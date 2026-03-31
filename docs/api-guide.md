@@ -300,10 +300,13 @@ Example response:
 These routes currently support:
 
 - reading the current user for the profile tab
+- saving the current user profile fields wired in the profile tab
 - reading users/module catalog/business catalog for the users tab
+- updating user role/status/module assignments
+- creating and resending pending invitations
 - reading company + business structure
-- saving business structure
-- saving basic company identity
+- saving business structure with richer unit/business metadata
+- saving company identity through `companies` plus `company_settings`
 
 ### `GET /api/v1/config-center/current-user`
 
@@ -328,6 +331,25 @@ Example response:
   "preferred_language": "es-419",
   "avatar_url": "",
   "role": "admin"
+}
+```
+
+### `PUT /api/v1/config-center/current-user`
+
+Purpose:
+
+- save the editable current-user profile fields wired in the profile tab
+
+Typical request:
+
+```json
+{
+  "primer_nombre": "Usuario",
+  "segundo_nombre": "Spring",
+  "apellido_paterno": "Demo",
+  "apellido_materno": "Activo",
+  "telefono": "+1 555-0100",
+  "preferred_language": "en-US"
 }
 ```
 
@@ -358,6 +380,24 @@ Example response:
       "module_slugs": [],
       "is_protected": false,
       "source": "user"
+    },
+    {
+      "id": 2,
+      "invitation_id": 2,
+      "user_company_id": null,
+      "apodo": null,
+      "nombres": "Pending",
+      "apellidos": "Invite",
+      "email": "invite@example.com",
+      "telefono": null,
+      "role": "user",
+      "department": null,
+      "status": "pending",
+      "created_at": null,
+      "business_id": null,
+      "module_slugs": [],
+      "is_protected": false,
+      "source": "invitation"
     }
   ],
   "catalog": {
@@ -377,6 +417,63 @@ Example response:
 }
 ```
 
+### `PUT /api/v1/config-center/users/{id}`
+
+Purpose:
+
+- update a user role
+- update a user active/inactive status
+- replace module access for that user
+
+Typical request:
+
+```json
+{
+  "role": "admin",
+  "status": "active",
+  "module_slugs": ["config_center", "human_resources"]
+}
+```
+
+### `POST /api/v1/config-center/users/invite`
+
+Purpose:
+
+- create a pending invitation from the users tab
+
+Typical request:
+
+```json
+{
+  "name": "Pending Invite",
+  "email": "invite@example.com",
+  "role": "user"
+}
+```
+
+Typical response:
+
+```json
+{
+  "email": "invite@example.com",
+  "invite_link": "http://127.0.0.1:8082/invite/<token>"
+}
+```
+
+### `POST /api/v1/config-center/users/invitations/{id}/resend`
+
+Purpose:
+
+- regenerate and resend a pending invitation link
+
+Typical request:
+
+```json
+{
+  "email": "invite.resent@example.com"
+}
+```
+
 ### `GET /api/v1/config-center/company`
 
 Purpose:
@@ -391,20 +488,44 @@ Example response:
   "nombre_empresa": "Empresa Demo",
   "logo_url": "",
   "plan_id": null,
-  "industria": "",
-  "modelo_negocio": "",
-  "descripcion": "",
-  "moneda": "",
-  "zona_horaria": "",
-  "tamano_empresa": "",
-  "colaboradores": 0,
+  "industria": "Retail > Sports",
+  "modelo_negocio": "B2C",
+  "descripcion": "Config center persisted through Spring",
+  "moneda": "CAD",
+  "zona_horaria": "America/Toronto",
+  "tamano_empresa": "Mediana",
+  "colaboradores": 1,
   "estructura": "multi",
-  "empresa_template": {},
+  "empresa_template": {
+    "industria": "Retail > Sports",
+    "modelo_negocio": "B2C",
+    "descripcion": "Config center persisted through Spring",
+    "currency": "CAD",
+    "timezone": "America/Toronto",
+    "tamano_empresa": "Mediana",
+    "display_name": "Fresh Config Co"
+  },
   "map": [
     {
-      "name": "Spring Unit",
+      "name": "North Unit",
+      "industria": "Retail > Sports",
+      "direccion": "100 King St",
+      "ciudad": "Toronto",
+      "estado": "Ontario",
+      "pais": "Canada",
+      "cp": "M5H 1J9",
+      "telefono": "111-111-1111",
+      "email": "north@example.com",
       "businesses": [
-        { "name": "Spring Biz A" }
+        {
+          "name": "North Store",
+          "industria": "Retail > Outlet",
+          "direccion": "200 Queen St",
+          "telefono": "222-222-2222",
+          "email": "store@example.com",
+          "gerente": "Alex",
+          "horario": "9-5"
+        }
       ]
     }
   ]
@@ -460,8 +581,9 @@ Request body:
 
 Current behavior:
 
-- rewrites `units`
-- rewrites `businesses`
+- synchronizes `units`
+- synchronizes `businesses`
+- persists the richer structure payload in `company_settings.settings_json`
 - returns a normalized structure snapshot
 
 Example response:
@@ -474,9 +596,13 @@ Example response:
   "map": [
     {
       "name": "Unit A",
+      "industria": "Retail > Sports",
+      "direccion": "100 King St",
       "businesses": [
-        { "name": "Business A" },
-        { "name": "Business B" }
+        {
+          "name": "Business A",
+          "industria": "Retail > Outlet"
+        }
       ]
     }
   ]
@@ -505,8 +631,9 @@ Request body:
 
 Current behavior:
 
-- company name persists
-- the rest is currently accepted and echoed back but not fully round-tripped everywhere yet
+- company name persists in `companies`
+- richer identity fields persist in `company_settings.settings_json`
+- reads now round-trip those saved values back to the frontend
 
 Example response:
 
@@ -656,13 +783,21 @@ Response:
 - `/api/v1/auth/*`
 - `/api/v1/modules`
 - `/api/v1/org/*`
+- `/api/v1/config-center/current-user`
+- `/api/v1/config-center/current-user` mutations
+- `/api/v1/config-center/users`
+- `/api/v1/config-center/users/{id}`
+- `/api/v1/config-center/users/invite`
+- `/api/v1/config-center/users/invitations/{id}/resend`
+- `/api/v1/config-center/company`
+- `/api/v1/config-center/config`
+- `/api/v1/config-center/business-structure`
+- `/api/v1/config-center/company`
 - `/api/v1/hr/employees*`
 
 ### Still transitional
 
-- some config-center persistence rules
-- users-tab mutations
-- profile save/update
+- some config-center persistence rules around richer company/unit/business metadata
 - logo/file handling
 
 ## Recommended next API improvements
@@ -670,5 +805,5 @@ Response:
 1. normalize all responses to a consistent envelope style
 2. add DTO classes instead of returning mixed maps everywhere
 3. add file upload support
-4. add proper invitation/user-update endpoints
-5. add Spring-owned DB migrations
+4. add deeper invitation lifecycle endpoints if the UI needs more than invite/resend
+5. continue expanding Spring-owned DB migrations module by module

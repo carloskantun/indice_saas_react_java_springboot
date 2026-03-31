@@ -73,9 +73,31 @@ export default function BusinessStructure() {
             resolvedMap.map((unidad, unidadIndex) => ({
               id: `unit-${unidadIndex}-${unidad.name}`,
               name: unidad.name,
+              legacyUnitId: unidad.legacy_unit_id,
+              logo: unidad.logo,
+              industria: unidad.industria,
+              direccion: unidad.direccion,
+              ciudad: unidad.ciudad,
+              estado: unidad.estado,
+              pais: unidad.pais,
+              cp: unidad.cp,
+              telefono: unidad.telefono,
+              email: unidad.email,
               negocios: (unidad.businesses ?? []).map((negocio, negocioIndex) => ({
                 id: `biz-${unidadIndex}-${negocioIndex}-${negocio.name}`,
                 name: negocio.name,
+                legacyBusinessId: negocio.legacy_business_id,
+                logo: negocio.logo,
+                industria: negocio.industria,
+                direccion: negocio.direccion,
+                ciudad: negocio.ciudad,
+                estado: negocio.estado,
+                pais: negocio.pais,
+                cp: negocio.cp,
+                telefono: negocio.telefono,
+                email: negocio.email,
+                gerente: negocio.gerente,
+                horario: negocio.horario,
               })),
             })),
           );
@@ -262,7 +284,31 @@ export default function BusinessStructure() {
           estructuraType === 'multi'
             ? unidades.map((unidad) => ({
                 name: unidad.name,
-                businesses: unidad.negocios.map((negocio) => ({ name: negocio.name })),
+                legacy_unit_id: unidad.legacyUnitId,
+                logo: unidad.logo,
+                industria: unidad.industria,
+                direccion: unidad.direccion,
+                ciudad: unidad.ciudad,
+                estado: unidad.estado,
+                pais: unidad.pais,
+                cp: unidad.cp,
+                telefono: unidad.telefono,
+                email: unidad.email,
+                businesses: unidad.negocios.map((negocio) => ({
+                  name: negocio.name,
+                  legacy_business_id: negocio.legacyBusinessId,
+                  logo: negocio.logo,
+                  industria: negocio.industria,
+                  direccion: negocio.direccion,
+                  ciudad: negocio.ciudad,
+                  estado: negocio.estado,
+                  pais: negocio.pais,
+                  cp: negocio.cp,
+                  telefono: negocio.telefono,
+                  email: negocio.email,
+                  gerente: negocio.gerente,
+                  horario: negocio.horario,
+                })),
               }))
             : [],
       });
@@ -329,7 +375,7 @@ export default function BusinessStructure() {
       ) : null}
 
       <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-700/30 dark:bg-blue-900/20 dark:text-blue-300">
-        This screen now loads from and saves to the Spring backend. Only the company identity and unit/business names are currently persisted end-to-end.
+        This screen now loads from and saves to the Spring backend. Company identity plus the unit and business details captured in this form are persisted through Spring.
       </div>
 
       <OperationTypeSection

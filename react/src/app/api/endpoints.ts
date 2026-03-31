@@ -12,10 +12,14 @@ export const endpoints = {
   configCenter: {
     currentUser: '/api/v1/config-center/current-user',
     users: '/api/v1/config-center/users',
+    updateUser: '/api/v1/config-center/users',
+    inviteUser: '/api/v1/config-center/users/invite',
+    resendInvitation: '/api/v1/config-center/users/invitations',
     empresa: '/api/v1/config-center/company',
     config: '/api/v1/config-center/config',
     saveConfig: '/api/v1/config-center/business-structure',
     saveEmpresa: '/api/v1/config-center/company',
+    saveCurrentUser: '/api/v1/config-center/current-user',
   },
   humanResources: {
     employeesList: '/api/v1/hr/employees',

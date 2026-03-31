@@ -3,6 +3,7 @@ export type EstructuraType = 'simple' | 'multi';
 export interface Negocio {
   id: string;
   name: string;
+  legacyBusinessId?: number;
   logo?: string;
   industria?: string;
   direccion?: string;
@@ -19,6 +20,7 @@ export interface Negocio {
 export interface Unidad {
   id: string;
   name: string;
+  legacyUnitId?: number;
   logo?: string;
   industria?: string;
   direccion?: string;

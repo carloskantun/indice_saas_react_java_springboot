@@ -266,6 +266,11 @@ export function routeForBackendSlug(slug: string): PageId | null {
   return moduleMetaBySlug[slug]?.route ?? null;
 }
 
+export function backendSlugForRoute(route: PageId): string | null {
+  const entry = Object.entries(moduleMetaBySlug).find(([, meta]) => meta.route === route);
+  return entry?.[0] ?? null;
+}
+
 export function mergeDashboardModules(
   apiModules: DashboardModuleCard[],
   fallbackModules: DashboardModuleCard[],

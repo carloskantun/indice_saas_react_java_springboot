@@ -55,7 +55,11 @@ Invalidates session.
 ## Config Center
 
 ### `GET /api/v1/config-center/current-user`
+### `PUT /api/v1/config-center/current-user`
 ### `GET /api/v1/config-center/users`
+### `PUT /api/v1/config-center/users/{id}`
+### `POST /api/v1/config-center/users/invite`
+### `POST /api/v1/config-center/users/invitations/{id}/resend`
 ### `GET /api/v1/config-center/company`
 ### `GET /api/v1/config-center/config`
 ### `PUT /api/v1/config-center/business-structure`

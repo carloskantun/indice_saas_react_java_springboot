@@ -17,8 +17,19 @@ export interface ConfigCenterCurrentUser {
   role?: string | null;
 }
 
+export interface SaveCurrentUserPayload {
+  primer_nombre: string;
+  segundo_nombre?: string;
+  apellido_paterno: string;
+  apellido_materno?: string;
+  telefono?: string;
+  preferred_language?: string;
+  avatar_url?: string;
+}
+
 export interface ConfigCenterUser {
   id: number;
+  invitation_id?: number | null;
   user_company_id: number | null;
   apodo?: string | null;
   nombres: string;
@@ -35,6 +46,23 @@ export interface ConfigCenterUser {
   source: string;
 }
 
+export interface UpdateConfigCenterUserPayload {
+  role: string;
+  status: string;
+  module_slugs: string[];
+}
+
+export interface InviteConfigCenterUserPayload {
+  name: string;
+  email: string;
+  role: string;
+}
+
+export interface ConfigCenterInviteResponse {
+  email: string;
+  invite_link: string;
+}
+
 export interface ConfigCenterCatalogModule {
   slug: string;
   name: string;
@@ -47,10 +75,32 @@ export interface ConfigCenterCatalogBusiness {
 
 export interface ConfigCenterEmpresaMapBusiness {
   name: string;
+  legacy_business_id?: number;
+  logo?: string;
+  industria?: string;
+  direccion?: string;
+  ciudad?: string;
+  estado?: string;
+  pais?: string;
+  cp?: string;
+  telefono?: string;
+  email?: string;
+  gerente?: string;
+  horario?: string;
 }
 
 export interface ConfigCenterEmpresaMapUnit {
   name: string;
+  legacy_unit_id?: number;
+  logo?: string;
+  industria?: string;
+  direccion?: string;
+  ciudad?: string;
+  estado?: string;
+  pais?: string;
+  cp?: string;
+  telefono?: string;
+  email?: string;
   businesses: ConfigCenterEmpresaMapBusiness[];
 }
 
@@ -104,7 +154,31 @@ export interface SaveStructurePayload {
   estructura: 'simple' | 'multi';
   map: Array<{
     name: string;
-    businesses: Array<{ name: string }>;
+    legacy_unit_id?: number;
+    logo?: string;
+    industria?: string;
+    direccion?: string;
+    ciudad?: string;
+    estado?: string;
+    pais?: string;
+    cp?: string;
+    telefono?: string;
+    email?: string;
+    businesses: Array<{
+      name: string;
+      legacy_business_id?: number;
+      logo?: string;
+      industria?: string;
+      direccion?: string;
+      ciudad?: string;
+      estado?: string;
+      pais?: string;
+      cp?: string;
+      telefono?: string;
+      email?: string;
+      gerente?: string;
+      horario?: string;
+    }>;
   }>;
 }
 
@@ -123,6 +197,13 @@ export const configCenterApi = {
     return apiClient<ConfigCenterCurrentUser>(endpoints.configCenter.currentUser);
   },
 
+  saveCurrentUser(payload: SaveCurrentUserPayload) {
+    return apiClient<ConfigCenterCurrentUser>(endpoints.configCenter.saveCurrentUser, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
   getUsers() {
     return apiClient<{
       users: ConfigCenterUser[];
@@ -131,6 +212,27 @@ export const configCenterApi = {
         modules: ConfigCenterCatalogModule[];
       };
     }>(endpoints.configCenter.users);
+  },
+
+  updateUser(id: number, payload: UpdateConfigCenterUserPayload) {
+    return apiClient<{ success: boolean }>(`${endpoints.configCenter.updateUser}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  inviteUser(payload: InviteConfigCenterUserPayload) {
+    return apiClient<ConfigCenterInviteResponse>(endpoints.configCenter.inviteUser, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  resendInvitation(id: number, email?: string) {
+    return apiClient<ConfigCenterInviteResponse>(`${endpoints.configCenter.resendInvitation}/${id}/resend`, {
+      method: 'POST',
+      body: JSON.stringify(email ? { email } : {}),
+    });
   },
 
   getEmpresa() {

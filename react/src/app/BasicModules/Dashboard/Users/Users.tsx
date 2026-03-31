@@ -15,6 +15,7 @@ import { Button } from '../../../components/ui/button';
 import { useLanguage } from '../../../shared/context';
 import { configCenterApi, type ConfigCenterCatalogModule, type ConfigCenterUser } from '../../../api/configCenter';
 import {
+  backendSlugForRoute,
   buildDefaultModuleCatalog,
   mapBackendModuleToCard,
   routeForBackendSlug,
@@ -24,6 +25,8 @@ import {
 
 interface User {
   id: string;
+  backendId: number;
+  source: 'user' | 'invitation';
   name: string;
   email: string;
   role: 'Super Admin' | 'Admin' | 'User';
@@ -33,6 +36,7 @@ interface User {
 
 interface AvailableModule {
   id: string;
+  slug: string;
   name: string;
   emoji: string;
   color: DashboardModuleColor;
@@ -79,6 +83,7 @@ export default function Users() {
   const [newEmail, setNewEmail] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [selectedModulesDraft, setSelectedModulesDraft] = useState<string[]>([]);
 
   const statusLabelMap: Record<User['status'], string> = {
     active: t.panelInicial.users.status.active,
@@ -243,6 +248,21 @@ export default function Users() {
     return styles[color];
   };
 
+  const refreshUsers = async (fallbackModules: AvailableModule[] = buildAvailableModules(t)) => {
+    const response = await configCenterApi.getUsers();
+    const mappedUsers = response.users.map((user) => mapBackendUser(user, fallbackModules));
+    const mappedModules = response.catalog.modules
+      .map((module) => mapCatalogModule(module, t))
+      .filter((module): module is AvailableModule => module !== null);
+
+    setUsers(mappedUsers);
+    if (mappedModules.length > 0) {
+      setAvailableModules(mergeAvailableModules(mappedModules, fallbackModules));
+    } else {
+      setAvailableModules(fallbackModules);
+    }
+  };
+
   useEffect(() => {
     let active = true;
     const fallbackModules = buildAvailableModules(t);
@@ -299,89 +319,120 @@ export default function Users() {
     setNewEmail('');
   };
 
-  const toggleUserModule = (userId: string, moduleId: string) => {
-    setUsers((prevUsers) =>
-      prevUsers.map((user) => {
-        if (user.id !== userId) {
-          return user;
-        }
-
-        const hasModule = user.modules.includes(moduleId);
-        return {
-          ...user,
-          modules: hasModule
-            ? user.modules.filter((module) => module !== moduleId)
-            : [...user.modules, moduleId],
-        };
-      }),
+  const toggleUserModule = (moduleId: string) => {
+    setSelectedModulesDraft((prevModules) =>
+      prevModules.includes(moduleId)
+        ? prevModules.filter((module) => module !== moduleId)
+        : [...prevModules, moduleId],
     );
   };
 
-  const toggleUserStatus = (userId: string) => {
-    setUsers((prevUsers) =>
-      prevUsers.map((user) => {
-        if (user.id !== userId) {
-          return user;
-        }
+  const toggleUserStatus = async (user: User) => {
+    if (user.source !== 'user') {
+      return;
+    }
 
-        return {
-          ...user,
-          status: user.status === 'active' ? 'inactive' : 'active',
-        };
-      }),
-    );
+    const nextStatus = user.status === 'active' ? 'inactive' : 'active';
+
+    try {
+      setLoadError('');
+      await configCenterApi.updateUser(user.backendId, {
+        role: toBackendRole(user.role),
+        status: nextStatus,
+        module_slugs: user.modules
+          .map((route) => backendSlugForRoute(route as any))
+          .filter((slug): slug is string => Boolean(slug)),
+      });
+      await refreshUsers();
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Unable to update user status.');
+    }
   };
 
-  const changeUserRole = (userId: string, newRole: User['role']) => {
-    setUsers((prevUsers) =>
-      prevUsers.map((user) => (user.id === userId ? { ...user, role: newRole } : user)),
-    );
+  const changeUserRole = async (user: User, newRole: User['role']) => {
+    if (user.source !== 'user') {
+      return;
+    }
+
+    try {
+      setLoadError('');
+      await configCenterApi.updateUser(user.backendId, {
+        role: toBackendRole(newRole),
+        status: user.status,
+        module_slugs: user.modules
+          .map((route) => backendSlugForRoute(route as any))
+          .filter((slug): slug is string => Boolean(slug)),
+      });
+      await refreshUsers();
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Unable to update user role.');
+    }
   };
 
-  const generateInviteLink = (email: string) => {
-    const token = Math.random().toString(36).slice(2, 15);
-    return `https://indice-erp.com/invite/${token}?email=${encodeURIComponent(email)}`;
-  };
-
-  const handleSendInvite = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSendInvite = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!inviteForm.name.trim() || !inviteForm.email.trim()) {
       return;
     }
 
-    const link = generateInviteLink(inviteForm.email.trim());
-    const newUser: User = {
-      id: String(Date.now()),
-      name: inviteForm.name.trim(),
-      email: inviteForm.email.trim(),
-      role: inviteForm.role,
-      status: 'pending',
-      modules: [],
-    };
-
-    setUsers((prevUsers) => [...prevUsers, newUser]);
-    setInviteLink(link);
+    try {
+      setLoadError('');
+      const response = await configCenterApi.inviteUser({
+        name: inviteForm.name.trim(),
+        email: inviteForm.email.trim(),
+        role: toBackendRole(inviteForm.role),
+      });
+      await refreshUsers();
+      setInviteLink(response.invite_link);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Unable to send invitation.');
+    }
   };
 
-  const handleResendInvite = () => {
-    if (!selectedUserForResend) {
+  const handleResendInvite = async () => {
+    if (!selectedUserForResend || !resendUser || resendUser.source !== 'invitation') {
       return;
     }
 
-    const user = users.find((entry) => entry.id === selectedUserForResend);
-    if (!user) {
+    try {
+      setLoadError('');
+      const response = await configCenterApi.resendInvitation(resendUser.backendId, newEmail.trim() || undefined);
+      await refreshUsers();
+      setInviteLink(response.invite_link);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Unable to resend invitation.');
+    }
+  };
+
+  const handleOpenModuleSettings = (user: User) => {
+    if (user.source !== 'user') {
       return;
     }
 
-    const emailToSend = newEmail.trim() || user.email;
-    const link = generateInviteLink(emailToSend);
+    setSelectedUserForModules(user.id);
+    setSelectedModulesDraft(user.modules);
+  };
 
-    setUsers((prevUsers) =>
-      prevUsers.map((entry) =>
-        entry.id === selectedUserForResend ? { ...entry, email: emailToSend } : entry,
-      ),
-    );
-    setInviteLink(link);
+  const handleSaveSelectedModules = async () => {
+    if (!selectedUser || selectedUser.source !== 'user') {
+      setSelectedUserForModules(null);
+      return;
+    }
+
+    try {
+      setLoadError('');
+      await configCenterApi.updateUser(selectedUser.backendId, {
+        role: toBackendRole(selectedUser.role),
+        status: selectedUser.status,
+        module_slugs: selectedModulesDraft
+          .map((route) => backendSlugForRoute(route as any))
+          .filter((slug): slug is string => Boolean(slug)),
+      });
+      await refreshUsers();
+      setSelectedUserForModules(null);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Unable to save module access.');
+    }
   };
 
   const copyToClipboard = async (text: string) => {
@@ -471,7 +522,7 @@ export default function Users() {
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-700/30 dark:bg-blue-900/20 dark:text-blue-300">
-        The users list and module catalog are loaded from the Spring backend. User mutations in this screen are still local-only until the matching backend endpoints are implemented.
+        The users list, role updates, status changes, module assignments, and invitation links in this screen are now backed by Spring.
       </div>
 
       {isLoading ? (
@@ -654,12 +705,11 @@ export default function Users() {
                         <div className="relative w-fit">
                           <select
                             value={user.role}
-                            onChange={(event) =>
-                              changeUserRole(user.id, event.target.value as User['role'])
-                            }
+                            onChange={(event) => changeUserRole(user, event.target.value as User['role'])}
+                            disabled={user.source !== 'user'}
                             className={`appearance-none cursor-pointer px-3 py-1 pr-8 rounded-full text-xs font-medium border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600 transition-all ${getRoleColorClasses(
                               user.role,
-                            )}`}
+                            )} ${user.source !== 'user' ? 'cursor-not-allowed opacity-60' : ''}`}
                           >
                             <option value="Super Admin">{t.panelInicial.users.roles.superAdmin}</option>
                             <option value="Admin">{t.panelInicial.users.roles.admin}</option>
@@ -679,8 +729,9 @@ export default function Users() {
                       <td className="px-6 py-4">
                         <button
                           type="button"
-                          onClick={() => setSelectedUserForModules(user.id)}
-                          className="inline-flex items-center gap-2 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg text-sm font-medium transition-colors"
+                          onClick={() => handleOpenModuleSettings(user)}
+                          disabled={user.source !== 'user'}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                           <Settings className="w-4 h-4" />
                           <span>{formatModulesCount(user.modules.length)}</span>
@@ -690,12 +741,13 @@ export default function Users() {
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => toggleUserStatus(user.id)}
+                            onClick={() => toggleUserStatus(user)}
+                            disabled={user.source !== 'user'}
                             className={`relative w-12 h-6 rounded-full transition-all duration-300 ease-in-out ${
                               user.status === 'active'
                                 ? 'bg-green-500 hover:bg-green-600'
                                 : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500'
-                            }`}
+                            } ${user.source !== 'user' ? 'opacity-60 cursor-not-allowed' : ''}`}
                             title={
                               user.status === 'active'
                                 ? t.panelInicial.users.status.inactive
@@ -718,6 +770,7 @@ export default function Users() {
                               setCopiedLink(false);
                               setNewEmail('');
                             }}
+                            disabled={user.source !== 'invitation'}
                             className="p-2 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
                             title={t.panelInicial.users.actions.resend}
                           >
@@ -773,14 +826,14 @@ export default function Users() {
                     {availableModules
                       .filter((module) => module.category === section.category)
                       .map((module) => {
-                        const isSelected = selectedUser.modules.includes(module.id);
+                        const isSelected = selectedModulesDraft.includes(module.id);
                         const colorClasses = getModuleColorClasses(module.color);
 
                         return (
                           <button
                             key={module.id}
                             type="button"
-                            onClick={() => toggleUserModule(selectedUser.id, module.id)}
+                            onClick={() => toggleUserModule(module.id)}
                             className={`p-4 rounded-lg border-2 transition-all text-left ${
                               isSelected
                                 ? `${colorClasses} border-opacity-100`
@@ -823,11 +876,11 @@ export default function Users() {
             </div>
 
             <div className="flex items-center justify-between p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                {formatSelectedModulesCount(selectedUser.modules.length)}
-              </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  {formatSelectedModulesCount(selectedModulesDraft.length)}
+                </div>
               <Button
-                onClick={() => setSelectedUserForModules(null)}
+                onClick={handleSaveSelectedModules}
                 className="bg-purple-600 hover:bg-purple-700 text-white"
               >
                 {t.panelInicial.users.modal.save}
@@ -1119,6 +1172,7 @@ export default function Users() {
 function buildAvailableModules(t: any): AvailableModule[] {
   return buildDefaultModuleCatalog(t).map((module) => ({
     id: module.route,
+    slug: module.slug,
     name: module.title,
     emoji: module.emoji,
     color: module.color,
@@ -1138,6 +1192,7 @@ function mapCatalogModule(module: ConfigCenterCatalogModule, t: any): AvailableM
 
   return {
     id: mapped.route,
+    slug: module.slug,
     name: mapped.title,
     emoji: mapped.emoji,
     color: mapped.color,
@@ -1166,9 +1221,14 @@ function mapBackendUser(user: ConfigCenterUser, availableModules: AvailableModul
   const status = normalizeUserStatus(user.status);
   const fullName = `${user.nombres ?? ''} ${user.apellidos ?? ''}`.trim() || user.email;
   const validModuleIds = new Set(availableModules.map((module) => module.id));
+  const backendId = user.source === 'invitation'
+    ? (user.invitation_id ?? user.id)
+    : user.id;
 
   return {
-    id: String(user.id),
+    id: `${user.source}:${backendId}`,
+    backendId,
+    source: user.source === 'invitation' ? 'invitation' : 'user',
     name: fullName,
     email: user.email,
     role,
@@ -1190,6 +1250,16 @@ function normalizeUserRole(role: string): User['role'] {
     return 'Admin';
   }
   return 'User';
+}
+
+function toBackendRole(role: User['role']): string {
+  if (role === 'Super Admin') {
+    return 'superadmin';
+  }
+  if (role === 'Admin') {
+    return 'admin';
+  }
+  return 'user';
 }
 
 function normalizeUserStatus(status: string): User['status'] {

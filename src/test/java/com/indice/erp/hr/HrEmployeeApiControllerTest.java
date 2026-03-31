@@ -1,0 +1,97 @@
+package com.indice.erp.hr;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.indice.erp.auth.AuthSessionUser;
+import com.indice.erp.auth.SessionAuthService;
+import java.math.BigDecimal;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Optional;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+@WebMvcTest(HrEmployeeApiController.class)
+class HrEmployeeApiControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockBean
+    private SessionAuthService sessionAuthService;
+
+    @MockBean
+    private HrEmployeeService hrEmployeeService;
+
+    @Test
+    void listReturnsUnauthorizedWhenSessionIsMissing() throws Exception {
+        given(sessionAuthService.currentUser(any())).willReturn(Optional.empty());
+
+        mockMvc.perform(get("/api/v1/hr/employees"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.message").value("Unauthorized"));
+    }
+
+    @Test
+    void listReturnsExpectedEnvelopeForAuthenticatedSession() throws Exception {
+        var currentUser = new AuthSessionUser(1L, 1L, "Usuario Demo", "admin");
+        var employee = new LinkedHashMap<String, Object>();
+        employee.put("id", 2L);
+        employee.put("full_name", "Second Empleado");
+        employee.put("email", "second.employee.spring@example.com");
+        employee.put("employee_number", "");
+        employee.put("status", "active");
+        employee.put("position_title", "Senior Analyst");
+        employee.put("department", "Finance");
+        employee.put("phone", "");
+        employee.put("hire_date", null);
+        employee.put("salary", new BigDecimal("6500.00"));
+
+        var serviceResult = new LinkedHashMap<String, Object>();
+        serviceResult.put("rows", List.of(employee));
+        serviceResult.put("meta", Map.of(
+            "total_count", 1,
+            "total_payroll_amount_monthly", new BigDecimal("6500.00")
+        ));
+
+        given(sessionAuthService.currentUser(any())).willReturn(Optional.of(currentUser));
+        given(hrEmployeeService.listEmployees(1L)).willReturn(serviceResult);
+
+        mockMvc.perform(get("/api/v1/hr/employees"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.count").value(1))
+            .andExpect(jsonPath("$.items[0].full_name").value("Second Empleado"))
+            .andExpect(jsonPath("$.summary.total_count").value(1));
+    }
+
+    @Test
+    void updateReturnsNotFoundWhenEmployeeIsMissing() throws Exception {
+        var currentUser = new AuthSessionUser(1L, 1L, "Usuario Demo", "admin");
+
+        given(sessionAuthService.currentUser(any())).willReturn(Optional.of(currentUser));
+        given(hrEmployeeService.updateEmployee(anyLong(), any(Map.class)))
+            .willThrow(new NoSuchElementException("Employee not found."));
+
+        mockMvc.perform(put("/api/v1/hr/employees/999")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "first_name": "Missing"
+                    }
+                    """))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.message").value("Employee not found."));
+    }
+}

@@ -5,6 +5,7 @@
 - Spring Boot modular monolith
 - JDBC-first
 - MySQL-backed
+- Flyway-managed schema changes for the Spring-owned subset
 - session-based auth
 
 ## Packages
@@ -52,3 +53,4 @@
 2. Session cookie is stored by browser
 3. React checks session with `GET /api/v1/auth/me`
 4. React loads modules/org/config/hr through `/api/v1/...`
+5. Flyway applies `B1`, `V2`, `V3`, and later migrations when the Spring-owned schema changes

@@ -4,6 +4,7 @@ import com.indice.erp.auth.SessionAuthService;
 import jakarta.servlet.http.HttpSession;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -55,6 +56,8 @@ public class HrEmployeeApiController {
         try {
             var result = hrEmployeeService.createEmployee(user.get().companyId(), user.get().userId(), payload);
             return ResponseEntity.status(HttpStatus.CREATED).body(result.get("employee"));
+        } catch (NoSuchElementException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", ex.getMessage()));
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
         }
@@ -71,6 +74,8 @@ public class HrEmployeeApiController {
             payload.put("id", employeeId);
             var result = hrEmployeeService.updateEmployee(user.get().companyId(), payload);
             return ResponseEntity.ok(result.get("employee"));
+        } catch (NoSuchElementException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", ex.getMessage()));
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
         }
@@ -83,8 +88,12 @@ public class HrEmployeeApiController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Unauthorized"));
         }
 
-        hrEmployeeService.terminateEmployee(user.get().companyId(), employeeId);
-        return ResponseEntity.ok(Map.of("success", true));
+        try {
+            hrEmployeeService.terminateEmployee(user.get().companyId(), employeeId);
+            return ResponseEntity.ok(Map.of("success", true));
+        } catch (NoSuchElementException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", ex.getMessage()));
+        }
     }
 
     @DeleteMapping("/{employeeId}")
@@ -94,7 +103,11 @@ public class HrEmployeeApiController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Unauthorized"));
         }
 
-        hrEmployeeService.deleteEmployee(user.get().companyId(), employeeId);
-        return ResponseEntity.ok(Map.of("success", true));
+        try {
+            hrEmployeeService.deleteEmployee(user.get().companyId(), employeeId);
+            return ResponseEntity.ok(Map.of("success", true));
+        } catch (NoSuchElementException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", ex.getMessage()));
+        }
     }
 }

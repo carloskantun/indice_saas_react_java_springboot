@@ -36,3 +36,6 @@ build/
 react/node_modules/
 react/dist/
 react/.env.local
+
+### Local handoff helpers ###
+handoff/

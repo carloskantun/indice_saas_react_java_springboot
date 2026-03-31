@@ -12,6 +12,7 @@ This backend no longer needs PHP-style routes for the frontend contract.
 - Java 21
 - Spring Web
 - Spring JDBC
+- Flyway
 - MySQL 8
 - session-based authentication
 
@@ -63,7 +64,11 @@ All frontend-facing routes are under:
 ### Config Center
 
 - `GET /api/v1/config-center/current-user`
+- `PUT /api/v1/config-center/current-user`
 - `GET /api/v1/config-center/users`
+- `PUT /api/v1/config-center/users/{id}`
+- `POST /api/v1/config-center/users/invite`
+- `POST /api/v1/config-center/users/invitations/{id}/resend`
 - `GET /api/v1/config-center/company`
 - `GET /api/v1/config-center/config`
 - `PUT /api/v1/config-center/business-structure`
@@ -82,11 +87,17 @@ All frontend-facing routes are under:
 Current database target:
 
 - host: `127.0.0.1`
-- port: `3306`
+- port: `3307`
 - db: `indice_db`
 - user: `indice_user`
 
 This backend currently uses the existing development database directly.
+
+Flyway is now enabled in transitional baseline mode for the existing shared schema:
+
+- first startup against a non-empty legacy schema creates `flyway_schema_history`
+- the current schema is tagged at baseline version `0`
+- `B1`, `V2`, and `V3` now cover the current Spring-owned subset of the schema
 
 ## Docs
 
@@ -94,6 +105,7 @@ See:
 
 - [`docs/README.md`](docs/README.md)
 - [`docs/setup.md`](docs/setup.md)
+- [`docs/flyway.md`](docs/flyway.md)
 - [`docs/api-guide.md`](docs/api-guide.md)
 - [`docs/api-reference.md`](docs/api-reference.md)
 - [`docs/frontend-integration.md`](docs/frontend-integration.md)

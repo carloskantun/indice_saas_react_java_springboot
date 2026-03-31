@@ -25,7 +25,7 @@ VITE_API_BASE_URL=
 
 - login/session
 - dashboard shell
-- profile tab
-- users tab
+- profile tab read/write
+- users tab read/write
 - business structure tab
 - HR collaborators tab

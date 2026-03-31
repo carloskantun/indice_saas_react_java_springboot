@@ -2,9 +2,11 @@ package com.indice.erp.hr;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
@@ -43,18 +45,18 @@ public class HrEmployeeService {
                     safe(rs.getString("last_name"))
                 ).trim();
 
-                return new LinkedHashMap<String, Object>(Map.of(
-                    "id", rs.getLong("id"),
-                    "full_name", fullName,
-                    "email", safe(rs.getString("email")),
-                    "employee_number", safe(rs.getString("employee_number")),
-                    "status", safe(rs.getString("status")),
-                    "position_title", safe(rs.getString("position")),
-                    "department", safe(rs.getString("department")),
-                    "phone", safe(rs.getString("phone")),
-                    "hire_date", rs.getObject("hire_date"),
-                    "salary", rs.getBigDecimal("salary") != null ? rs.getBigDecimal("salary") : BigDecimal.ZERO
-                ));
+                var employee = new LinkedHashMap<String, Object>();
+                employee.put("id", rs.getLong("id"));
+                employee.put("full_name", fullName);
+                employee.put("email", safe(rs.getString("email")));
+                employee.put("employee_number", safe(rs.getString("employee_number")));
+                employee.put("status", safe(rs.getString("status")));
+                employee.put("position_title", safe(rs.getString("position")));
+                employee.put("department", safe(rs.getString("department")));
+                employee.put("phone", safe(rs.getString("phone")));
+                employee.put("hire_date", rs.getObject("hire_date"));
+                employee.put("salary", rs.getBigDecimal("salary") != null ? rs.getBigDecimal("salary") : BigDecimal.ZERO);
+                return employee;
             },
             companyId
         );
@@ -149,7 +151,7 @@ public class HrEmployeeService {
         var salary = parseBigDecimal(payload, "salary", "salario");
         var status = stringValue(payload, "status", "estado");
 
-        jdbcTemplate.update(
+        var rowsUpdated = jdbcTemplate.update(
             """
                 UPDATE hr_employees
                 SET first_name = COALESCE(?, first_name),
@@ -176,15 +178,33 @@ public class HrEmployeeService {
             companyId
         );
 
+        if (rowsUpdated == 0) {
+            throw new NoSuchElementException("Employee not found.");
+        }
+
         return employeeDetails(employeeId, companyId);
     }
 
     public void deleteEmployee(long companyId, long employeeId) {
-        jdbcTemplate.update("DELETE FROM hr_employees WHERE id = ? AND company_id = ?", employeeId, companyId);
+        var rowsUpdated = jdbcTemplate.update(
+            "DELETE FROM hr_employees WHERE id = ? AND company_id = ?",
+            employeeId,
+            companyId
+        );
+        if (rowsUpdated == 0) {
+            throw new NoSuchElementException("Employee not found.");
+        }
     }
 
     public void terminateEmployee(long companyId, long employeeId) {
-        jdbcTemplate.update("UPDATE hr_employees SET status = 'inactive' WHERE id = ? AND company_id = ?", employeeId, companyId);
+        var rowsUpdated = jdbcTemplate.update(
+            "UPDATE hr_employees SET status = 'inactive' WHERE id = ? AND company_id = ?",
+            employeeId,
+            companyId
+        );
+        if (rowsUpdated == 0) {
+            throw new NoSuchElementException("Employee not found.");
+        }
     }
 
     private Map<String, Object> employeeDetails(long employeeId, long companyId) {
@@ -215,7 +235,11 @@ public class HrEmployeeService {
             companyId
         );
 
-        return rows.isEmpty() ? Map.of("employee_id", employeeId, "employee", Map.of()) : Map.of("employee_id", employeeId, "employee", rows.getFirst());
+        if (rows.isEmpty()) {
+            throw new NoSuchElementException("Employee not found.");
+        }
+
+        return Map.of("employee_id", employeeId, "employee", rows.getFirst());
     }
 
     private String stringValue(Map<String, Object> payload, String... keys) {
@@ -235,7 +259,11 @@ public class HrEmployeeService {
                 return number.longValue();
             }
             if (value instanceof String string && !string.isBlank()) {
-                return Long.parseLong(string.trim());
+                try {
+                    return Long.parseLong(string.trim());
+                } catch (NumberFormatException ex) {
+                    throw new IllegalArgumentException(key + " must be numeric.");
+                }
             }
         }
         return null;
@@ -246,7 +274,11 @@ public class HrEmployeeService {
         if (raw.isBlank()) {
             return null;
         }
-        return new BigDecimal(raw);
+        try {
+            return new BigDecimal(raw);
+        } catch (NumberFormatException ex) {
+            throw new IllegalArgumentException(keys[0] + " must be a valid number.");
+        }
     }
 
     private LocalDate parseDate(Map<String, Object> payload, String... keys) {
@@ -254,7 +286,11 @@ public class HrEmployeeService {
         if (raw.isBlank()) {
             return null;
         }
-        return LocalDate.parse(raw);
+        try {
+            return LocalDate.parse(raw);
+        } catch (DateTimeParseException ex) {
+            throw new IllegalArgumentException(keys[0] + " must use YYYY-MM-DD format.");
+        }
     }
 
     private String safe(String value) {
