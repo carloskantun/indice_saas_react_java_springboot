@@ -1,0 +1,430 @@
+{
+  "info": {
+    "_postman_id": "34c96f4e-1980-4f1c-bec8-ea8ed61c201d",
+    "name": "Indice ERP API v1",
+    "description": "Standalone Spring REST API collection.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "POST Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{demo_email}}\",\n  \"password\": \"{{demo_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET Me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "GET Modules",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/modules",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "modules"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET Units",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/org/units",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "org",
+                "units"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET Businesses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/org/businesses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "org",
+                "businesses"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Config Center",
+      "item": [
+        {
+          "name": "GET Current User",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/config-center/current-user",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "config-center",
+                "current-user"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET Users",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/config-center/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "config-center",
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET Company",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/config-center/company",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "config-center",
+                "company"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET Config",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/config-center/config",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "config-center",
+                "config"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT Business Structure",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estructura\": \"multi\",\n  \"map\": [\n    {\n      \"name\": \"API Unit\",\n      \"businesses\": [\n        { \"name\": \"API Business A\" }\n      ]\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/config-center/business-structure",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "config-center",
+                "business-structure"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT Company",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre_empresa\": \"Empresa Demo API\",\n  \"industria\": \"Retail\",\n  \"descripcion\": \"Updated from Postman\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/config-center/company",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "config-center",
+                "company"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Human Resources",
+      "item": [
+        {
+          "name": "GET Employees",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/employees",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hr",
+                "employees"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST Create Employee",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.id) {",
+                  "  pm.collectionVariables.set('employee_id', String(json.id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Postman\",\n  \"last_name\": \"Employee\",\n  \"email\": \"postman.{{$timestamp}}@example.com\",\n  \"position\": \"Analyst\",\n  \"department\": \"Operations\",\n  \"salary\": \"5000.00\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/employees",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hr",
+                "employees"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT Update Employee",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position\": \"Senior Analyst\",\n  \"department\": \"Finance\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/employees/{{employee_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hr",
+                "employees",
+                "{{employee_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST Terminate Employee",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/employees/{{employee_id}}/terminate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hr",
+                "employees",
+                "{{employee_id}}",
+                "terminate"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE Employee",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/employees/{{employee_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hr",
+                "employees",
+                "{{employee_id}}"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8082",
+      "type": "string"
+    },
+    {
+      "key": "demo_email",
+      "value": "demo@example.com",
+      "type": "string"
+    },
+    {
+      "key": "demo_password",
+      "value": "demo123",
+      "type": "string"
+    },
+    {
+      "key": "employee_id",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

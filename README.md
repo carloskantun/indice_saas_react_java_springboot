@@ -1,0 +1,100 @@
+# Indice ERP Spring Backend
+
+Standalone Spring Boot backend for the React frontend in:
+
+- [`../saas_indice_modules/Frontend_Indice`](../saas_indice_modules/Frontend_Indice)
+
+This backend no longer needs PHP-style routes for the frontend contract.
+
+## Stack
+
+- Spring Boot 3.5
+- Java 21
+- Spring Web
+- Spring JDBC
+- MySQL 8
+- session-based authentication
+
+## Run
+
+```bash
+cd ~/Desktop/indice_saas_spring
+./mvnw spring-boot:run
+```
+
+Default URL:
+
+- `http://127.0.0.1:8082`
+
+## Frontend setup
+
+Point the React frontend to this backend:
+
+```env
+VITE_BACKEND_URL=http://127.0.0.1:8082
+VITE_API_BASE_URL=
+```
+
+## Current API base
+
+All frontend-facing routes are under:
+
+- `/api/v1`
+
+## Implemented route groups
+
+### Auth
+
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/logout`
+- `GET /api/v1/auth/me`
+
+### Health
+
+- `GET /`
+- `GET /api/v1/health`
+
+### Dashboard / org shell
+
+- `GET /api/v1/modules`
+- `GET /api/v1/org/units`
+- `GET /api/v1/org/businesses`
+
+### Config Center
+
+- `GET /api/v1/config-center/current-user`
+- `GET /api/v1/config-center/users`
+- `GET /api/v1/config-center/company`
+- `GET /api/v1/config-center/config`
+- `PUT /api/v1/config-center/business-structure`
+- `PUT /api/v1/config-center/company`
+
+### Human Resources
+
+- `GET /api/v1/hr/employees`
+- `POST /api/v1/hr/employees`
+- `PUT /api/v1/hr/employees/{id}`
+- `POST /api/v1/hr/employees/{id}/terminate`
+- `DELETE /api/v1/hr/employees/{id}`
+
+## Database
+
+Current database target:
+
+- host: `127.0.0.1`
+- port: `3306`
+- db: `indice_db`
+- user: `indice_user`
+
+This backend currently uses the existing development database directly.
+
+## Docs
+
+See:
+
+- [`docs/README.md`](docs/README.md)
+- [`docs/setup.md`](docs/setup.md)
+- [`docs/api-guide.md`](docs/api-guide.md)
+- [`docs/api-reference.md`](docs/api-reference.md)
+- [`docs/frontend-integration.md`](docs/frontend-integration.md)
+- [`docs/postman.md`](docs/postman.md)
