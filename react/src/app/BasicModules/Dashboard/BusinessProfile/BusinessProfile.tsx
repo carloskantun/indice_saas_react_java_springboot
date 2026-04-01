@@ -161,8 +161,8 @@ export default function BusinessProfile() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-purple-50 dark:bg-purple-900/10 rounded-lg p-6 border border-purple-200 dark:border-purple-700/30">
-        <div className="flex items-start justify-between gap-4">
+      <div className="bg-purple-50 dark:bg-purple-900/10 rounded-lg border border-purple-200 p-4 dark:border-purple-700/30 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
               <span className="text-2xl">📊</span>
@@ -176,7 +176,7 @@ export default function BusinessProfile() {
             variant="outline"
             size="sm"
             onClick={() => window.print()}
-            className="gap-2 bg-purple-600 hover:bg-purple-700 text-white border-purple-600 hover:border-purple-700"
+            className="w-full gap-2 border-purple-600 bg-purple-600 text-white hover:border-purple-700 hover:bg-purple-700 sm:w-auto"
           >
             <Printer className="h-4 w-4" />
             {t.panelInicial.diagnosis.printDiagnosis}
@@ -184,7 +184,7 @@ export default function BusinessProfile() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 p-4 shadow-sm dark:border-gray-700 sm:p-6">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
           {t.panelInicial.diagnosis.centerTitle}
         </h3>
@@ -218,7 +218,7 @@ export default function BusinessProfile() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 p-4 shadow-sm dark:border-gray-700 sm:p-6">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
           {t.panelInicial.diagnosis.progress}
         </h3>
@@ -255,7 +255,7 @@ export default function BusinessProfile() {
 
           return (
             <div key={pilar.id}>
-              <div className={`border-2 rounded-lg p-6 transition-all ${colors.border} ${colors.bg}`}>
+              <div className={`border-2 rounded-lg p-4 transition-all sm:p-6 ${colors.border} ${colors.bg}`}>
                 <div className="flex items-start gap-4 mb-4">
                   <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl ${colors.icon}`}>
                     {pilar.emoji}
@@ -265,14 +265,14 @@ export default function BusinessProfile() {
                     <p className="text-sm text-gray-600 dark:text-gray-400">{pilar.description}</p>
                   </div>
                 </div>
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     {progress}/{totalPillarQuestions}
                   </span>
                   <Button
                     onClick={() => handleStartPillar(pilar.id)}
                     size="sm"
-                    className="bg-purple-600 hover:bg-purple-700 text-white"
+                    className="w-full bg-purple-600 text-white hover:bg-purple-700 sm:w-auto"
                   >
                     {progress === 0
                       ? t.panelInicial.diagnosis.start
@@ -284,18 +284,18 @@ export default function BusinessProfile() {
               </div>
 
               {isActive && (
-                <div className="mt-4 bg-white dark:bg-gray-800 border-2 border-purple-600 rounded-lg p-8 shadow-lg">
-                  <div className="flex items-center justify-between gap-4 mb-6">
+                <div className="mt-4 rounded-lg border-2 border-purple-600 bg-white p-4 shadow-lg dark:bg-gray-800 sm:p-8">
+                  <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <h4 className="font-semibold text-lg text-gray-900 dark:text-white">
                       {pilar.emoji} {pilar.title}
                     </h4>
-                    <Button variant="outline" size="sm" onClick={() => setActivePillar(null)}>
+                    <Button variant="outline" size="sm" onClick={() => setActivePillar(null)} className="w-full sm:w-auto">
                       {t.panelInicial.diagnosis.close}
                     </Button>
                   </div>
 
                   <div className="mb-8">
-                    <div className="flex items-center justify-between mb-2 gap-4">
+                    <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                         {t.panelInicial.diagnosis.question} {currentQuestion + 1} {t.panelInicial.diagnosis.of}{' '}
                         {totalPillarQuestions}
@@ -318,7 +318,7 @@ export default function BusinessProfile() {
 
                     return (
                       <div className="mb-8">
-                        <p className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+                        <p className="mb-6 text-lg font-semibold text-gray-900 dark:text-white sm:text-xl">
                           {currentQuestion + 1}. {currentQ.question}
                         </p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -326,7 +326,7 @@ export default function BusinessProfile() {
                             <button
                               key={optionIndex}
                               onClick={() => handleAnswer(pilar.id, currentQuestion, optionIndex)}
-                              className={`px-6 py-4 rounded-lg text-base font-medium transition-all border-2 text-left ${
+                              className={`rounded-lg border-2 px-4 py-4 text-left text-sm font-medium transition-all sm:px-6 sm:text-base ${
                                 selectedAnswer === optionIndex
                                   ? 'bg-purple-600 border-purple-600 text-white shadow-md'
                                   : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20'
@@ -340,13 +340,13 @@ export default function BusinessProfile() {
                     );
                   })()}
 
-                  <div className="flex items-center justify-between pt-6 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex flex-col-reverse gap-3 border-t border-gray-200 pt-6 dark:border-gray-700 sm:flex-row sm:items-center sm:justify-between">
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={handlePreviousQuestion}
                       disabled={currentQuestion === 0}
-                      className="gap-2"
+                      className="w-full gap-2 sm:w-auto"
                     >
                       <ChevronLeft className="w-4 h-4" />
                       {t.panelInicial.diagnosis.previous}
@@ -356,7 +356,7 @@ export default function BusinessProfile() {
                       <Button
                         size="sm"
                         onClick={handleNextQuestion}
-                        className="gap-2 bg-purple-600 hover:bg-purple-700"
+                        className="w-full gap-2 bg-purple-600 hover:bg-purple-700 sm:w-auto"
                       >
                         {t.panelInicial.diagnosis.next}
                         <ChevronRight className="w-4 h-4" />
@@ -369,7 +369,7 @@ export default function BusinessProfile() {
                           setCurrentQuestion(0);
                         }}
                         disabled={progress < totalPillarQuestions}
-                        className="bg-green-600 hover:bg-green-700"
+                        className="w-full bg-green-600 hover:bg-green-700 sm:w-auto"
                       >
                         {t.panelInicial.diagnosis.finish}
                       </Button>

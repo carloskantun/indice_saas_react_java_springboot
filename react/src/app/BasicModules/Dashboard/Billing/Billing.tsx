@@ -390,7 +390,7 @@ export default function Billing() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-purple-50 dark:bg-purple-900/10 rounded-lg p-6 border border-purple-200 dark:border-purple-700/30">
+      <div className="bg-purple-50 dark:bg-purple-900/10 rounded-lg border border-purple-200 p-4 dark:border-purple-700/30 sm:p-6">
         <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
           <span className="text-2xl">🧾</span>
           {t.panelInicial.billing.title}
@@ -399,7 +399,7 @@ export default function Billing() {
       </div>
 
       <div className="space-y-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
           <div className="flex items-start gap-2 mb-4">
             <div className="w-6 h-6 rounded bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-purple-600 dark:text-purple-400">
               📋
@@ -441,8 +441,8 @@ export default function Billing() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-start justify-between gap-4 mb-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+          <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-start gap-2">
               <div className="w-6 h-6 rounded bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-purple-600 dark:text-purple-400">
                 <CreditCard className="w-4 h-4" />
@@ -461,7 +461,7 @@ export default function Billing() {
               variant="outline"
               size="sm"
               onClick={() => setShowAddCard((prevValue) => !prevValue)}
-              className="gap-2"
+              className="w-full gap-2 sm:w-auto"
             >
               {showAddCard
                 ? `✕ ${t.panelInicial.billing.paymentMethod.cancel}`
@@ -485,7 +485,7 @@ export default function Billing() {
                   }`}
                   onClick={() => setDefaultCard(card.id)}
                 >
-                  <div className="flex items-center justify-between gap-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
                         <CreditCard className="w-5 h-5 text-gray-600 dark:text-gray-400" />
@@ -500,7 +500,7 @@ export default function Billing() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       {card.isDefault && (
                         <span className="px-3 py-1 text-xs font-medium bg-purple-600 text-white rounded-full">
                           {t.panelInicial.billing.paymentMethod.defaultCard}
@@ -707,7 +707,7 @@ export default function Billing() {
           )}
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
           <div className="flex items-start gap-2 mb-4">
             <div className="w-6 h-6 rounded bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-purple-600 dark:text-purple-400">
               <FileText className="w-4 h-4" />
@@ -723,7 +723,7 @@ export default function Billing() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="min-w-[640px] w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-700/50">
                 <tr>
                   <th className="px-4 py-3 text-left font-medium text-gray-700 dark:text-gray-300">

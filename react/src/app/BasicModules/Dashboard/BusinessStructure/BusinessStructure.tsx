@@ -329,8 +329,8 @@ export default function BusinessStructure() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-purple-50 dark:bg-purple-900/10 rounded-lg p-6 border border-purple-200 dark:border-purple-700/30">
-        <div className="flex items-center justify-between gap-4">
+      <div className="bg-purple-50 dark:bg-purple-900/10 rounded-lg border border-purple-200 p-4 dark:border-purple-700/30 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
               <span className="text-2xl">🏢</span>
@@ -340,7 +340,7 @@ export default function BusinessStructure() {
               {t.panelInicial.structure.subtitle}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
             <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>Spring backend connected</span>
@@ -348,7 +348,7 @@ export default function BusinessStructure() {
             <Button
               onClick={handlePersistBusinessStructure}
               disabled={isSaving || isLoading}
-              className="bg-purple-600 hover:bg-purple-700 text-white"
+              className="w-full bg-purple-600 text-white hover:bg-purple-700 sm:w-auto"
             >
               {isSaving ? 'Saving...' : 'Save changes'}
             </Button>
@@ -411,7 +411,7 @@ export default function BusinessStructure() {
       {showUnidadModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
-            <div className="flex items-center justify-between p-6 bg-purple-600 dark:bg-purple-700">
+            <div className="flex items-start justify-between gap-4 bg-purple-600 p-4 dark:bg-purple-700 sm:p-6">
               <div>
                 <h3 className="text-xl font-semibold text-white">
                   {editingUnidad
@@ -437,7 +437,7 @@ export default function BusinessStructure() {
               onSubmit={handleSaveUnidad}
               className="overflow-y-auto max-h-[calc(90vh-160px)]"
             >
-              <div className="p-6 space-y-5">
+              <div className="space-y-5 p-4 sm:p-6">
                 <div>
                   <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
                     Información básica
@@ -461,7 +461,7 @@ export default function BusinessStructure() {
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Logo <span className="text-xs text-gray-500 font-normal">(opcional)</span>
                       </label>
-                      <div className="flex items-start gap-4">
+                      <div className="flex flex-col items-start gap-4 sm:flex-row">
                         {(unidadLogoPreview || editingUnidad?.logo) && (
                           <div className="flex-shrink-0">
                             <img
@@ -630,15 +630,15 @@ export default function BusinessStructure() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+              <div className="flex flex-col-reverse gap-3 border-t border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-700/50 sm:flex-row sm:items-center sm:justify-end sm:p-6">
                 <Button
                   type="button"
                   onClick={closeUnidadModal}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200"
+                  className="w-full bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 sm:w-auto"
                 >
                   {t.panelInicial.structure.modal.cancel}
                 </Button>
-                <Button type="submit" className="bg-purple-600 hover:bg-purple-700 text-white">
+                <Button type="submit" className="w-full bg-purple-600 text-white hover:bg-purple-700 sm:w-auto">
                   {t.panelInicial.structure.modal.save}
                 </Button>
               </div>
@@ -650,7 +650,7 @@ export default function BusinessStructure() {
       {showNegocioModal && editingNegocio && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
-            <div className="flex items-center justify-between p-6 bg-purple-600 dark:bg-purple-700">
+            <div className="flex items-start justify-between gap-4 bg-purple-600 p-4 dark:bg-purple-700 sm:p-6">
               <div>
                 <h3 className="text-xl font-semibold text-white">
                   {editingNegocio.id
@@ -676,7 +676,7 @@ export default function BusinessStructure() {
               onSubmit={handleSaveNegocio}
               className="overflow-y-auto max-h-[calc(90vh-160px)]"
             >
-              <div className="p-6 space-y-5">
+              <div className="space-y-5 p-4 sm:p-6">
                 <div>
                   <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
                     Información básica
@@ -700,7 +700,7 @@ export default function BusinessStructure() {
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Logo <span className="text-xs text-gray-500 font-normal">(opcional)</span>
                       </label>
-                      <div className="flex items-start gap-4">
+                      <div className="flex flex-col items-start gap-4 sm:flex-row">
                         {(negocioLogoPreview || editingNegocio.logo) && (
                           <div className="flex-shrink-0">
                             <img
@@ -899,15 +899,15 @@ export default function BusinessStructure() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+              <div className="flex flex-col-reverse gap-3 border-t border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-700/50 sm:flex-row sm:items-center sm:justify-end sm:p-6">
                 <Button
                   type="button"
                   onClick={closeNegocioModal}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200"
+                  className="w-full bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 sm:w-auto"
                 >
                   {t.panelInicial.structure.modal.cancel}
                 </Button>
-                <Button type="submit" className="bg-purple-600 hover:bg-purple-700 text-white">
+                <Button type="submit" className="w-full bg-purple-600 text-white hover:bg-purple-700 sm:w-auto">
                   {editingNegocio.id
                     ? t.panelInicial.structure.modal.save
                     : 'Crear negocio'}
