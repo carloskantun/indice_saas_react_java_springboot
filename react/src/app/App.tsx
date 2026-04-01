@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
 import { Settings } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router';
+import { useLocation, useNavigate, useParams } from 'react-router';
 import { Header } from './components/Header';
 import { KPICard } from './components/KPICard';
 import { KPICarousel } from './components/KPICarousel';
@@ -203,11 +203,12 @@ function Dashboard({
   const aiModules = availableModules.filter((module) => module.category === 'ai');
 
   const favoriteModules = getFavoriteModules(availableModules);
+  const isGuidedLearningVisible = learningModeActive && learningModeVisible;
 
   return (
     <main className="max-w-[1600px] mx-auto px-8 py-10 space-y-12">
       {/* Modo Aprendiz Banner */}
-      {learningModeActive && (
+      {isGuidedLearningVisible && (
         <LearningModeBanner
           isVisible={learningModeVisible}
           onHide={() => setLearningModeVisible(false)}
@@ -219,7 +220,7 @@ function Dashboard({
       )}
 
       {/* Sección KPIs - Solo visible cuando Modo Aprendiz está desactivado */}
-      {!learningModeActive && (
+      {!isGuidedLearningVisible && (
         <section>
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -268,7 +269,7 @@ function Dashboard({
       )}
 
       {/* Sección Favoritos - Solo visible cuando Modo Aprendiz está desactivado */}
-      {!learningModeActive && favoriteModules.length > 0 && (
+      {!isGuidedLearningVisible && favoriteModules.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
@@ -308,8 +309,8 @@ function Dashboard({
               onToggleFavorite={() => toggleFavorite(module.id)}
               onClick={() => handleModuleClick(module.route)}
               size="small"
-              stepNumber={learningModeActive ? index + 1 : undefined}
-              isHighlighted={learningModeActive && learningStep === index}
+              stepNumber={isGuidedLearningVisible ? index + 1 : undefined}
+              isHighlighted={isGuidedLearningVisible && learningStep === index}
             />
           ))}
         </ModuleCarousel>
@@ -364,6 +365,7 @@ function Dashboard({
 
 export default function App() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { pageId, '*': wildcardPath } = useParams();
   const [learningModeActive, setLearningModeActive] = useLocalStorageState('indice.app.learningModeActive', true);
   const [learningModeVisible, setLearningModeVisible] = useLocalStorageState('indice.app.learningModeVisible', true);
@@ -384,18 +386,26 @@ export default function App() {
 
     if (needsPageRedirect) {
       navigate(getPagePath(currentPage, wildcardPath), { replace: true });
+      return;
     }
-  }, [currentPage, navigate, needsPageRedirect, pageId, wildcardPath]);
+
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [currentPage, navigate, needsPageRedirect, pageId, pathname, wildcardPath]);
 
   const toggleLearningMode = () => {
-    setLearningModeActive(!learningModeActive);
-    if (!learningModeActive) {
-      setLearningModeVisible(true);
-    }
+    setLearningModeActive((current) => {
+      const next = !current;
+
+      if (next) {
+        setLearningModeVisible(true);
+      }
+
+      return next;
+    });
   };
 
   const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
+    setDarkMode((current) => !current);
   };
 
   const handleModuleNavigation = (page?: string) => {

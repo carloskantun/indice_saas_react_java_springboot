@@ -150,11 +150,12 @@ export default function Dashboard() {
   ];
 
   const favoriteModules = mainModules.filter(module => favorites.includes(module.id));
+  const isGuidedLearningVisible = learningModeActive && learningModeVisible;
 
   return (
     <main className="max-w-[1600px] mx-auto px-8 py-10 space-y-12">
       {/* Modo Aprendiz Banner */}
-      {learningModeActive && (
+      {isGuidedLearningVisible && (
         <LearningModeBanner
           isVisible={learningModeVisible}
           onHide={() => setLearningModeVisible(false)}
@@ -166,7 +167,7 @@ export default function Dashboard() {
       )}
 
       {/* Sección KPIs - Solo visible cuando Modo Aprendiz está desactivado */}
-      {!learningModeActive && (
+      {!isGuidedLearningVisible && (
         <section>
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -215,7 +216,7 @@ export default function Dashboard() {
       )}
 
       {/* Sección Favoritos - Solo visible cuando Modo Aprendiz está desactivado */}
-      {!learningModeActive && favoriteModules.length > 0 && (
+      {!isGuidedLearningVisible && favoriteModules.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
@@ -255,8 +256,8 @@ export default function Dashboard() {
               onToggleFavorite={() => toggleFavorite(module.id)}
               onClick={() => handleModuleClick(module.id)}
               size="small"
-              stepNumber={learningModeActive ? index + 1 : undefined}
-              isHighlighted={learningModeActive && learningStep === index}
+              stepNumber={isGuidedLearningVisible ? index + 1 : undefined}
+              isHighlighted={isGuidedLearningVisible && learningStep === index}
             />
           ))}
         </ModuleCarousel>
