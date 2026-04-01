@@ -537,8 +537,8 @@ export default function Users() {
         </div>
       ) : null}
 
-      <div className="bg-purple-50 dark:bg-purple-900/10 rounded-lg p-6 border border-purple-200 dark:border-purple-700/30">
-        <div className="flex items-center justify-between gap-4">
+      <div className="bg-purple-50 dark:bg-purple-900/10 rounded-lg border border-purple-200 p-4 dark:border-purple-700/30 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
               <span className="text-2xl">👥</span>
@@ -549,7 +549,7 @@ export default function Users() {
             </p>
           </div>
           <Button
-            className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
+            className="w-full gap-2 bg-purple-600 text-white hover:bg-purple-700 sm:w-auto"
             onClick={() => {
               setInviteForm(emptyInviteForm);
               setInviteLink('');
@@ -608,16 +608,16 @@ export default function Users() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-6">
           <div className="text-center">
-            <div className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-1">
+            <div className="mb-1 text-2xl font-bold text-purple-600 dark:text-purple-400 sm:text-3xl">
               {totalUsers}
             </div>
             <div className="text-sm text-gray-600 dark:text-gray-400">{summaryLabels.total}</div>
           </div>
           <div className="text-center">
-            <div className="text-3xl font-bold text-green-600 dark:text-green-400 mb-1">
+            <div className="mb-1 text-2xl font-bold text-green-600 dark:text-green-400 sm:text-3xl">
               {activeUsers}
             </div>
             <div className="text-sm text-gray-600 dark:text-gray-400">
@@ -625,7 +625,7 @@ export default function Users() {
             </div>
           </div>
           <div className="text-center">
-            <div className="text-3xl font-bold text-yellow-600 dark:text-yellow-400 mb-1">
+            <div className="mb-1 text-2xl font-bold text-yellow-600 dark:text-yellow-400 sm:text-3xl">
               {pendingUsers}
             </div>
             <div className="text-sm text-gray-600 dark:text-gray-400">
@@ -633,7 +633,7 @@ export default function Users() {
             </div>
           </div>
           <div className="text-center">
-            <div className="text-3xl font-bold text-gray-600 dark:text-gray-400 mb-1">
+            <div className="mb-1 text-2xl font-bold text-gray-600 dark:text-gray-400 sm:text-3xl">
               {inactiveUsers}
             </div>
             <div className="text-sm text-gray-600 dark:text-gray-400">
@@ -645,7 +645,7 @@ export default function Users() {
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="min-w-[720px] w-full">
             <thead className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -799,7 +799,7 @@ export default function Users() {
       {selectedUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-start justify-between gap-4 border-b border-gray-200 p-4 dark:border-gray-700 sm:p-6">
               <div>
                 <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
                   {t.panelInicial.users.modal.modules}
@@ -815,7 +815,7 @@ export default function Users() {
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto max-h-[calc(90vh-160px)]">
+            <div className="max-h-[calc(90vh-160px)] overflow-y-auto p-4 sm:p-6">
               {categoryMeta.map((section) => (
                 <div key={section.category} className="mb-6 last:mb-0">
                   <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
@@ -875,13 +875,13 @@ export default function Users() {
               ))}
             </div>
 
-            <div className="flex items-center justify-between p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  {formatSelectedModulesCount(selectedModulesDraft.length)}
-                </div>
+            <div className="flex flex-col gap-3 border-t border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-700/50 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                {formatSelectedModulesCount(selectedModulesDraft.length)}
+              </div>
               <Button
                 onClick={handleSaveSelectedModules}
-                className="bg-purple-600 hover:bg-purple-700 text-white"
+                className="w-full bg-purple-600 text-white hover:bg-purple-700 sm:w-auto"
               >
                 {t.panelInicial.users.modal.save}
               </Button>
@@ -893,7 +893,7 @@ export default function Users() {
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-start justify-between gap-4 border-b border-gray-200 p-4 dark:border-gray-700 sm:p-6">
               <div>
                 <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
                   {t.panelInicial.users.modal.newUser}
@@ -912,7 +912,7 @@ export default function Users() {
             </div>
 
             <form onSubmit={handleSendInvite}>
-              <div className="p-6 space-y-4">
+              <div className="space-y-4 p-4 sm:p-6">
                 {!inviteLink ? (
                   <>
                     <div>
@@ -977,7 +977,7 @@ export default function Users() {
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         {t.panelInicial.users.modal.inviteLink}
                       </label>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col gap-2 sm:flex-row">
                         <input
                           type="text"
                           value={inviteLink}
@@ -987,7 +987,7 @@ export default function Users() {
                         <button
                           type="button"
                           onClick={() => copyToClipboard(inviteLink)}
-                          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                          className="flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-white transition-colors hover:bg-purple-700 sm:w-auto"
                         >
                           {copiedLink ? (
                             <>
@@ -1007,17 +1007,17 @@ export default function Users() {
                 )}
               </div>
 
-              <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+              <div className="flex flex-col-reverse gap-3 border-t border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-700/50 sm:flex-row sm:items-center sm:justify-end sm:p-6">
                 {!inviteLink ? (
                   <>
                     <Button
                       type="button"
                       onClick={closeInviteModal}
-                      className="bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200"
+                      className="w-full bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 sm:w-auto"
                     >
                       {t.panelInicial.users.modal.cancel}
                     </Button>
-                    <Button type="submit" className="bg-purple-600 hover:bg-purple-700 text-white gap-2">
+                    <Button type="submit" className="w-full gap-2 bg-purple-600 text-white hover:bg-purple-700 sm:w-auto">
                       <UserPlus className="w-4 h-4" />
                       {t.panelInicial.users.modal.send}
                     </Button>
@@ -1026,7 +1026,7 @@ export default function Users() {
                   <Button
                     type="button"
                     onClick={closeInviteModal}
-                    className="bg-purple-600 hover:bg-purple-700 text-white"
+                    className="w-full bg-purple-600 text-white hover:bg-purple-700 sm:w-auto"
                   >
                     {closeLabel}
                   </Button>
@@ -1040,7 +1040,7 @@ export default function Users() {
       {showResendModal && resendUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-start justify-between gap-4 border-b border-gray-200 p-4 dark:border-gray-700 sm:p-6">
               <div>
                 <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
                   {t.panelInicial.users.actions.resend}
@@ -1056,7 +1056,7 @@ export default function Users() {
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="space-y-4 p-4 sm:p-6">
               {!inviteLink ? (
                 <>
                   <div>
@@ -1103,7 +1103,7 @@ export default function Users() {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       {t.panelInicial.users.modal.inviteLink}
                     </label>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row">
                       <input
                         type="text"
                         value={inviteLink}
@@ -1113,7 +1113,7 @@ export default function Users() {
                       <button
                         type="button"
                         onClick={() => copyToClipboard(inviteLink)}
-                        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                        className="flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-white transition-colors hover:bg-purple-700 sm:w-auto"
                       >
                         {copiedLink ? (
                           <>
@@ -1133,20 +1133,20 @@ export default function Users() {
               )}
             </div>
 
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+            <div className="flex flex-col-reverse gap-3 border-t border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-700/50 sm:flex-row sm:items-center sm:justify-end sm:p-6">
               {!inviteLink ? (
                 <>
                   <Button
                     type="button"
                     onClick={closeResendModal}
-                    className="bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200"
+                    className="w-full bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 sm:w-auto"
                   >
                     {t.panelInicial.users.modal.cancel}
                   </Button>
                   <Button
                     type="button"
                     onClick={handleResendInvite}
-                    className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
+                    className="w-full gap-2 bg-purple-600 text-white hover:bg-purple-700 sm:w-auto"
                   >
                     <Mail className="w-4 h-4" />
                     {t.panelInicial.users.actions.resend}
@@ -1156,7 +1156,7 @@ export default function Users() {
                 <Button
                   type="button"
                   onClick={closeResendModal}
-                  className="bg-purple-600 hover:bg-purple-700 text-white"
+                  className="w-full bg-purple-600 text-white hover:bg-purple-700 sm:w-auto"
                 >
                   {closeLabel}
                 </Button>

@@ -32,9 +32,9 @@ export function UnitsSection({
   onCreateUnidad,
 }: UnitsSectionProps) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
       <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-5">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               {structure.units.title}
@@ -52,7 +52,7 @@ export function UnitsSection({
             key={unidad.id}
             className="border-2 border-gray-200 dark:border-gray-700 rounded-lg p-4 transition-all"
           >
-            <div className="flex items-center justify-between gap-4 mb-3">
+            <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-xl">📍</span>
                 <div>
@@ -62,7 +62,7 @@ export function UnitsSection({
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                 <button
                   type="button"
                   onClick={() => onEditUnidad(unidad)}
@@ -83,13 +83,13 @@ export function UnitsSection({
             </div>
 
             {unidad.negocios.length > 0 && (
-              <div className="ml-8 space-y-2 mb-3">
+              <div className="mb-3 space-y-2 sm:ml-8">
                 {unidad.negocios.map((negocio) => (
                   <div
                     key={negocio.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700"
+                    className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/50 sm:flex-row sm:items-center sm:justify-between"
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                       <span className="text-sm">🏪</span>
                       <span className="text-sm font-medium text-gray-900 dark:text-white">
                         {negocio.name}
@@ -119,7 +119,7 @@ export function UnitsSection({
             <button
               type="button"
               onClick={() => onCreateNegocio(unidad.id)}
-              className="ml-8 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-medium transition-colors"
+              className="w-full rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-purple-700 sm:ml-8 sm:w-auto"
             >
               {structure.units.addBusiness}
             </button>

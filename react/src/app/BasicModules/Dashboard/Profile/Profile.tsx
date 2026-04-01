@@ -115,8 +115,8 @@ export default function Profile() {
 
   return (
     <div>
-      <div className="bg-purple-50 dark:bg-purple-900/10 rounded-lg p-6 border border-purple-200 dark:border-purple-700/30 mb-6">
-        <div className="flex items-center justify-between">
+      <div className="bg-purple-50 dark:bg-purple-900/10 mb-6 rounded-lg border border-purple-200 p-4 dark:border-purple-700/30 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
               <span className="text-2xl">👤</span>
@@ -129,7 +129,7 @@ export default function Profile() {
           <Button
             onClick={handleSaveProfile}
             disabled={isLoading || isSaving}
-            className="bg-purple-600 hover:bg-purple-700 text-white"
+            className="w-full bg-purple-600 text-white hover:bg-purple-700 sm:w-auto"
           >
             {isSaving ? 'Saving...' : 'Save profile'}
           </Button>
@@ -158,7 +158,7 @@ export default function Profile() {
         Profile data in this screen now loads from and saves through the Spring backend.
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-4">
+      <div className="bg-white dark:bg-gray-800 mb-4 rounded-xl border border-gray-200 p-4 shadow-sm dark:border-gray-700 sm:p-6">
         <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-5">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             Identidad
@@ -172,7 +172,7 @@ export default function Profile() {
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             {t.panelInicial.profile.fields.profilePhoto}
           </label>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
             <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white text-xl font-semibold shadow-md">
               {initials}
             </div>
@@ -191,7 +191,7 @@ export default function Profile() {
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             Nombre y apellidos
           </label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="block text-[11px] font-medium text-gray-600 dark:text-gray-400 mb-1.5">
                 Nombre o nombres
@@ -238,7 +238,7 @@ export default function Profile() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-4">
+      <div className="bg-white dark:bg-gray-800 mb-4 rounded-xl border border-gray-200 p-4 shadow-sm dark:border-gray-700 sm:p-6">
         <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-5">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             Información de contacto
@@ -259,8 +259,8 @@ export default function Profile() {
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             {t.panelInicial.profile.fields.phone} <span className="text-gray-400 text-[11px]">(opcional)</span>
           </label>
-          <div className="flex gap-2">
-            <select value={phonePrefix} onChange={(event) => setPhonePrefix(event.target.value)} className={`${inputClassName} w-auto`}>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <select value={phonePrefix} onChange={(event) => setPhonePrefix(event.target.value)} className={`${inputClassName} w-full sm:min-w-[112px] sm:w-auto`}>
               <option value="+1">🇺🇸 +1</option>
               <option value="+52">🇲🇽 +52</option>
               <option value="+34">🇪🇸 +34</option>
@@ -279,7 +279,7 @@ export default function Profile() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-4">
+      <div className="bg-white dark:bg-gray-800 mb-4 rounded-xl border border-gray-200 p-4 shadow-sm dark:border-gray-700 sm:p-6">
         <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-5">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             Seguridad de la cuenta
@@ -289,7 +289,7 @@ export default function Profile() {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Nueva contraseña
@@ -308,7 +308,7 @@ export default function Profile() {
         </p>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 p-4 shadow-sm dark:border-gray-700 sm:p-6">
         <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-5">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             Preferencias

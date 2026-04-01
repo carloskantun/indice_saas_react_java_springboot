@@ -37,7 +37,7 @@ const legacySubTabAliases: Partial<Record<string, PanelInicialTabId>> = {
 export default function PanelInicial({ onNavigate }: PanelInicialProps) {
   const { t } = useLanguage();
   const { activeTab: activeSubTab, setActiveTab: setActiveSubTab } = useRoutedModuleTab<PanelInicialTabId>(
-    'business-profile',
+    'profile',
     subTabIds,
     legacySubTabAliases,
   );
@@ -52,12 +52,12 @@ export default function PanelInicial({ onNavigate }: PanelInicialProps) {
   ];
 
   // Get the active component
-  const ActiveComponent = subTabs.find(tab => tab.id === activeSubTab)?.component || BusinessProfile;
+  const ActiveComponent = subTabs.find(tab => tab.id === activeSubTab)?.component || Profile;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header del módulo */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-8 py-6">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4 sm:px-8 sm:py-6">
         <div className="max-w-[1600px] mx-auto">
           {/* Barra de Favoritos */}
           <FavoritesBar 
@@ -68,46 +68,48 @@ export default function PanelInicial({ onNavigate }: PanelInicialProps) {
             currentModule="home-panel" 
           />
           
-          <div className="flex items-start justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 sm:text-3xl">
                 {t.panelInicial.title}
               </h1>
               <p className="text-gray-600 dark:text-gray-400">
                 Configure your profile, business structure, billing, and more.
               </p>
             </div>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => onNavigate()}
-              className="text-sm gap-2"
+              className="w-full justify-center gap-2 text-sm sm:w-auto"
             >
               <span className="text-lg">🏠</span> {t.panelInicial.back}
             </Button>
           </div>
 
           {/* Sub-tabs */}
-          <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-2">
-            {subTabs.map(tab => (
-              <button
-                key={tab.id}
-                className={`px-4 py-2 text-sm font-medium rounded-full whitespace-nowrap transition-all duration-200 flex items-center gap-2 ${
-                  activeSubTab === tab.id
-                    ? 'bg-purple-600 text-white shadow-md'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-200'
-                }`}
-                onClick={() => setActiveSubTab(tab.id as PanelInicialTabId)}
-              >
-                <span>{tab.emoji}</span>
-                <span>{tab.label}</span>
-              </button>
-            ))}
+          <div className="-mx-4 mt-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+            <div className="flex min-w-max items-center gap-2">
+              {subTabs.map(tab => (
+                <button
+                  key={tab.id}
+                  className={`flex items-center gap-2 whitespace-nowrap rounded-full px-3 py-2 text-xs font-medium transition-all duration-200 sm:px-4 sm:text-sm ${
+                    activeSubTab === tab.id
+                      ? 'bg-purple-600 text-white shadow-md'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-200'
+                  }`}
+                  onClick={() => setActiveSubTab(tab.id as PanelInicialTabId)}
+                >
+                  <span>{tab.emoji}</span>
+                  <span>{tab.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
       {/* Contenido Principal */}
-      <div className="max-w-[1600px] mx-auto px-8 py-8">
+      <div className="max-w-[1600px] mx-auto px-4 py-6 sm:px-8 sm:py-8">
         <ActiveComponent />
       </div>
     </div>

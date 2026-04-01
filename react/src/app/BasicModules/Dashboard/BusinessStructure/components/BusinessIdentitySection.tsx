@@ -44,7 +44,7 @@ export function BusinessIdentitySection({
   return (
     <div
       key={`identity-${estructuraType}`}
-      className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6"
+      className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6"
     >
       <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-5">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -107,7 +107,7 @@ export function BusinessIdentitySection({
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           Logo de la {identityLabel}
         </label>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
           <button className="px-4 py-2 bg-white dark:bg-gray-700 border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-purple-500 dark:hover:border-purple-500 rounded-lg text-sm text-gray-700 dark:text-gray-300 font-medium transition-all">
             Seleccionar archivo
           </button>

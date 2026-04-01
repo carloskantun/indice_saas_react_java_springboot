@@ -276,6 +276,9 @@ export function mergeDashboardModules(
   fallbackModules: DashboardModuleCard[],
 ): DashboardModuleCard[] {
   const merged = new Map<string, DashboardModuleCard>();
+  const fallbackOrder = new Map(
+    fallbackModules.map((module, index) => [module.id, index] as const),
+  );
 
   for (const module of apiModules) {
     merged.set(module.id, module);
@@ -287,7 +290,16 @@ export function mergeDashboardModules(
     }
   }
 
-  return Array.from(merged.values());
+  return Array.from(merged.values()).sort((left, right) => {
+    const leftOrder = fallbackOrder.get(left.id) ?? Number.MAX_SAFE_INTEGER;
+    const rightOrder = fallbackOrder.get(right.id) ?? Number.MAX_SAFE_INTEGER;
+
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+
+    return left.title.localeCompare(right.title);
+  });
 }
 
 function normalizeCategory(
