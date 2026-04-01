@@ -61,7 +61,7 @@ export function FavoritesBar({ onNavigate, currentModule }: FavoritesBarProps) {
 
   return (
     <div className="mb-6">
-      <div className="-mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+      <div className="-mx-4 overflow-x-auto px-4 py-2 sm:mx-0 sm:px-0">
         <div className="flex min-w-max items-center gap-2 sm:min-w-0 sm:flex-wrap">
           {/* Botón Dashboard - Siempre fijo */}
           <button

@@ -60,13 +60,15 @@ export default function PanelInicial({ onNavigate }: PanelInicialProps) {
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4 sm:px-8 sm:py-6">
         <div className="max-w-[1600px] mx-auto">
           {/* Barra de Favoritos */}
-          <FavoritesBar 
-            onNavigate={(page) => {
-              if (page === 'home-panel') return;
-              onNavigate(page);
-            }} 
-            currentModule="home-panel" 
-          />
+          <div className="mt-2 sm:mt-3">
+            <FavoritesBar
+              onNavigate={(page) => {
+                if (page === 'home-panel') return;
+                onNavigate(page);
+              }}
+              currentModule="home-panel"
+            />
+          </div>
           
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
