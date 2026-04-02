@@ -160,6 +160,35 @@
           }
         },
         {
+          "name": "PUT Current User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"primer_nombre\": \"Usuario\",\n  \"segundo_nombre\": \"Spring\",\n  \"apellido_paterno\": \"Demo\",\n  \"apellido_materno\": \"Activo\",\n  \"telefono\": \"+1 555-0100\",\n  \"country\": \"CA\",\n  \"preferred_language\": \"en-US\",\n  \"new_password\": \"newSecret123\",\n  \"confirm_new_password\": \"newSecret123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/config-center/current-user",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "config-center",
+                "current-user"
+              ]
+            },
+            "description": "Updates the editable current-user profile fields. `country` is stored separately from `telefono`. Password fields are optional and only applied when both are provided."
+          }
+        },
+        {
           "name": "GET Users",
           "request": {
             "method": "GET",

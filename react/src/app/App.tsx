@@ -8,6 +8,7 @@ import { ModuleCard } from './components/ModuleCard';
 import { ModuleCarousel } from './components/ModuleCarousel';
 import { LearningModeBanner } from './components/LearningModeBanner';
 import { KPIConfiguration } from './components/KPIConfiguration';
+import { SuccessToast } from './components/SuccessToast';
 import { Button } from './components/ui/button';
 import { useLanguage } from './shared/context';
 import { useFavorites } from './shared/context';
@@ -48,6 +49,15 @@ import {
   mergeDashboardModules,
   type DashboardModuleCard,
 } from './config/moduleCatalog';
+
+const getNavigationSuccessToast = (state: unknown) => {
+  if (!state || typeof state !== 'object' || !('successToast' in state)) {
+    return '';
+  }
+
+  const successToast = (state as { successToast?: unknown }).successToast;
+  return typeof successToast === 'string' ? successToast : '';
+};
 
 function StandaloneModuleShell({
   children,
@@ -365,12 +375,14 @@ function Dashboard({
 
 export default function App() {
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname, state } = location;
   const { pageId, '*': wildcardPath } = useParams();
   const [learningModeActive, setLearningModeActive] = useLocalStorageState('indice.app.learningModeActive', true);
   const [learningModeVisible, setLearningModeVisible] = useLocalStorageState('indice.app.learningModeVisible', true);
   const [learningStep, setLearningStep] = useLocalStorageState('indice.app.learningStep', 0);
   const [darkMode, setDarkMode] = useLocalStorageState('indice.app.darkMode', false);
+  const [successToastMessage, setSuccessToastMessage] = useState('');
   const currentPage = resolvePageId(pageId);
   const needsPageRedirect = Boolean(pageId && currentPage && pageId !== currentPage);
 
@@ -390,7 +402,13 @@ export default function App() {
     }
 
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-  }, [currentPage, navigate, needsPageRedirect, pageId, pathname, wildcardPath]);
+
+    const nextSuccessToast = getNavigationSuccessToast(state);
+    if (nextSuccessToast) {
+      setSuccessToastMessage(nextSuccessToast);
+      navigate(pathname, { replace: true, state: null });
+    }
+  }, [currentPage, navigate, needsPageRedirect, pageId, pathname, state, wildcardPath]);
 
   const toggleLearningMode = () => {
     setLearningModeActive((current) => {
@@ -483,6 +501,11 @@ export default function App() {
         onToggleDarkMode={toggleDarkMode}
       />
       {pageContent}
+      <SuccessToast
+        isVisible={Boolean(successToastMessage)}
+        message={successToastMessage}
+        onClose={() => setSuccessToastMessage('')}
+      />
     </div>
   );
 }

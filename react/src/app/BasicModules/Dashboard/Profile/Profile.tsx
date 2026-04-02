@@ -1,38 +1,112 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button } from '../../../components/ui/button';
 import { configCenterApi, type ConfigCenterCurrentUser } from '../../../api/configCenter';
-import { useLanguage } from '../../../shared/context';
+import {
+  LoadingBarOverlay,
+  runWithMinimumDuration,
+} from '../../../components/LoadingBarOverlay';
+import { SaveChangesBar } from '../../../components/SaveChangesBar';
+import { SuccessToast } from '../../../components/SuccessToast';
+import { languages, useLanguage } from '../../../shared/context';
+import {
+  DEFAULT_PROFILE_COUNTRY,
+  getProfileCountry,
+  getProfileCountryLabel,
+  isProfileCountry,
+  PROFILE_COUNTRY_OPTIONS,
+  splitProfilePhone,
+} from '../../../shared/profileCountries';
 
 const inputClassName =
   'w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all';
 
-const splitPhone = (phone: string | undefined) => {
-  const normalizedPhone = (phone ?? '').trim();
-  if (!normalizedPhone) {
-    return { prefix: '+52', number: '' };
+const DEFAULT_PREFERRED_LANGUAGE = languages[0]?.code ?? 'es-MX';
+const LEGACY_PREFERRED_LANGUAGE_ALIASES: Record<string, string> = {
+  'es-419': 'es-MX',
+  'es-ES': 'es-MX',
+  'en-GB': 'en-US',
+};
+const SUPPORTED_PREFERRED_LANGUAGES = new Set(languages.map((language) => language.code));
+
+const DEFAULT_PROFILE_FORM_VALUES = {
+  firstName: '',
+  secondName: '',
+  lastName: '',
+  maternalLastName: '',
+  country: DEFAULT_PROFILE_COUNTRY,
+  phoneNumber: '',
+  preferredLanguage: DEFAULT_PREFERRED_LANGUAGE,
+  newPassword: '',
+  confirmNewPassword: '',
+} as const;
+
+const PROFILE_SAVE_MINIMUM_LOADING_MS = 2500;
+
+type ProfileFormValues = {
+  firstName: string;
+  secondName: string;
+  lastName: string;
+  maternalLastName: string;
+  country: string;
+  phoneNumber: string;
+  preferredLanguage: string;
+  newPassword: string;
+  confirmNewPassword: string;
+};
+
+const normalizePreferredLanguage = (languageCode?: string) => {
+  const normalizedLanguage = languageCode
+    ? (LEGACY_PREFERRED_LANGUAGE_ALIASES[languageCode] ?? languageCode)
+    : DEFAULT_PREFERRED_LANGUAGE;
+
+  return SUPPORTED_PREFERRED_LANGUAGES.has(normalizedLanguage)
+    ? normalizedLanguage
+    : DEFAULT_PREFERRED_LANGUAGE;
+};
+
+const createProfileFormValues = (user?: ConfigCenterCurrentUser | null): ProfileFormValues => {
+  if (!user) {
+    return { ...DEFAULT_PROFILE_FORM_VALUES };
   }
 
-  const match = normalizedPhone.match(/^(\+\d{1,3})\s*(.*)$/);
-  if (!match) {
-    return { prefix: '+52', number: normalizedPhone };
-  }
+  const phoneParts = splitProfilePhone(
+    user.telefono,
+    user.country,
+  );
 
   return {
-    prefix: match[1],
-    number: match[2],
+    firstName: user.primer_nombre ?? user.nombres ?? '',
+    secondName: user.segundo_nombre ?? '',
+    lastName: user.apellido_paterno ?? user.apellidos ?? '',
+    maternalLastName: user.apellido_materno ?? '',
+    country: phoneParts.country,
+    phoneNumber: phoneParts.number,
+    preferredLanguage: normalizePreferredLanguage(user.preferred_language),
+    newPassword: '',
+    confirmNewPassword: '',
   };
 };
 
+const areProfileFormValuesEqual = (
+  currentValues: ProfileFormValues,
+  baselineValues: ProfileFormValues,
+) => (
+  currentValues.firstName === baselineValues.firstName
+  && currentValues.secondName === baselineValues.secondName
+  && currentValues.lastName === baselineValues.lastName
+  && currentValues.maternalLastName === baselineValues.maternalLastName
+  && currentValues.country === baselineValues.country
+  && currentValues.phoneNumber === baselineValues.phoneNumber
+  && currentValues.preferredLanguage === baselineValues.preferredLanguage
+  && currentValues.newPassword === baselineValues.newPassword
+  && currentValues.confirmNewPassword === baselineValues.confirmNewPassword
+);
+
 export default function Profile() {
-  const { t } = useLanguage();
+  const { currentLanguage, t } = useLanguage();
+  const profileCopy = t.panelInicial.profile;
   const [user, setUser] = useState<ConfigCenterCurrentUser | null>(null);
-  const [firstName, setFirstName] = useState('');
-  const [secondName, setSecondName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [maternalLastName, setMaternalLastName] = useState('');
-  const [phonePrefix, setPhonePrefix] = useState('+52');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [preferredLanguage, setPreferredLanguage] = useState('es-419');
+  const [formValues, setFormValues] = useState<ProfileFormValues>({ ...DEFAULT_PROFILE_FORM_VALUES });
+  const [baselineValues, setBaselineValues] = useState<ProfileFormValues | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -46,21 +120,19 @@ export default function Profile() {
         if (!active) {
           return;
         }
+
+        const nextValues = createProfileFormValues(response);
+
         setUser(response);
-        setFirstName(response.primer_nombre ?? response.nombres ?? '');
-        setSecondName(response.segundo_nombre ?? '');
-        setLastName(response.apellido_paterno ?? response.apellidos ?? '');
-        setMaternalLastName(response.apellido_materno ?? '');
-        const phoneParts = splitPhone(response.telefono);
-        setPhonePrefix(phoneParts.prefix);
-        setPhoneNumber(phoneParts.number);
-        setPreferredLanguage(response.preferred_language ?? 'es-419');
+        setBaselineValues(nextValues);
+        setFormValues(nextValues);
       })
       .catch((error) => {
         if (!active) {
           return;
         }
-        setErrorMessage(error instanceof Error ? error.message : 'Unable to load profile.');
+
+        setErrorMessage(error instanceof Error ? error.message : profileCopy.messages.loadError);
       })
       .finally(() => {
         if (active) {
@@ -74,19 +146,95 @@ export default function Profile() {
   }, []);
 
   const firstNames = useMemo(
-    () => [firstName, secondName].filter((value) => value.trim().length > 0).join(' ').trim(),
-    [firstName, secondName],
+    () => [formValues.firstName, formValues.secondName]
+      .filter((value) => value.trim().length > 0)
+      .join(' ')
+      .trim(),
+    [formValues.firstName, formValues.secondName],
   );
 
   const lastNames = useMemo(
-    () => [lastName, maternalLastName].filter((value) => value.trim().length > 0).join(' ').trim(),
-    [lastName, maternalLastName],
+    () => [formValues.lastName, formValues.maternalLastName]
+      .filter((value) => value.trim().length > 0)
+      .join(' ')
+      .trim(),
+    [formValues.lastName, formValues.maternalLastName],
+  );
+  const selectedCountry = useMemo(
+    () => getProfileCountry(formValues.country),
+    [formValues.country],
+  );
+  const countryOptions = useMemo(
+    () => PROFILE_COUNTRY_OPTIONS.map((country) => ({
+      code: country.code,
+      label: getProfileCountryLabel(country, currentLanguage.code),
+    })),
+    [currentLanguage.code],
   );
 
   const initials = ((firstNames[0] ?? '') + (lastNames[0] ?? '')).trim().toUpperCase() || 'U';
+  const hasUnsavedChanges = baselineValues !== null && !areProfileFormValuesEqual(formValues, baselineValues);
+
+  const updateFormValue = <Key extends keyof ProfileFormValues>(
+    field: Key,
+    value: ProfileFormValues[Key],
+  ) => {
+    setFormValues((currentValues) => {
+      if (currentValues[field] === value) {
+        return currentValues;
+      }
+
+      return {
+        ...currentValues,
+        [field]: value,
+      };
+    });
+
+    if (errorMessage) {
+      setErrorMessage('');
+    }
+
+    if (saveMessage) {
+      setSaveMessage('');
+    }
+  };
+
+  const handleCountryChange = (value: string) => {
+    if (!isProfileCountry(value)) {
+      return;
+    }
+
+    updateFormValue('country', value);
+  };
+
+  const handleDiscardChanges = () => {
+    if (!baselineValues || isSaving) {
+      return;
+    }
+
+    setFormValues({ ...baselineValues });
+    setErrorMessage('');
+    setSaveMessage('');
+  };
 
   const handleSaveProfile = async () => {
-    if (!user) {
+    if (!user || !hasUnsavedChanges) {
+      return;
+    }
+
+    const trimmedNewPassword = formValues.newPassword.trim();
+    const trimmedPasswordConfirmation = formValues.confirmNewPassword.trim();
+    const hasPasswordChange = trimmedNewPassword.length > 0 || trimmedPasswordConfirmation.length > 0;
+
+    if (hasPasswordChange && trimmedNewPassword !== trimmedPasswordConfirmation) {
+      setErrorMessage(profileCopy.messages.passwordMismatch);
+      setSaveMessage('');
+      return;
+    }
+
+    if (trimmedNewPassword.length > 0 && trimmedNewPassword.length < 8) {
+      setErrorMessage(profileCopy.messages.passwordMinLength);
+      setSaveMessage('');
       return;
     }
 
@@ -95,30 +243,47 @@ export default function Profile() {
     setSaveMessage('');
 
     try {
-      const response = await configCenterApi.saveCurrentUser({
-        primer_nombre: firstName,
-        segundo_nombre: secondName,
-        apellido_paterno: lastName,
-        apellido_materno: maternalLastName,
-        telefono: phoneNumber.trim() ? `${phonePrefix} ${phoneNumber.trim()}` : '',
-        preferred_language: preferredLanguage,
-      });
+      const trimmedPhoneNumber = formValues.phoneNumber.trim();
+      const response = await runWithMinimumDuration(
+        configCenterApi.saveCurrentUser({
+          primer_nombre: formValues.firstName,
+          segundo_nombre: formValues.secondName,
+          apellido_paterno: formValues.lastName,
+          apellido_materno: formValues.maternalLastName,
+          telefono: trimmedPhoneNumber
+            ? `${selectedCountry.dialCode} ${trimmedPhoneNumber}`
+            : '',
+          country: formValues.country,
+          preferred_language: formValues.preferredLanguage,
+          ...(trimmedNewPassword
+            ? {
+                new_password: trimmedNewPassword,
+                confirm_new_password: trimmedPasswordConfirmation,
+              }
+            : {}),
+        }),
+        PROFILE_SAVE_MINIMUM_LOADING_MS,
+      );
+
+      const nextValues = createProfileFormValues(response);
 
       setUser(response);
-      setSaveMessage('Profile saved.');
+      setBaselineValues(nextValues);
+      setFormValues(nextValues);
+      setSaveMessage(profileCopy.messages.saveSuccess);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Unable to save profile.');
+      setErrorMessage(error instanceof Error ? error.message : profileCopy.messages.saveError);
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <div>
-      <div className="bg-purple-50 dark:bg-purple-900/10 mb-6 rounded-lg border border-purple-200 p-4 dark:border-purple-700/30 sm:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <>
+      <div className={hasUnsavedChanges ? 'pb-24 sm:pb-20' : ''}>
+        <div className="bg-purple-50 dark:bg-purple-900/10 mb-6 rounded-lg border border-purple-200 p-4 dark:border-purple-700/30 sm:p-6">
           <div>
-            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
+            <h2 className="mb-1 flex items-center gap-2 text-2xl font-semibold text-gray-900 dark:text-white">
               <span className="text-2xl">👤</span>
               {t.panelInicial.profile.title}
             </h2>
@@ -126,219 +291,255 @@ export default function Profile() {
               {t.panelInicial.profile.subtitle}
             </p>
           </div>
-          <Button
-            onClick={handleSaveProfile}
-            disabled={isLoading || isSaving}
-            className="w-full bg-purple-600 text-white hover:bg-purple-700 sm:w-auto"
-          >
-            {isSaving ? 'Saving...' : 'Save profile'}
-          </Button>
-        </div>
-      </div>
-
-      {isLoading ? (
-        <div className="mb-4 rounded-lg border border-purple-200 bg-purple-50 px-4 py-3 text-sm text-purple-700 dark:border-purple-700/30 dark:bg-purple-900/20 dark:text-purple-300">
-          Loading profile...
-        </div>
-      ) : null}
-
-      {errorMessage ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-700/30 dark:bg-red-900/20 dark:text-red-300">
-          {errorMessage}
-        </div>
-      ) : null}
-
-      {saveMessage ? (
-        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 dark:border-green-700/30 dark:bg-green-900/20 dark:text-green-300">
-          {saveMessage}
-        </div>
-      ) : null}
-
-      <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-700/30 dark:bg-blue-900/20 dark:text-blue-300">
-        Profile data in this screen now loads from and saves through the Spring backend.
-      </div>
-
-      <div className="bg-white dark:bg-gray-800 mb-4 rounded-xl border border-gray-200 p-4 shadow-sm dark:border-gray-700 sm:p-6">
-        <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-5">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Identidad
-          </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Tu foto y tu nombre para la interfaz.
-          </p>
         </div>
 
-        <div className="mb-5">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-            {t.panelInicial.profile.fields.profilePhoto}
-          </label>
-          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-            <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white text-xl font-semibold shadow-md">
-              {initials}
+        {isLoading ? (
+          <div className="mb-4 rounded-lg border border-purple-200 bg-purple-50 px-4 py-3 text-sm text-purple-700 dark:border-purple-700/30 dark:bg-purple-900/20 dark:text-purple-300">
+            {profileCopy.messages.loading}
+          </div>
+        ) : null}
+
+        {errorMessage ? (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-700/30 dark:bg-red-900/20 dark:text-red-300">
+            {errorMessage}
+          </div>
+        ) : null}
+
+        <div className="bg-white dark:bg-gray-800 mb-4 rounded-xl border border-gray-200 p-4 shadow-sm dark:border-gray-700 sm:p-6">
+          <div className="mb-5 border-b border-gray-200 pb-4 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              {profileCopy.sections.identityTitle}
+            </h3>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              {profileCopy.sections.identitySubtitle}
+            </p>
+          </div>
+
+          <div className="mb-5">
+            <label className="mb-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {t.panelInicial.profile.fields.profilePhoto}
+            </label>
+            <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-blue-500 text-xl font-semibold text-white shadow-md">
+                {initials}
+              </div>
+              <div>
+                <button disabled className="cursor-not-allowed rounded-lg bg-purple-600/70 px-4 py-2 text-sm font-medium text-white">
+                  📷 {t.panelInicial.profile.fields.uploadPhoto}
+                </button>
+                <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                  {profileCopy.hints.photoFormat}
+                </p>
+              </div>
             </div>
-            <div>
-              <button disabled className="px-4 py-2 bg-purple-600/70 text-white rounded-lg text-sm font-medium cursor-not-allowed">
-                📷 {t.panelInicial.profile.fields.uploadPhoto}
-              </button>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-                JPG/PNG, Máx 1MB
-              </p>
+          </div>
+
+          <div>
+            <label className="mb-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {profileCopy.sections.nameGroup}
+            </label>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-[11px] font-medium text-gray-600 dark:text-gray-400">
+                  {profileCopy.fields.firstNames}
+                </label>
+                <input
+                  type="text"
+                  value={formValues.firstName}
+                  onChange={(event) => updateFormValue('firstName', event.target.value)}
+                  className={inputClassName}
+                />
+                <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                  {profileCopy.hints.firstNames}
+                </p>
+                <input
+                  type="text"
+                  value={formValues.secondName}
+                  onChange={(event) => updateFormValue('secondName', event.target.value)}
+                  className={`${inputClassName} mt-2`}
+                  placeholder={profileCopy.placeholders.secondName}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[11px] font-medium text-gray-600 dark:text-gray-400">
+                  {profileCopy.fields.lastNames}
+                </label>
+                <input
+                  type="text"
+                  value={formValues.lastName}
+                  onChange={(event) => updateFormValue('lastName', event.target.value)}
+                  className={inputClassName}
+                />
+                <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                  {profileCopy.hints.lastNames}
+                </p>
+                <input
+                  type="text"
+                  value={formValues.maternalLastName}
+                  onChange={(event) => updateFormValue('maternalLastName', event.target.value)}
+                  className={`${inputClassName} mt-2`}
+                  placeholder={profileCopy.placeholders.maternalLastName}
+                />
+              </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-[11px] font-medium text-gray-600 dark:text-gray-400">
+                  {profileCopy.fields.country}
+                </label>
+                <select
+                  value={formValues.country}
+                  onChange={(event) => handleCountryChange(event.target.value)}
+                  className={`${inputClassName} appearance-none cursor-pointer`}
+                >
+                  {countryOptions.map((country) => (
+                    <option key={country.code} value={country.code}>
+                      {country.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-            Nombre y apellidos
-          </label>
+        <div className="bg-white dark:bg-gray-800 mb-4 rounded-xl border border-gray-200 p-4 shadow-sm dark:border-gray-700 sm:p-6">
+          <div className="mb-5 border-b border-gray-200 pb-4 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              {profileCopy.sections.contactTitle}
+            </h3>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              {profileCopy.sections.contactSubtitle}
+            </p>
+          </div>
+
+          <div className="mb-4">
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {t.panelInicial.profile.fields.email}
+            </label>
+            <input type="email" value={user?.email ?? ''} readOnly className={inputClassName} />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {t.panelInicial.profile.fields.phone} <span className="text-[11px] text-gray-400">{profileCopy.messages.optional}</span>
+            </label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="flex min-h-[42px] items-center rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 sm:min-w-[112px]">
+                <span className="truncate font-medium">
+                  {selectedCountry.flag} {selectedCountry.dialCode}
+                </span>
+              </div>
+              <input
+                type="tel"
+                value={formValues.phoneNumber}
+                onChange={(event) => updateFormValue('phoneNumber', event.target.value)}
+                className={`${inputClassName} flex-1`}
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+              {profileCopy.hints.phone}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 mb-4 rounded-xl border border-gray-200 p-4 shadow-sm dark:border-gray-700 sm:p-6">
+          <div className="mb-5 border-b border-gray-200 pb-4 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              {profileCopy.sections.securityTitle}
+            </h3>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              {profileCopy.sections.securitySubtitle}
+            </p>
+          </div>
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="block text-[11px] font-medium text-gray-600 dark:text-gray-400 mb-1.5">
-                Nombre o nombres
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                {profileCopy.fields.newPassword}
               </label>
               <input
-                type="text"
-                value={firstName}
-                onChange={(event) => setFirstName(event.target.value)}
+                type="password"
+                value={formValues.newPassword}
+                onChange={(event) => updateFormValue('newPassword', event.target.value)}
+                placeholder="••••••••"
+                autoComplete="new-password"
                 className={inputClassName}
-              />
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-                En algunos países puedes usar uno o varios nombres.
-              </p>
-              <input
-                type="text"
-                value={secondName}
-                onChange={(event) => setSecondName(event.target.value)}
-                className={`${inputClassName} mt-2`}
-                placeholder="Segundo nombre"
               />
             </div>
             <div>
-              <label className="block text-[11px] font-medium text-gray-600 dark:text-gray-400 mb-1.5">
-                Apellido o apellidos
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                {profileCopy.fields.confirmNewPassword}
               </label>
               <input
-                type="text"
-                value={lastName}
-                onChange={(event) => setLastName(event.target.value)}
+                type="password"
+                value={formValues.confirmNewPassword}
+                onChange={(event) => updateFormValue('confirmNewPassword', event.target.value)}
+                placeholder="••••••••"
+                autoComplete="new-password"
                 className={inputClassName}
-              />
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-                Puede ser 1 (USA/Canadá) o 2 (México/Colombia).
-              </p>
-              <input
-                type="text"
-                value={maternalLastName}
-                onChange={(event) => setMaternalLastName(event.target.value)}
-                className={`${inputClassName} mt-2`}
-                placeholder="Segundo apellido"
               />
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="bg-white dark:bg-gray-800 mb-4 rounded-xl border border-gray-200 p-4 shadow-sm dark:border-gray-700 sm:p-6">
-        <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-5">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Información de contacto
-          </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Datos para notificaciones y comunicación.
+          <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
+            {profileCopy.hints.password}
           </p>
         </div>
 
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            {t.panelInicial.profile.fields.email}
-          </label>
-          <input type="email" value={user?.email ?? ''} readOnly className={inputClassName} />
-        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 p-4 shadow-sm dark:border-gray-700 sm:p-6">
+          <div className="mb-5 border-b border-gray-200 pb-4 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              {profileCopy.sections.preferencesTitle}
+            </h3>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              {profileCopy.sections.preferencesSubtitle}
+            </p>
+          </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            {t.panelInicial.profile.fields.phone} <span className="text-gray-400 text-[11px]">(opcional)</span>
-          </label>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <select value={phonePrefix} onChange={(event) => setPhonePrefix(event.target.value)} className={`${inputClassName} w-full sm:min-w-[112px] sm:w-auto`}>
-              <option value="+1">🇺🇸 +1</option>
-              <option value="+52">🇲🇽 +52</option>
-              <option value="+34">🇪🇸 +34</option>
-              <option value="+57">🇨🇴 +57</option>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {profileCopy.fields.preferredLanguage}
+            </label>
+            <select
+              value={formValues.preferredLanguage}
+              onChange={(event) => updateFormValue('preferredLanguage', event.target.value)}
+              className={`${inputClassName} appearance-none cursor-pointer`}
+            >
+              {languages.map((language) => (
+                <option key={language.code} value={language.code}>
+                  {language.flag} {language.name}
+                </option>
+              ))}
             </select>
-            <input
-              type="tel"
-              value={phoneNumber}
-              onChange={(event) => setPhoneNumber(event.target.value)}
-              className={`${inputClassName} flex-1`}
-            />
+            <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+              {profileCopy.hints.preferredLanguage}
+            </p>
           </div>
-          <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-            Selecciona tu país para prefijar la clave.
-          </p>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 mb-4 rounded-xl border border-gray-200 p-4 shadow-sm dark:border-gray-700 sm:p-6">
-        <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-5">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Seguridad de la cuenta
-          </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Actualiza tu contraseña cuando lo necesites.
-          </p>
-        </div>
+      <SaveChangesBar
+        isVisible={hasUnsavedChanges}
+        isSaving={isSaving}
+        onDiscard={handleDiscardChanges}
+        onSave={handleSaveProfile}
+        saveLabel={profileCopy.actions.save}
+        savingLabel={profileCopy.actions.saving}
+        discardLabel={profileCopy.actions.discard}
+        message={profileCopy.messages.unsavedChanges}
+      />
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Nueva contraseña
-            </label>
-            <input type="password" placeholder="••••••••" disabled className={inputClassName} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Confirmar nueva contraseña
-            </label>
-            <input type="password" placeholder="••••••••" disabled className={inputClassName} />
-          </div>
-        </div>
-        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-2">
-          Si no quieres cambiarla, déjala vacía.
-        </p>
-      </div>
+      <LoadingBarOverlay
+        isVisible={isSaving}
+        title={profileCopy.messages.savingOverlay}
+      />
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 p-4 shadow-sm dark:border-gray-700 sm:p-6">
-        <div className="border-b border-gray-200 dark:border-gray-700 pb-4 mb-5">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Preferencias
-          </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Personaliza el idioma de la interfaz.
-          </p>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Idioma preferido
-          </label>
-          <select
-            value={preferredLanguage}
-            onChange={(event) => setPreferredLanguage(event.target.value)}
-            className={`${inputClassName} appearance-none cursor-pointer`}
-          >
-            <option value="es-419">🇲🇽 Español (Latinoamérica)</option>
-            <option value="es-ES">🇪🇸 Español (España)</option>
-            <option value="en-US">🇺🇸 English (US)</option>
-            <option value="en-GB">🇬🇧 English (UK)</option>
-            <option value="pt-BR">🇧🇷 Português (Brasil)</option>
-            <option value="fr-CA">🇫🇷 Français (Canada)</option>
-          </select>
-          <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-            Usaremos este idioma para la interfaz y plantillas.
-          </p>
-        </div>
-      </div>
-    </div>
+      <SuccessToast
+        isVisible={Boolean(saveMessage)}
+        message={saveMessage}
+        onClose={() => setSaveMessage('')}
+      />
+    </>
   );
 }

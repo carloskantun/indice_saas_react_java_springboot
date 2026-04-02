@@ -78,7 +78,11 @@ export default function LoginPage() {
         LOGIN_MINIMUM_LOADING_MS,
       );
 
-      navigate('/dashboard');
+      navigate('/dashboard', {
+        state: {
+          successToast: copy.successToast,
+        },
+      });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : copy.errorFallback);
       setIsSubmitting(false);

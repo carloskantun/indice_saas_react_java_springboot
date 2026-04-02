@@ -75,7 +75,7 @@ export const languages: Language[] = [
   {
     code: 'ko-CA',
     name: '한국어 (캐나다)',
-    flag: '🇨🇦',
+    flag: '🇰🇷',
     greetings: {
       morning: '좋은 아침',
       afternoon: '좋은 오후',
@@ -85,7 +85,7 @@ export const languages: Language[] = [
   {
     code: 'zh-CA',
     name: '中文 (加拿大)',
-    flag: '🇨🇦',
+    flag: '🇨🇳',
     greetings: {
       morning: '早上好',
       afternoon: '下午好',
@@ -184,6 +184,7 @@ type TranslationDictionary = {
       showPassword: string;
       signIn: string;
       signingIn: string;
+      successToast: string;
       errorFallback: string;
       insideTitle: string;
       insideText: string;
@@ -342,9 +343,53 @@ type TranslationDictionary = {
           position: string;
           department: string;
           profilePhoto: string;
+          country: string;
           uploadPhoto: string;
+          firstNames: string;
+          lastNames: string;
+          preferredLanguage: string;
+          newPassword: string;
+          confirmNewPassword: string;
         };
-        save: string;
+        sections: {
+          identityTitle: string;
+          identitySubtitle: string;
+          contactTitle: string;
+          contactSubtitle: string;
+          securityTitle: string;
+          securitySubtitle: string;
+          preferencesTitle: string;
+          preferencesSubtitle: string;
+          nameGroup: string;
+        };
+        hints: {
+          photoFormat: string;
+          firstNames: string;
+          lastNames: string;
+          phone: string;
+          password: string;
+          preferredLanguage: string;
+        };
+        placeholders: {
+          secondName: string;
+          maternalLastName: string;
+        };
+        actions: {
+          save: string;
+          saving: string;
+          discard: string;
+        };
+        messages: {
+          loading: string;
+          saveSuccess: string;
+          loadError: string;
+          saveError: string;
+          unsavedChanges: string;
+          optional: string;
+          savingOverlay: string;
+          passwordMismatch: string;
+          passwordMinLength: string;
+        };
       };
       users: {
         title: string;
@@ -556,6 +601,7 @@ type TranslationDictionary = {
         centerTitle: string;
         centerDescription: string;
         questionCount: string;
+        questionCountLabel: string;
         progress: string;
         progressOf: string;
         printDiagnosis: string;
@@ -713,6 +759,7 @@ const translations: Translations = {
       showPassword: 'Mostrar contraseña',
       signIn: 'Iniciar sesión',
       signingIn: 'Ingresando...',
+      successToast: 'Sesión iniciada correctamente.',
       errorFallback: 'No fue posible iniciar sesión.',
       insideTitle: 'Lo que te espera dentro',
       insideText:
@@ -824,6 +871,7 @@ const translations: Translations = {
         centerTitle: 'Centro de diagnóstico empresarial',
         centerDescription: 'Descubre el estado de gestión de tu empresa a través de 4 pilares: Personas, Procesos, Productos y Finanzas. Con las respuestas utilizaremos los índices de Madurez Empresarial (IME), que nos ayudará a personalizar recomendaciones, módulos y mejores compañeros detrás de Índice.',
         questionCount: '10 preguntas cada uno',
+        questionCountLabel: 'El diagnóstico contiene',
         progress: 'Progreso del diagnóstico empresarial',
         progressOf: 'completado',
         printDiagnosis: 'Imprimir diagnóstico',
@@ -969,9 +1017,53 @@ const translations: Translations = {
           position: 'Puesto',
           department: 'Departamento',
           profilePhoto: 'Foto de perfil',
+          country: 'País',
           uploadPhoto: 'Subir foto',
+          firstNames: 'Nombre o nombres',
+          lastNames: 'Apellido o apellidos',
+          preferredLanguage: 'Idioma preferido',
+          newPassword: 'Nueva contraseña',
+          confirmNewPassword: 'Confirmar nueva contraseña',
         },
-        save: 'Guardar cambios',
+        sections: {
+          identityTitle: 'Identidad',
+          identitySubtitle: 'Tu foto y tu nombre para la interfaz.',
+          contactTitle: 'Información de contacto',
+          contactSubtitle: 'Datos para notificaciones y comunicación.',
+          securityTitle: 'Seguridad de la cuenta',
+          securitySubtitle: 'Actualiza tu contraseña cuando lo necesites.',
+          preferencesTitle: 'Preferencias',
+          preferencesSubtitle: 'Personaliza el idioma de la interfaz.',
+          nameGroup: 'Nombre y apellidos',
+        },
+        hints: {
+          photoFormat: 'JPG/PNG, Máx 1MB',
+          firstNames: 'En algunos países puedes usar uno o varios nombres.',
+          lastNames: 'Puede ser 1 (USA/Canadá) o 2 (México/Colombia).',
+          phone: 'El país define la clave telefónica automáticamente.',
+          password: 'Si no quieres cambiarla, déjala vacía.',
+          preferredLanguage: 'Usaremos este idioma para la interfaz y plantillas.',
+        },
+        placeholders: {
+          secondName: 'Segundo nombre',
+          maternalLastName: 'Segundo apellido',
+        },
+        actions: {
+          save: 'Guardar cambios',
+          saving: 'Guardando...',
+          discard: 'Descartar',
+        },
+        messages: {
+          loading: 'Cargando perfil...',
+          saveSuccess: 'Perfil guardado.',
+          loadError: 'No fue posible cargar el perfil.',
+          saveError: 'No fue posible guardar el perfil.',
+          unsavedChanges: 'Tienes cambios sin guardar.',
+          optional: '(opcional)',
+          savingOverlay: 'Guardando perfil...',
+          passwordMismatch: 'La nueva contraseña y su confirmación deben coincidir.',
+          passwordMinLength: 'La nueva contraseña debe tener al menos 8 caracteres.',
+        },
       },
       users: {
         title: 'Usuarios',
@@ -1271,6 +1363,7 @@ const translations: Translations = {
       showPassword: 'Mostrar contraseña',
       signIn: 'Iniciar sesión',
       signingIn: 'Ingresando...',
+      successToast: 'Sesión iniciada correctamente.',
       errorFallback: 'No fue posible iniciar sesión.',
       insideTitle: 'Lo que te espera dentro',
       insideText:
@@ -1382,6 +1475,7 @@ const translations: Translations = {
         centerTitle: 'Centro de diagnóstico empresarial',
         centerDescription: 'Descubre el estado de gestión de tu empresa a través de 4 pilares: Personas, Procesos, Productos y Finanzas. Con las respuestas utilizaremos los índices de Madurez Empresarial (IME), que nos ayudará a personalizar recomendaciones, módulos y mejores compañeros detrás de Índice.',
         questionCount: '10 preguntas cada uno',
+        questionCountLabel: 'El diagnóstico contiene',
         progress: 'Progreso del diagnóstico empresarial',
         progressOf: 'completado',
         printDiagnosis: 'Imprimir diagnóstico',
@@ -1615,9 +1709,53 @@ const translations: Translations = {
           position: 'Puesto',
           department: 'Departamento',
           profilePhoto: 'Foto de perfil',
+          country: 'País',
           uploadPhoto: 'Subir foto',
+          firstNames: 'Nombre o nombres',
+          lastNames: 'Apellido o apellidos',
+          preferredLanguage: 'Idioma preferido',
+          newPassword: 'Nueva contraseña',
+          confirmNewPassword: 'Confirmar nueva contraseña',
         },
-        save: 'Guardar cambios',
+        sections: {
+          identityTitle: 'Identidad',
+          identitySubtitle: 'Tu foto y tu nombre para la interfaz.',
+          contactTitle: 'Información de contacto',
+          contactSubtitle: 'Datos para notificaciones y comunicación.',
+          securityTitle: 'Seguridad de la cuenta',
+          securitySubtitle: 'Actualiza tu contraseña cuando lo necesites.',
+          preferencesTitle: 'Preferencias',
+          preferencesSubtitle: 'Personaliza el idioma de la interfaz.',
+          nameGroup: 'Nombre y apellidos',
+        },
+        hints: {
+          photoFormat: 'JPG/PNG, Máx 1MB',
+          firstNames: 'En algunos países puedes usar uno o varios nombres.',
+          lastNames: 'Puede ser 1 (USA/Canadá) o 2 (México/Colombia).',
+          phone: 'El país define la clave telefónica automáticamente.',
+          password: 'Si no quieres cambiarla, déjala vacía.',
+          preferredLanguage: 'Usaremos este idioma para la interfaz y plantillas.',
+        },
+        placeholders: {
+          secondName: 'Segundo nombre',
+          maternalLastName: 'Segundo apellido',
+        },
+        actions: {
+          save: 'Guardar cambios',
+          saving: 'Guardando...',
+          discard: 'Descartar',
+        },
+        messages: {
+          loading: 'Cargando perfil...',
+          saveSuccess: 'Perfil guardado.',
+          loadError: 'No fue posible cargar el perfil.',
+          saveError: 'No fue posible guardar el perfil.',
+          unsavedChanges: 'Tienes cambios sin guardar.',
+          optional: '(opcional)',
+          savingOverlay: 'Guardando perfil...',
+          passwordMismatch: 'La nueva contraseña y su confirmación deben coincidir.',
+          passwordMinLength: 'La nueva contraseña debe tener al menos 8 caracteres.',
+        },
       },
       users: {
         title: 'Usuarios',
@@ -1829,6 +1967,7 @@ const translations: Translations = {
       showPassword: 'Show password',
       signIn: 'Sign in',
       signingIn: 'Signing in...',
+      successToast: 'Signed in successfully.',
       errorFallback: 'Unable to sign in.',
       insideTitle: 'What waits inside',
       insideText:
@@ -1940,6 +2079,7 @@ const translations: Translations = {
         centerTitle: 'Business Diagnosis Center',
         centerDescription: 'Discover your company\'s management status through 4 pillars: People, Processes, Products, and Finance. With your answers, we\'ll use the Business Maturity Index (BMI), which will help us personalize recommendations, modules, and best partners behind Indice.',
         questionCount: '10 questions each',
+        questionCountLabel: 'The diagnosis contains',
         progress: 'Business diagnosis progress',
         progressOf: 'completed',
         printDiagnosis: 'Print diagnosis',
@@ -2173,9 +2313,53 @@ const translations: Translations = {
           position: 'Position',
           department: 'Department',
           profilePhoto: 'Profile photo',
+          country: 'Country',
           uploadPhoto: 'Upload photo',
+          firstNames: 'First name(s)',
+          lastNames: 'Last name(s)',
+          preferredLanguage: 'Preferred language',
+          newPassword: 'New password',
+          confirmNewPassword: 'Confirm new password',
         },
-        save: 'Save changes',
+        sections: {
+          identityTitle: 'Identity',
+          identitySubtitle: 'Your photo and name for the interface.',
+          contactTitle: 'Contact information',
+          contactSubtitle: 'Details for notifications and communication.',
+          securityTitle: 'Account security',
+          securitySubtitle: 'Update your password whenever you need to.',
+          preferencesTitle: 'Preferences',
+          preferencesSubtitle: 'Personalize the interface language.',
+          nameGroup: 'First and last names',
+        },
+        hints: {
+          photoFormat: 'JPG/PNG, max 1MB',
+          firstNames: 'In some countries you may use one or more given names.',
+          lastNames: 'This may be 1 surname (USA/Canada) or 2 surnames (Mexico/Colombia).',
+          phone: 'The country updates the phone code automatically.',
+          password: 'Leave it blank if you do not want to change it.',
+          preferredLanguage: 'We will use this language for the interface and templates.',
+        },
+        placeholders: {
+          secondName: 'Second name',
+          maternalLastName: 'Second surname',
+        },
+        actions: {
+          save: 'Save changes',
+          saving: 'Saving...',
+          discard: 'Discard',
+        },
+        messages: {
+          loading: 'Loading profile...',
+          saveSuccess: 'Profile saved.',
+          loadError: 'Unable to load profile.',
+          saveError: 'Unable to save profile.',
+          unsavedChanges: 'You have unsaved changes.',
+          optional: '(optional)',
+          savingOverlay: 'Saving profile...',
+          passwordMismatch: 'The new password and its confirmation must match.',
+          passwordMinLength: 'The new password must be at least 8 characters long.',
+        },
       },
       users: {
         title: 'Users',
@@ -2387,6 +2571,7 @@ const translations: Translations = {
       showPassword: 'Show password',
       signIn: 'Sign in',
       signingIn: 'Signing in...',
+      successToast: 'Signed in successfully.',
       errorFallback: 'Unable to sign in.',
       insideTitle: 'What waits inside',
       insideText:
@@ -2498,6 +2683,7 @@ const translations: Translations = {
         centerTitle: 'Business Diagnosis Center',
         centerDescription: 'Discover your company\'s management status through 4 pillars: People, Processes, Products, and Finance. With your answers, we\'ll use the Business Maturity Index (BMI), which will help us personalize recommendations, modules, and best partners behind Indice.',
         questionCount: '10 questions each',
+        questionCountLabel: 'The diagnosis contains',
         progress: 'Business diagnosis progress',
         progressOf: 'completed',
         printDiagnosis: 'Print diagnosis',
@@ -2731,9 +2917,53 @@ const translations: Translations = {
           position: 'Position',
           department: 'Department',
           profilePhoto: 'Profile photo',
+          country: 'Country',
           uploadPhoto: 'Upload photo',
+          firstNames: 'First name(s)',
+          lastNames: 'Last name(s)',
+          preferredLanguage: 'Preferred language',
+          newPassword: 'New password',
+          confirmNewPassword: 'Confirm new password',
         },
-        save: 'Save changes',
+        sections: {
+          identityTitle: 'Identity',
+          identitySubtitle: 'Your photo and name for the interface.',
+          contactTitle: 'Contact information',
+          contactSubtitle: 'Details for notifications and communication.',
+          securityTitle: 'Account security',
+          securitySubtitle: 'Update your password whenever you need to.',
+          preferencesTitle: 'Preferences',
+          preferencesSubtitle: 'Personalize the interface language.',
+          nameGroup: 'First and last names',
+        },
+        hints: {
+          photoFormat: 'JPG/PNG, max 1MB',
+          firstNames: 'In some countries you may use one or more given names.',
+          lastNames: 'This may be 1 surname (USA/Canada) or 2 surnames (Mexico/Colombia).',
+          phone: 'The country updates the phone code automatically.',
+          password: 'Leave it blank if you do not want to change it.',
+          preferredLanguage: 'We will use this language for the interface and templates.',
+        },
+        placeholders: {
+          secondName: 'Second name',
+          maternalLastName: 'Second surname',
+        },
+        actions: {
+          save: 'Save changes',
+          saving: 'Saving...',
+          discard: 'Discard',
+        },
+        messages: {
+          loading: 'Loading profile...',
+          saveSuccess: 'Profile saved.',
+          loadError: 'Unable to load profile.',
+          saveError: 'Unable to save profile.',
+          unsavedChanges: 'You have unsaved changes.',
+          optional: '(optional)',
+          savingOverlay: 'Saving profile...',
+          passwordMismatch: 'The new password and its confirmation must match.',
+          passwordMinLength: 'The new password must be at least 8 characters long.',
+        },
       },
       users: {
         title: 'Users',
@@ -2945,6 +3175,7 @@ const translations: Translations = {
       showPassword: 'Afficher le mot de passe',
       signIn: 'Se connecter',
       signingIn: 'Connexion en cours...',
+      successToast: 'Connexion réussie.',
       errorFallback: 'Impossible de se connecter.',
       insideTitle: 'Ce qui vous attend',
       insideText:
@@ -3056,6 +3287,7 @@ const translations: Translations = {
         centerTitle: 'Centre de diagnostic d\'entreprise',
         centerDescription: 'Découvrez l\'état de gestion de votre entreprise à travers 4 piliers : Personnes, Processus, Produits et Finances. Avec vos réponses, nous utiliserons l\'Indice de Maturité Entrepreneuriale (IME), qui nous aidera à personnaliser les recommandations, modules et meilleurs partenaires derrière Indice.',
         questionCount: '10 questions chacun',
+        questionCountLabel: 'Le diagnostic comprend',
         progress: 'Progrès du diagnostic d\'entreprise',
         progressOf: 'complété',
         printDiagnosis: 'Imprimer le diagnostic',
@@ -3289,9 +3521,53 @@ const translations: Translations = {
           position: 'Poste',
           department: 'Département',
           profilePhoto: 'Photo de profil',
+          country: 'Pays',
           uploadPhoto: 'Télécharger photo',
+          firstNames: 'Prénom(s)',
+          lastNames: 'Nom(s) de famille',
+          preferredLanguage: 'Langue préférée',
+          newPassword: 'Nouveau mot de passe',
+          confirmNewPassword: 'Confirmer le nouveau mot de passe',
         },
-        save: 'Enregistrer les modifications',
+        sections: {
+          identityTitle: 'Identité',
+          identitySubtitle: 'Votre photo et votre nom pour l’interface.',
+          contactTitle: 'Coordonnées',
+          contactSubtitle: 'Informations pour les notifications et la communication.',
+          securityTitle: 'Sécurité du compte',
+          securitySubtitle: 'Mettez à jour votre mot de passe au besoin.',
+          preferencesTitle: 'Préférences',
+          preferencesSubtitle: 'Personnalisez la langue de l’interface.',
+          nameGroup: 'Prénoms et noms',
+        },
+        hints: {
+          photoFormat: 'JPG/PNG, max. 1 Mo',
+          firstNames: 'Dans certains pays, vous pouvez utiliser un ou plusieurs prénoms.',
+          lastNames: 'Cela peut être 1 nom de famille (USA/Canada) ou 2 noms de famille (Mexique/Colombie).',
+          phone: 'Le pays met automatiquement l’indicatif téléphonique à jour.',
+          password: 'Laissez ce champ vide si vous ne voulez pas le modifier.',
+          preferredLanguage: 'Nous utiliserons cette langue pour l’interface et les modèles.',
+        },
+        placeholders: {
+          secondName: 'Deuxième prénom',
+          maternalLastName: 'Deuxième nom de famille',
+        },
+        actions: {
+          save: 'Enregistrer les modifications',
+          saving: 'Enregistrement...',
+          discard: 'Ignorer',
+        },
+        messages: {
+          loading: 'Chargement du profil...',
+          saveSuccess: 'Profil enregistré.',
+          loadError: 'Impossible de charger le profil.',
+          saveError: 'Impossible d’enregistrer le profil.',
+          unsavedChanges: 'Vous avez des modifications non enregistrées.',
+          optional: '(facultatif)',
+          savingOverlay: 'Enregistrement du profil...',
+          passwordMismatch: 'Le nouveau mot de passe et sa confirmation doivent correspondre.',
+          passwordMinLength: 'Le nouveau mot de passe doit contenir au moins 8 caractères.',
+        },
       },
       users: {
         title: 'Utilisateurs',
@@ -3503,6 +3779,7 @@ const translations: Translations = {
       showPassword: 'Mostrar senha',
       signIn: 'Entrar',
       signingIn: 'Entrando...',
+      successToast: 'Login realizado com sucesso.',
       errorFallback: 'Não foi possível entrar.',
       insideTitle: 'O que espera por você',
       insideText:
@@ -3614,6 +3891,7 @@ const translations: Translations = {
         centerTitle: 'Centro de diagnóstico empresarial',
         centerDescription: 'Descubra o estado de gestão da sua empresa através de 4 pilares: Pessoas, Processos, Produtos e Finanças. Com as respostas, usaremos o Índice de Maturidade Empresarial (IME), que nos ajudará a personalizar recomendações, módulos e melhores parceiros por trás do Índice.',
         questionCount: '10 perguntas cada',
+        questionCountLabel: 'O diagnóstico contém',
         progress: 'Progresso do diagnóstico empresarial',
         progressOf: 'concluído',
         printDiagnosis: 'Imprimir diagnóstico',
@@ -3847,9 +4125,53 @@ const translations: Translations = {
           position: 'Cargo',
           department: 'Departamento',
           profilePhoto: 'Foto de perfil',
+          country: 'País',
           uploadPhoto: 'Carregar foto',
+          firstNames: 'Nome ou nomes',
+          lastNames: 'Sobrenome ou sobrenomes',
+          preferredLanguage: 'Idioma preferido',
+          newPassword: 'Nova senha',
+          confirmNewPassword: 'Confirmar nova senha',
         },
-        save: 'Salvar alterações',
+        sections: {
+          identityTitle: 'Identidade',
+          identitySubtitle: 'Sua foto e seu nome para a interface.',
+          contactTitle: 'Informações de contato',
+          contactSubtitle: 'Dados para notificações e comunicação.',
+          securityTitle: 'Segurança da conta',
+          securitySubtitle: 'Atualize sua senha sempre que precisar.',
+          preferencesTitle: 'Preferências',
+          preferencesSubtitle: 'Personalize o idioma da interface.',
+          nameGroup: 'Nome e sobrenomes',
+        },
+        hints: {
+          photoFormat: 'JPG/PNG, máx. 1 MB',
+          firstNames: 'Em alguns países você pode usar um ou mais nomes.',
+          lastNames: 'Pode ser 1 sobrenome (EUA/Canadá) ou 2 sobrenomes (México/Colômbia).',
+          phone: 'O país atualiza o código telefônico automaticamente.',
+          password: 'Se não quiser alterá-la, deixe em branco.',
+          preferredLanguage: 'Usaremos este idioma para a interface e os modelos.',
+        },
+        placeholders: {
+          secondName: 'Segundo nome',
+          maternalLastName: 'Segundo sobrenome',
+        },
+        actions: {
+          save: 'Salvar alterações',
+          saving: 'Salvando...',
+          discard: 'Descartar',
+        },
+        messages: {
+          loading: 'Carregando perfil...',
+          saveSuccess: 'Perfil salvo.',
+          loadError: 'Não foi possível carregar o perfil.',
+          saveError: 'Não foi possível salvar o perfil.',
+          unsavedChanges: 'Você tem alterações não salvas.',
+          optional: '(opcional)',
+          savingOverlay: 'Salvando perfil...',
+          passwordMismatch: 'A nova senha e a confirmação devem ser iguais.',
+          passwordMinLength: 'A nova senha deve ter pelo menos 8 caracteres.',
+        },
       },
       users: {
         title: 'Usuários',
@@ -4061,6 +4383,7 @@ const translations: Translations = {
       showPassword: '비밀번호 보기',
       signIn: '로그인',
       signingIn: '로그인 중...',
+      successToast: '로그인에 성공했습니다.',
       errorFallback: '로그인할 수 없습니다.',
       insideTitle: '로그인 후 할 수 있는 일',
       insideText:
@@ -4172,6 +4495,7 @@ const translations: Translations = {
         centerTitle: '비즈니스 진단 센터',
         centerDescription: '사람, 프로세스, 제품 및 재무의 4가지 기둥을 통해 귀사의 관리 상태를 발견하십시오. 귀하의 답변을 통해 비즈니스 성숙도 지수(BMI)를 사용하여 Indice 뒤에 있는 권장 사항, 모듈 및 최고의 파트너를 개인화하는 데 도움이 됩니다.',
         questionCount: '각 10개 질문',
+        questionCountLabel: '진단에는',
         progress: '비즈니스 진단 진행',
         progressOf: '완료',
         printDiagnosis: '진단 인쇄',
@@ -4405,9 +4729,53 @@ const translations: Translations = {
           position: '직위',
           department: '부서',
           profilePhoto: '프로필 사진',
+          country: '국가',
           uploadPhoto: '사진 업로드',
+          firstNames: '이름',
+          lastNames: '성',
+          preferredLanguage: '선호 언어',
+          newPassword: '새 비밀번호',
+          confirmNewPassword: '새 비밀번호 확인',
         },
-        save: '변경 사항 저장',
+        sections: {
+          identityTitle: '신원 정보',
+          identitySubtitle: '인터페이스에 표시될 사진과 이름입니다.',
+          contactTitle: '연락처 정보',
+          contactSubtitle: '알림과 커뮤니케이션을 위한 정보입니다.',
+          securityTitle: '계정 보안',
+          securitySubtitle: '필요할 때 비밀번호를 업데이트하세요.',
+          preferencesTitle: '환경설정',
+          preferencesSubtitle: '인터페이스 언어를 맞춤 설정하세요.',
+          nameGroup: '이름과 성',
+        },
+        hints: {
+          photoFormat: 'JPG/PNG, 최대 1MB',
+          firstNames: '일부 국가에서는 하나 이상의 이름을 사용할 수 있습니다.',
+          lastNames: '성은 1개(미국/캐나다) 또는 2개(멕시코/콜롬비아)일 수 있습니다.',
+          phone: '국가를 변경하면 전화 국가 코드가 자동으로 바뀝니다.',
+          password: '변경하지 않으려면 비워 두세요.',
+          preferredLanguage: '이 언어는 인터페이스와 템플릿에 사용됩니다.',
+        },
+        placeholders: {
+          secondName: '중간 이름',
+          maternalLastName: '두 번째 성',
+        },
+        actions: {
+          save: '변경 사항 저장',
+          saving: '저장 중...',
+          discard: '취소',
+        },
+        messages: {
+          loading: '프로필을 불러오는 중...',
+          saveSuccess: '프로필이 저장되었습니다.',
+          loadError: '프로필을 불러올 수 없습니다.',
+          saveError: '프로필을 저장할 수 없습니다.',
+          unsavedChanges: '저장되지 않은 변경 사항이 있습니다.',
+          optional: '(선택 사항)',
+          savingOverlay: '프로필 저장 중...',
+          passwordMismatch: '새 비밀번호와 확인 비밀번호가 일치해야 합니다.',
+          passwordMinLength: '새 비밀번호는 최소 8자 이상이어야 합니다.',
+        },
       },
       users: {
         title: '사용자',
@@ -4619,6 +4987,7 @@ const translations: Translations = {
       showPassword: '显示密码',
       signIn: '登录',
       signingIn: '登录中...',
+      successToast: '登录成功。',
       errorFallback: '无法登录。',
       insideTitle: '登录后可查看',
       insideText:
@@ -4730,6 +5099,7 @@ const translations: Translations = {
         centerTitle: '企业诊断中心',
         centerDescription: '通过 4 个支柱发现您公司的管理状况：人员、流程、产品和财务。通过您的回答，我们将使用企业成熟度指数（BMI），这将帮助我们个性化 Indice 背后的建议、模块和最佳合作伙伴。',
         questionCount: '每个 10 个问题',
+        questionCountLabel: '诊断包含',
         progress: '企业诊断进度',
         progressOf: '已完成',
         printDiagnosis: '打印诊断',
@@ -4963,9 +5333,53 @@ const translations: Translations = {
           position: '职位',
           department: '部门',
           profilePhoto: '个人资料照片',
+          country: '国家',
           uploadPhoto: '上传照片',
+          firstNames: '名字',
+          lastNames: '姓氏',
+          preferredLanguage: '首选语言',
+          newPassword: '新密码',
+          confirmNewPassword: '确认新密码',
         },
-        save: '保存更改',
+        sections: {
+          identityTitle: '身份信息',
+          identitySubtitle: '用于界面的照片和姓名。',
+          contactTitle: '联系信息',
+          contactSubtitle: '用于通知和沟通的信息。',
+          securityTitle: '帐户安全',
+          securitySubtitle: '需要时更新您的密码。',
+          preferencesTitle: '偏好设置',
+          preferencesSubtitle: '自定义界面语言。',
+          nameGroup: '名字和姓氏',
+        },
+        hints: {
+          photoFormat: 'JPG/PNG，最大 1MB',
+          firstNames: '在某些国家/地区，您可以使用一个或多个名字。',
+          lastNames: '可以是 1 个姓氏（美国/加拿大）或 2 个姓氏（墨西哥/哥伦比亚）。',
+          phone: '国家会自动更新电话区号。',
+          password: '如果您不想更改密码，请留空。',
+          preferredLanguage: '我们将把此语言用于界面和模板。',
+        },
+        placeholders: {
+          secondName: '第二名字',
+          maternalLastName: '第二姓氏',
+        },
+        actions: {
+          save: '保存更改',
+          saving: '保存中...',
+          discard: '放弃',
+        },
+        messages: {
+          loading: '正在加载个人资料...',
+          saveSuccess: '个人资料已保存。',
+          loadError: '无法加载个人资料。',
+          saveError: '无法保存个人资料。',
+          unsavedChanges: '您有尚未保存的更改。',
+          optional: '（可选）',
+          savingOverlay: '正在保存个人资料...',
+          passwordMismatch: '新密码和确认密码必须一致。',
+          passwordMinLength: '新密码至少需要 8 个字符。',
+        },
       },
       users: {
         title: '用户',

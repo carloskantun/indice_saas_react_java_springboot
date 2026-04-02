@@ -192,7 +192,8 @@ export default function BusinessProfile() {
           {t.panelInicial.diagnosis.centerDescription}
         </p>
         <p className="text-sm font-medium text-gray-900 dark:text-white mb-4">
-          El diagnostico contiene <span className="text-purple-600">{t.panelInicial.diagnosis.questionCount}</span>
+          {t.panelInicial.diagnosis.questionCountLabel}{' '}
+          <span className="text-purple-600">{t.panelInicial.diagnosis.questionCount}</span>
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">

@@ -10,11 +10,13 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,10 +27,16 @@ public class ConfigCenterService {
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    private final BCryptPasswordEncoder passwordEncoder;
 
-    public ConfigCenterService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+    public ConfigCenterService(
+        JdbcTemplate jdbcTemplate,
+        ObjectMapper objectMapper,
+        BCryptPasswordEncoder passwordEncoder
+    ) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
+        this.passwordEncoder = passwordEncoder;
     }
 
     public Map<String, Object> getEmpresa(long companyId) {
@@ -109,6 +117,7 @@ public class ConfigCenterService {
                        u.email,
                        COALESCE(NULLIF(p.full_name, ''), COALESCE(u.full_name, '')) AS full_name,
                        COALESCE(p.phone, '') AS phone,
+                       COALESCE(p.country, '') AS country,
                        COALESCE(p.preferred_language, 'es-419') AS preferred_language,
                        COALESCE(p.avatar_url, '') AS avatar_url
                 FROM users u
@@ -131,6 +140,7 @@ public class ConfigCenterService {
                 user.put("apellido_paterno", parsed.lastName());
                 user.put("apellido_materno", "");
                 user.put("telefono", safe(rs.getString("phone")));
+                user.put("country", safe(rs.getString("country")));
                 user.put("preferred_language", safe(rs.getString("preferred_language")));
                 user.put("avatar_url", safe(rs.getString("avatar_url")));
                 user.put("role", currentRole);
@@ -262,28 +272,51 @@ public class ConfigCenterService {
         var lastName = value(payload, "apellido_paterno", "apellidos");
         var maternalLastName = value(payload, "apellido_materno");
         var phone = value(payload, "telefono");
+        var country = normalizeCountry(value(payload, "country", "pais"));
         var preferredLanguage = firstNonBlank(value(payload, "preferred_language"), "es-419");
         var avatarUrl = value(payload, "avatar_url");
+        var newPassword = value(payload, "new_password");
+        var confirmNewPassword = value(payload, "confirm_new_password", "password_confirmation", "confirm_password");
+        var hasPasswordChange = !newPassword.isBlank() || !confirmNewPassword.isBlank();
 
         var fullName = joinParts(firstName, secondName, lastName, maternalLastName);
         if (fullName.isBlank()) {
             throw new IllegalArgumentException("At least one name field is required.");
         }
 
+        if (hasPasswordChange) {
+            if (!newPassword.equals(confirmNewPassword)) {
+                throw new IllegalArgumentException("The new password and its confirmation must match.");
+            }
+
+            if (newPassword.length() < 8) {
+                throw new IllegalArgumentException("The new password must be at least 8 characters long.");
+            }
+        }
+
         jdbcTemplate.update("UPDATE users SET full_name = ? WHERE id = ?", fullName, userId);
+        if (hasPasswordChange) {
+            jdbcTemplate.update(
+                "UPDATE users SET password_hash = ? WHERE id = ?",
+                passwordEncoder.encode(newPassword),
+                userId
+            );
+        }
         jdbcTemplate.update(
             """
-                INSERT INTO user_profiles (user_id, full_name, phone, preferred_language, avatar_url)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO user_profiles (user_id, full_name, phone, country, preferred_language, avatar_url)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     full_name = VALUES(full_name),
                     phone = VALUES(phone),
+                    country = VALUES(country),
                     preferred_language = VALUES(preferred_language),
                     avatar_url = VALUES(avatar_url)
                 """,
             userId,
             fullName,
             nullable(phone),
+            nullable(country),
             preferredLanguage,
             nullable(avatarUrl)
         );
@@ -1263,6 +1296,14 @@ public class ConfigCenterService {
 
     private String safe(String value) {
         return value == null ? "" : value;
+    }
+
+    private String normalizeCountry(String value) {
+        var normalized = safe(value).trim().toUpperCase(Locale.ROOT);
+        if (normalized.length() != 2 || !normalized.chars().allMatch(Character::isLetter)) {
+            return "";
+        }
+        return normalized;
     }
 
     private Object nullable(String value) {

@@ -12,6 +12,7 @@ export interface ConfigCenterCurrentUser {
   apellido_paterno?: string;
   apellido_materno?: string;
   telefono?: string;
+  country?: string;
   preferred_language?: string;
   avatar_url?: string;
   role?: string | null;
@@ -23,8 +24,11 @@ export interface SaveCurrentUserPayload {
   apellido_paterno: string;
   apellido_materno?: string;
   telefono?: string;
+  country?: string;
   preferred_language?: string;
   avatar_url?: string;
+  new_password?: string;
+  confirm_new_password?: string;
 }
 
 export interface ConfigCenterUser {
