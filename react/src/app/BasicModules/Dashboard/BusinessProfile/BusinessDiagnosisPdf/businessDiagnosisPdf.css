@@ -17,12 +17,14 @@
 }
 
 .bdpdf-report-shell {
+  box-sizing: border-box;
   margin: 0 auto;
   max-width: 794px;
 }
 
 .bdpdf-report-page {
   background: #eef2f7;
+  box-sizing: border-box;
   color: #172033;
   font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   min-height: 1123px;
@@ -33,6 +35,7 @@
 .bdpdf-page-card {
   background: #ffffff;
   border: 1px solid #d7dfeb;
+  box-sizing: border-box;
   border-radius: 20px;
   box-shadow: 0 20px 44px rgba(15, 23, 42, 0.08);
   overflow: hidden;
@@ -122,6 +125,76 @@
 
 .bdpdf-page-content {
   padding: 26px 28px 28px;
+}
+
+.bdpdf-report-page:first-child .bdpdf-page-content {
+  padding: 18px 24px 22px;
+}
+
+.bdpdf-report-page:first-child .bdpdf-section:first-child {
+  margin: 0 auto;
+  max-width: 640px;
+}
+
+.bdpdf-report-page:first-child .bdpdf-section:first-child .bdpdf-section-heading {
+  align-items: center;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.bdpdf-report-page:first-child .bdpdf-section:first-child .bdpdf-summary-card,
+.bdpdf-report-page:first-child .bdpdf-section:first-child .bdpdf-panel-card {
+  min-height: 120px;
+}
+
+.bdpdf-report-page:first-child .bdpdf-section:first-child .bdpdf-highlight-grid {
+  margin-top: 14px;
+}
+
+.bdpdf-report-page:first-child .bdpdf-section:first-child .bdpdf-summary-grid,
+.bdpdf-report-page:first-child .bdpdf-section:first-child .bdpdf-highlight-grid {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.bdpdf-report-page:first-child .bdpdf-section:first-child .bdpdf-summary-grid {
+  gap: 10px;
+}
+
+.bdpdf-report-page:first-child .bdpdf-section:first-child .bdpdf-highlight-grid {
+  gap: 10px;
+}
+
+.bdpdf-report-page:first-child .bdpdf-section:first-child .bdpdf-lead {
+  line-height: 1.6;
+}
+
+.bdpdf-report-page:first-child .bdpdf-section:first-child .bdpdf-highlight-card {
+  min-height: 100px;
+  padding: 14px;
+}
+
+.bdpdf-report-page:first-child .bdpdf-section:first-child .bdpdf-highlight-value {
+  font-size: 24px;
+}
+
+.bdpdf-report-page:first-child .bdpdf-section:nth-child(2) {
+  margin-top: 16px;
+}
+
+.bdpdf-report-page:first-child .bdpdf-hero {
+  padding: 24px 24px 20px;
+}
+
+.bdpdf-report-page:first-child .bdpdf-hero-topline {
+  margin-bottom: 14px;
+}
+
+.bdpdf-report-page:first-child .bdpdf-hero-meta {
+  margin-top: 16px;
 }
 
 .bdpdf-section {
@@ -556,11 +629,24 @@
 }
 
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
   html,
   body {
+    -webkit-print-color-adjust: exact !important;
     background: #ffffff !important;
     margin: 0 !important;
     padding: 0 !important;
+    print-color-adjust: exact !important;
+  }
+
+  .bdpdf-print-host,
+  .bdpdf-print-host * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   body > *:not(.bdpdf-print-host) {
@@ -568,8 +654,10 @@
   }
 
   .bdpdf-print-host {
+    display: block !important;
     height: auto !important;
     left: auto !important;
+    margin: 0 !important;
     overflow: visible !important;
     position: static !important;
     top: auto !important;
@@ -582,24 +670,83 @@
   .bdpdf-report-shell {
     margin: 0 !important;
     max-width: none !important;
-    width: auto !important;
+    width: 100% !important;
   }
 
   .bdpdf-report-page {
-    background: #ffffff !important;
+    background: #eef2f7 !important;
+    break-after: page;
     min-height: 0 !important;
-    padding: 0 !important;
     page-break-after: always;
-    width: auto !important;
+    padding: 4mm 0 0 !important;
+    width: 100% !important;
+  }
+
+  .bdpdf-report-page:first-child {
+    padding-top: 0 !important;
   }
 
   .bdpdf-report-page:last-child {
+    break-after: auto;
     page-break-after: auto;
   }
 
   .bdpdf-page-card {
     border: 1px solid #d7dfeb !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
+    border-radius: 20px !important;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08) !important;
+    overflow: hidden !important;
+  }
+
+  .bdpdf-page-content {
+    padding: 24px 28px 28px !important;
+  }
+
+  .bdpdf-pillars-grid {
+    display: block !important;
+    font-size: 0;
+  }
+
+  .bdpdf-pillar-card {
+    display: inline-block !important;
+    font-size: 16px;
+    margin: 0 12px 12px 0;
+    vertical-align: top;
+    width: calc(50% - 6px);
+  }
+
+  .bdpdf-pillar-card:nth-child(2n) {
+    margin-right: 0;
+  }
+
+  .bdpdf-section {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .bdpdf-section-heading {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .bdpdf-summary-card,
+  .bdpdf-panel-card,
+  .bdpdf-highlight-card,
+  .bdpdf-pillar-card,
+  .bdpdf-analysis-card,
+  .bdpdf-recommendation-card,
+  .bdpdf-plan-card,
+  .bdpdf-table-card,
+  .bdpdf-table tbody tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .bdpdf-table thead {
+    display: table-header-group;
+  }
+
+  .bdpdf-table tbody tr:last-child td {
+    border-bottom: none;
   }
 }
