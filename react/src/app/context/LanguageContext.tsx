@@ -608,6 +608,7 @@ type TranslationDictionary = {
         start: string;
         continue: string;
         doAgain: string;
+        reviewAnswers: string;
         close: string;
         question: string;
         of: string;
@@ -616,6 +617,25 @@ type TranslationDictionary = {
         next: string;
         finish: string;
         restart: string;
+        actions: {
+          save: string;
+          saving: string;
+          discard: string;
+        };
+        scoreSummary: {
+          title: string;
+          bmi: string;
+          level: string;
+          answered: string;
+          score: string;
+        };
+        messages: {
+          loading: string;
+          loadError: string;
+          saveSuccess: string;
+          saveError: string;
+          unsavedChanges: string;
+        };
         pillars: {
           people: {
             title: string;
@@ -878,6 +898,7 @@ const translations: Translations = {
         start: 'Comenzar',
         continue: 'Continuar',
         doAgain: 'Hacer de nuevo',
+        reviewAnswers: 'Revisar respuestas',
         close: 'Cerrar',
         question: 'Pregunta',
         of: 'de',
@@ -886,6 +907,25 @@ const translations: Translations = {
         next: 'Siguiente',
         finish: 'Finalizar',
         restart: 'Reiniciar diagnóstico',
+        actions: {
+          save: 'Guardar',
+          saving: 'Guardando...',
+          discard: 'Descartar',
+        },
+        scoreSummary: {
+          title: 'Puntuación del diagnóstico',
+          bmi: 'IME',
+          level: 'Nivel',
+          answered: 'Respondidas',
+          score: 'Puntaje',
+        },
+        messages: {
+          loading: 'Cargando diagnóstico empresarial...',
+          loadError: 'No pudimos cargar el diagnóstico empresarial.',
+          saveSuccess: 'Se guardó el diagnóstico empresarial.',
+          saveError: 'No pudimos guardar el diagnóstico empresarial.',
+          unsavedChanges: 'Tienes cambios sin guardar en el diagnóstico empresarial.',
+        },
         pillars: {
           people: {
             title: 'Personas',
@@ -1482,6 +1522,7 @@ const translations: Translations = {
         start: 'Comenzar',
         continue: 'Continuar',
         doAgain: 'Hacer de nuevo',
+        reviewAnswers: 'Revisar respuestas',
         close: 'Cerrar',
         question: 'Pregunta',
         of: 'de',
@@ -1490,6 +1531,25 @@ const translations: Translations = {
         next: 'Siguiente',
         finish: 'Finalizar',
         restart: 'Reiniciar diagnóstico',
+        actions: {
+          save: 'Guardar',
+          saving: 'Guardando...',
+          discard: 'Descartar',
+        },
+        scoreSummary: {
+          title: 'Puntuación del diagnóstico',
+          bmi: 'IME',
+          level: 'Nivel',
+          answered: 'Respondidas',
+          score: 'Puntaje',
+        },
+        messages: {
+          loading: 'Cargando diagnóstico empresarial...',
+          loadError: 'No pudimos cargar el diagnóstico empresarial.',
+          saveSuccess: 'Se guardó el diagnóstico empresarial.',
+          saveError: 'No pudimos guardar el diagnóstico empresarial.',
+          unsavedChanges: 'Tienes cambios sin guardar en el diagnóstico empresarial.',
+        },
         pillars: {
           people: {
             title: 'Personas',
@@ -2086,6 +2146,7 @@ const translations: Translations = {
         start: 'Start',
         continue: 'Continue',
         doAgain: 'Do again',
+        reviewAnswers: 'Review answers',
         close: 'Close',
         question: 'Question',
         of: 'of',
@@ -2094,6 +2155,25 @@ const translations: Translations = {
         next: 'Next',
         finish: 'Finish',
         restart: 'Restart diagnosis',
+        actions: {
+          save: 'Save',
+          saving: 'Saving...',
+          discard: 'Discard',
+        },
+        scoreSummary: {
+          title: 'Diagnosis score',
+          bmi: 'BMI',
+          level: 'Level',
+          answered: 'Answered',
+          score: 'Score',
+        },
+        messages: {
+          loading: 'Loading business diagnosis...',
+          loadError: 'We could not load the business diagnosis.',
+          saveSuccess: 'Business diagnosis saved.',
+          saveError: 'We could not save the business diagnosis.',
+          unsavedChanges: 'You have unsaved changes in the business diagnosis.',
+        },
         pillars: {
           people: {
             title: 'People',
@@ -2690,6 +2770,7 @@ const translations: Translations = {
         start: 'Start',
         continue: 'Continue',
         doAgain: 'Do again',
+        reviewAnswers: 'Review answers',
         close: 'Close',
         question: 'Question',
         of: 'of',
@@ -2698,6 +2779,25 @@ const translations: Translations = {
         next: 'Next',
         finish: 'Finish',
         restart: 'Restart diagnosis',
+        actions: {
+          save: 'Save',
+          saving: 'Saving...',
+          discard: 'Discard',
+        },
+        scoreSummary: {
+          title: 'Diagnosis score',
+          bmi: 'BMI',
+          level: 'Level',
+          answered: 'Answered',
+          score: 'Score',
+        },
+        messages: {
+          loading: 'Loading business diagnosis...',
+          loadError: 'We could not load the business diagnosis.',
+          saveSuccess: 'Business diagnosis saved.',
+          saveError: 'We could not save the business diagnosis.',
+          unsavedChanges: 'You have unsaved changes in the business diagnosis.',
+        },
         pillars: {
           people: {
             title: 'People',
@@ -3294,6 +3394,7 @@ const translations: Translations = {
         start: 'Commencer',
         continue: 'Continuer',
         doAgain: 'Recommencer',
+        reviewAnswers: 'Revoir les réponses',
         close: 'Fermer',
         question: 'Question',
         of: 'de',
@@ -3302,6 +3403,25 @@ const translations: Translations = {
         next: 'Suivant',
         finish: 'Terminer',
         restart: 'Redémarrer le diagnostic',
+        actions: {
+          save: 'Enregistrer',
+          saving: 'Enregistrement...',
+          discard: 'Annuler',
+        },
+        scoreSummary: {
+          title: 'Score du diagnostic',
+          bmi: 'IME',
+          level: 'Niveau',
+          answered: 'Répondues',
+          score: 'Score',
+        },
+        messages: {
+          loading: 'Chargement du diagnostic d\'entreprise...',
+          loadError: 'Impossible de charger le diagnostic d\'entreprise.',
+          saveSuccess: 'Le diagnostic d\'entreprise a été enregistré.',
+          saveError: 'Impossible d\'enregistrer le diagnostic d\'entreprise.',
+          unsavedChanges: 'Vous avez des changements non enregistrés dans le diagnostic d\'entreprise.',
+        },
         pillars: {
           people: {
             title: 'Personnes',
@@ -3898,6 +4018,7 @@ const translations: Translations = {
         start: 'Começar',
         continue: 'Continuar',
         doAgain: 'Fazer novamente',
+        reviewAnswers: 'Revisar respostas',
         close: 'Fechar',
         question: 'Pergunta',
         of: 'de',
@@ -3906,6 +4027,25 @@ const translations: Translations = {
         next: 'Próximo',
         finish: 'Finalizar',
         restart: 'Reiniciar diagnóstico',
+        actions: {
+          save: 'Salvar',
+          saving: 'Salvando...',
+          discard: 'Descartar',
+        },
+        scoreSummary: {
+          title: 'Pontuação do diagnóstico',
+          bmi: 'IME',
+          level: 'Nível',
+          answered: 'Respondidas',
+          score: 'Pontuação',
+        },
+        messages: {
+          loading: 'Carregando diagnóstico empresarial...',
+          loadError: 'Não foi possível carregar o diagnóstico empresarial.',
+          saveSuccess: 'O diagnóstico empresarial foi salvo.',
+          saveError: 'Não foi possível salvar o diagnóstico empresarial.',
+          unsavedChanges: 'Você tem alterações não salvas no diagnóstico empresarial.',
+        },
         pillars: {
           people: {
             title: 'Pessoas',
@@ -4502,6 +4642,7 @@ const translations: Translations = {
         start: '시작',
         continue: '계속',
         doAgain: '다시 하기',
+        reviewAnswers: '답변 검토',
         close: '닫기',
         question: '질문',
         of: '의',
@@ -4510,6 +4651,25 @@ const translations: Translations = {
         next: '다음',
         finish: '완료',
         restart: '진단 재시작',
+        actions: {
+          save: '저장',
+          saving: '저장 중...',
+          discard: '취소',
+        },
+        scoreSummary: {
+          title: '진단 점수',
+          bmi: 'BMI',
+          level: '레벨',
+          answered: '응답 수',
+          score: '점수',
+        },
+        messages: {
+          loading: '비즈니스 진단을 불러오는 중입니다...',
+          loadError: '비즈니스 진단을 불러오지 못했습니다.',
+          saveSuccess: '비즈니스 진단이 저장되었습니다.',
+          saveError: '비즈니스 진단을 저장하지 못했습니다.',
+          unsavedChanges: '비즈니스 진단에 저장되지 않은 변경 사항이 있습니다.',
+        },
         pillars: {
           people: {
             title: '사람',
@@ -5106,6 +5266,7 @@ const translations: Translations = {
         start: '开始',
         continue: '继续',
         doAgain: '重新做',
+        reviewAnswers: '查看答案',
         close: '关闭',
         question: '问题',
         of: '的',
@@ -5114,6 +5275,25 @@ const translations: Translations = {
         next: '下一个',
         finish: '完成',
         restart: '重新开始诊断',
+        actions: {
+          save: '保存',
+          saving: '保存中...',
+          discard: '放弃更改',
+        },
+        scoreSummary: {
+          title: '诊断得分',
+          bmi: 'BMI',
+          level: '等级',
+          answered: '已回答',
+          score: '得分',
+        },
+        messages: {
+          loading: '正在加载业务诊断...',
+          loadError: '无法加载业务诊断。',
+          saveSuccess: '业务诊断已保存。',
+          saveError: '无法保存业务诊断。',
+          unsavedChanges: '业务诊断中有未保存的更改。',
+        },
         pillars: {
           people: {
             title: '人员',
