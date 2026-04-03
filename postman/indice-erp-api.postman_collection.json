@@ -135,6 +135,55 @@
               ]
             }
           }
+        },
+        {
+          "name": "GET Business Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/dashboard/business-profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "dashboard",
+                "business-profile"
+              ]
+            },
+            "description": "Loads the current company business profile and all four sections: people, processes, products, and finance."
+          }
+        },
+        {
+          "name": "PUT Business Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sections\": {\n    \"people\": {\n      \"status\": \"completed\",\n      \"data\": {\n        \"ui_key\": \"personas\",\n        \"answers\": {\n          \"p1\": 2,\n          \"p2\": 2,\n          \"p3\": 2,\n          \"p4\": 4,\n          \"p5\": 2,\n          \"p6\": 1,\n          \"p7\": 3,\n          \"p8\": 2,\n          \"p9\": 2,\n          \"p10\": 4\n        },\n        \"question_count\": 10\n      }\n    },\n    \"processes\": {\n      \"status\": \"in_progress\",\n      \"data\": {\n        \"ui_key\": \"procesos\",\n        \"answers\": {\n          \"pr1\": 1,\n          \"pr2\": 3,\n          \"pr3\": 4\n        },\n        \"question_count\": 10\n      }\n    },\n    \"products\": {\n      \"status\": \"draft\",\n      \"data\": {\n        \"ui_key\": \"productos\",\n        \"answers\": {},\n        \"question_count\": 10\n      }\n    },\n    \"finance\": {\n      \"status\": \"draft\",\n      \"data\": {\n        \"ui_key\": \"finanzas\",\n        \"answers\": {},\n        \"question_count\": 10\n      }\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/dashboard/business-profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "dashboard",
+                "business-profile"
+              ]
+            },
+            "description": "Upserts the company business profile. You can send one section or all four sections in the same request."
+          }
         }
       ]
     },
@@ -157,6 +206,35 @@
                 "current-user"
               ]
             }
+          }
+        },
+        {
+          "name": "PUT Current User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"primer_nombre\": \"Usuario\",\n  \"segundo_nombre\": \"Spring\",\n  \"apellido_paterno\": \"Demo\",\n  \"apellido_materno\": \"Activo\",\n  \"telefono\": \"+1 555-0100\",\n  \"country\": \"CA\",\n  \"preferred_language\": \"en-US\",\n  \"new_password\": \"newSecret123\",\n  \"confirm_new_password\": \"newSecret123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/config-center/current-user",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "config-center",
+                "current-user"
+              ]
+            },
+            "description": "Updates the editable current-user profile fields. `country` is stored separately from `telefono`. Password fields are optional and only applied when both are provided."
           }
         },
         {

@@ -328,6 +328,7 @@ Example response:
   "apellido_paterno": "Demo",
   "apellido_materno": "",
   "telefono": "",
+  "country": "",
   "preferred_language": "es-419",
   "avatar_url": "",
   "role": "admin"
@@ -349,9 +350,18 @@ Typical request:
   "apellido_paterno": "Demo",
   "apellido_materno": "Activo",
   "telefono": "+1 555-0100",
-  "preferred_language": "en-US"
+  "country": "CA",
+  "preferred_language": "en-US",
+  "new_password": "newSecret123",
+  "confirm_new_password": "newSecret123"
 }
 ```
+
+Notes:
+
+- `telefono` remains the full stored phone value
+- `country` is stored separately in the profile
+- password fields are optional and only required when changing the password
 
 ### `GET /api/v1/config-center/users`
 

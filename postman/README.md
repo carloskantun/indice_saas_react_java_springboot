@@ -11,7 +11,15 @@ Run order:
 
 1. `POST Login`
 2. `GET Me`
-3. any other request
+3. `GET Current User`
+4. `PUT Current User` when you want to verify profile saves
+5. any other request
+
+Current-user profile payload notes:
+
+- `telefono` remains the full stored phone value
+- `country` is now a separate profile field
+- `new_password` and `confirm_new_password` are optional
 
 Base URL:
 

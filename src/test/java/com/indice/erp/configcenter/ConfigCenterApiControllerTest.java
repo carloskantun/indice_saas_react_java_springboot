@@ -103,17 +103,18 @@ class ConfigCenterApiControllerTest {
     @Test
     void saveCurrentUserReturnsUpdatedUserPayload() throws Exception {
         var currentUser = new AuthSessionUser(1L, 7L, "Usuario Demo", "admin");
-        var savedUser = Map.<String, Object>of(
-            "id", 1L,
-            "email", "demo@example.com",
-            "nombres", "Usuario Spring Demo",
-            "apellidos", "Activo",
-            "primer_nombre", "Usuario Spring Demo",
-            "apellido_paterno", "Activo",
-            "telefono", "+1 555-0100",
-            "preferred_language", "en-US",
-            "avatar_url", "",
-            "role", "admin"
+        var savedUser = Map.<String, Object>ofEntries(
+            Map.entry("id", 1L),
+            Map.entry("email", "demo@example.com"),
+            Map.entry("nombres", "Usuario Spring Demo"),
+            Map.entry("apellidos", "Activo"),
+            Map.entry("primer_nombre", "Usuario Spring Demo"),
+            Map.entry("apellido_paterno", "Activo"),
+            Map.entry("telefono", "+1 555-0100"),
+            Map.entry("country", "CA"),
+            Map.entry("preferred_language", "en-US"),
+            Map.entry("avatar_url", ""),
+            Map.entry("role", "admin")
         );
 
         given(sessionAuthService.currentUser(any())).willReturn(Optional.of(currentUser));
@@ -129,12 +130,14 @@ class ConfigCenterApiControllerTest {
                       "apellido_paterno": "Demo",
                       "apellido_materno": "Activo",
                       "telefono": "+1 555-0100",
+                      "country": "CA",
                       "preferred_language": "en-US"
                     }
                     """))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.email").value("demo@example.com"))
             .andExpect(jsonPath("$.telefono").value("+1 555-0100"))
+            .andExpect(jsonPath("$.country").value("CA"))
             .andExpect(jsonPath("$.preferred_language").value("en-US"));
     }
 

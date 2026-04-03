@@ -1057,7 +1057,8 @@ export default function PanelInicial({ onNavigate }: PanelInicialProps) {
                   {t.panelInicial.diagnosis.centerDescription}
                 </p>
                 <p className="text-sm font-medium text-gray-900 dark:text-white mb-4">
-                  El diagnóstico contiene <span className="text-purple-600">{t.panelInicial.diagnosis.questionCount}</span>
+                  {t.panelInicial.diagnosis.questionCountLabel}{' '}
+                  <span className="text-purple-600">{t.panelInicial.diagnosis.questionCount}</span>
                 </p>
 
                 {/* Checkboxes de pilares */}
