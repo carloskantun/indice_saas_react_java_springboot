@@ -16,7 +16,10 @@ import { SaveChangesBar } from '../../../components/SaveChangesBar';
 import { SuccessToast } from '../../../components/SuccessToast';
 import { Button } from '../../../components/ui/button';
 import { useLanguage } from '../../../shared/context';
-import { openBusinessDiagnosisPdfPreview } from './BusinessDiagnosisPdfDocument';
+import {
+  BusinessDiagnosisPrintPortal,
+  type BusinessDiagnosisPdfDocumentProps,
+} from './BusinessDiagnosisPdf';
 import { buildBusinessDiagnosisScoreReport } from './businessDiagnosisScoring';
 
 type PillarId = BusinessProfileSectionKey;
@@ -280,6 +283,7 @@ export default function BusinessProfile() {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
+  const [printJob, setPrintJob] = useState<BusinessDiagnosisPdfDocumentProps | null>(null);
 
   const diagnosticoQuestions = useMemo<DiagnosticoQuestions>(() => ({
     people: diagnosisCopy.questions.people,
@@ -567,7 +571,8 @@ export default function BusinessProfile() {
   };
 
   const handlePrintDiagnosis = () => {
-    openBusinessDiagnosisPdfPreview({
+    setErrorMessage('');
+    setPrintJob({
       report: diagnosisScoreReport,
       title: diagnosisCopy.title,
       subtitle: diagnosisCopy.description,
@@ -862,6 +867,11 @@ export default function BusinessProfile() {
         isVisible={Boolean(saveMessage)}
         message={saveMessage}
         onClose={() => setSaveMessage('')}
+      />
+
+      <BusinessDiagnosisPrintPortal
+        job={printJob}
+        onComplete={() => setPrintJob(null)}
       />
     </>
   );
