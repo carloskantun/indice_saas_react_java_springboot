@@ -7,6 +7,10 @@ interface UnitsCopy {
     description: string;
     addBusiness: string;
     addUnit: string;
+    configureUnit: string;
+    configureBusiness: string;
+    businessCountSingular: string;
+    businessCountPlural: string;
   };
 }
 
@@ -58,7 +62,10 @@ export function UnitsSection({
                 <div>
                   <h4 className="font-semibold text-gray-900 dark:text-white">{unidad.name}</h4>
                   <p className="text-xs text-gray-600 dark:text-gray-400">
-                    {unidad.negocios.length} negocio{unidad.negocios.length !== 1 ? 's' : ''}
+                    {unidad.negocios.length}{' '}
+                    {unidad.negocios.length === 1
+                      ? structure.units.businessCountSingular
+                      : structure.units.businessCountPlural}
                   </p>
                 </div>
               </div>
@@ -68,7 +75,7 @@ export function UnitsSection({
                   onClick={() => onEditUnidad(unidad)}
                   className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-medium transition-colors"
                 >
-                  ⚙️ Configurar unidad
+                  {structure.units.configureUnit}
                 </button>
                 {unidad.id !== '1' && (
                   <button
@@ -101,7 +108,7 @@ export function UnitsSection({
                         onClick={() => onEditNegocio(negocio, unidad.id)}
                         className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-medium transition-colors"
                       >
-                        ⚙️ Configurar
+                        {structure.units.configureBusiness}
                       </button>
                       <button
                         type="button"
