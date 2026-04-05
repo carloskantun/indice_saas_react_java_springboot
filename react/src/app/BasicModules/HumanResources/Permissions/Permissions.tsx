@@ -3,7 +3,7 @@ import { PermisosTab } from '../../../components/rh/PermisosTab';
 import { SolicitarPermisoModal } from '../../../components/SolicitarPermisoModal';
 import { rhColaboradores } from '../mockData';
 
-export default function Permisos() {
+export default function Permissions() {
   const [isSolicitarModalOpen, setIsSolicitarModalOpen] = useState(false);
 
   return (

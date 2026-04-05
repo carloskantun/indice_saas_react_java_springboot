@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from './ui/button';
 import { X, MapPin } from 'lucide-react';
+import { useHRLanguage } from '../BasicModules/HumanResources/HRLanguage';
 
 interface Location {
   id: string;
@@ -25,6 +26,7 @@ export function LocationRegistrationModal({
   onSave,
   initialLocations = []
 }: LocationRegistrationModalProps) {
+  const t = useHRLanguage().attendanceLocationModal;
   const [locations, setLocations] = useState<Location[]>(initialLocations);
   const [nombre, setNombre] = useState('');
   const [latitud, setLatitud] = useState('');
@@ -69,7 +71,7 @@ export function LocationRegistrationModal({
 
   const handleAgregar = () => {
     if (!nombre || !latitud || !longitud || !radio) {
-      alert('Por favor completa Nombre, Latitud, Longitud y Radio');
+      alert(t.alerts.requiredFields);
       return;
     }
 
@@ -128,16 +130,16 @@ export function LocationRegistrationModal({
           }
         },
         (error) => {
-          let errorMessage = 'No se pudo obtener la ubicación.';
+          let errorMessage = t.alerts.noLocation;
           switch (error.code) {
             case error.PERMISSION_DENIED:
-              errorMessage = 'Permiso de ubicación denegado. Por favor, habilita los permisos de ubicación en tu navegador.';
+              errorMessage = t.alerts.permissionDenied;
               break;
             case error.POSITION_UNAVAILABLE:
-              errorMessage = 'La información de ubicación no está disponible.';
+              errorMessage = t.alerts.positionUnavailable;
               break;
             case error.TIMEOUT:
-              errorMessage = 'El tiempo de espera para obtener la ubicación ha expirado.';
+              errorMessage = t.alerts.timeout;
               break;
           }
           console.warn('Error obteniendo ubicación:', error.message || error);
@@ -150,7 +152,7 @@ export function LocationRegistrationModal({
         }
       );
     } else {
-      alert('Tu navegador no soporta geolocalización');
+      alert(t.alerts.unsupported);
     }
   };
 
@@ -164,7 +166,7 @@ export function LocationRegistrationModal({
               <MapPin className="h-5 w-5 text-white" />
             </div>
             <h2 className="text-xl font-semibold text-white">
-              Registrar ubicaciones
+              {t.title}
             </h2>
           </div>
           <button
@@ -180,23 +182,19 @@ export function LocationRegistrationModal({
           {/* Info banner */}
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
             <p className="text-sm text-blue-900 dark:text-blue-200">
-              Configura tus ubicaciones para que en la tabla de asistencia se muestre el{' '}
-              <span className="font-medium">nombre</span> en lugar de la latitud/longitud
-              (por cercanía). Puedes usar <span className="font-medium">Aquí</span> (GPS) o
-              pegar un enlace de <span className="font-medium">Google Maps</span> para extraer
-              coordenadas.
+              {t.banner}
             </p>
           </div>
 
           {/* Counter */}
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            <span className="font-medium">Ubicaciones activas: {locations.length}</span> ·{' '}
+            <span className="font-medium">{t.activeLocations(locations.length)}</span> ·{' '}
             {hasChanges ? (
               <span className="text-orange-600 dark:text-orange-400">
-                Los cambios no se guardan hasta presionar Guardar.
+                {t.unsavedChanges}
               </span>
             ) : (
-              <span className="text-green-600 dark:text-green-400">Sin cambios pendientes</span>
+              <span className="text-green-600 dark:text-green-400">{t.noPendingChanges}</span>
             )}
           </div>
 
@@ -205,19 +203,19 @@ export function LocationRegistrationModal({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Nombre
+                  {t.fields.name}
                 </label>
                 <input
                   type="text"
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
-                  placeholder="Ej. Oficina"
+                  placeholder={t.placeholders.name}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Latitud
+                  {t.fields.latitude}
                 </label>
                 <input
                   type="text"
@@ -229,7 +227,7 @@ export function LocationRegistrationModal({
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Longitud
+                  {t.fields.longitude}
                 </label>
                 <input
                   type="text"
@@ -244,13 +242,13 @@ export function LocationRegistrationModal({
             <div className="flex items-end gap-2">
               <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Enlace de Google Maps (opcional)
+                  {t.fields.googleMapsLink}
                 </label>
                 <input
                   type="text"
                   value={enlaceGoogleMaps}
                   onChange={(e) => setEnlaceGoogleMaps(e.target.value)}
-                  placeholder="Pega aquí el enlace de Google Maps"
+                  placeholder={t.placeholders.googleMapsLink}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -259,26 +257,26 @@ export function LocationRegistrationModal({
                 variant="outline"
                 className="whitespace-nowrap"
               >
-                Extraer
+                {t.buttons.extract}
               </Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Altitud (opcional)
+                  {t.fields.altitude}
                 </label>
                 <input
                   type="text"
                   value={altitud}
                   onChange={(e) => setAltitud(e.target.value)}
-                  placeholder="m.s.n.m"
+                  placeholder={t.placeholders.altitude}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Radio (m)
+                  {t.fields.radius}
                 </label>
                 <input
                   type="number"
@@ -297,13 +295,13 @@ export function LocationRegistrationModal({
                 className="gap-2"
               >
                 <MapPin className="h-4 w-4" />
-                Aquí
+                {t.buttons.here}
               </Button>
               <Button
                 onClick={handleAgregar}
                 className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
               >
-                + Agregar
+                + {t.buttons.add}
               </Button>
             </div>
           </div>
@@ -315,19 +313,19 @@ export function LocationRegistrationModal({
                 <thead className="bg-gray-50 dark:bg-gray-900/50">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      NOMBRE
+                      {t.table.name}
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      LAT
+                      {t.table.lat}
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      LNG
+                      {t.table.lng}
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      RADIO
+                      {t.table.radius}
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      ACCIÓN
+                      {t.table.action}
                     </th>
                   </tr>
                 </thead>
@@ -353,7 +351,7 @@ export function LocationRegistrationModal({
                           size="sm"
                           className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
                         >
-                          Quitar
+                          {t.buttons.remove}
                         </Button>
                       </td>
                     </tr>
@@ -366,9 +364,7 @@ export function LocationRegistrationModal({
           {/* Tip */}
           <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
             <p className="text-xs text-yellow-900 dark:text-yellow-200">
-              <span className="font-medium">Tip:</span> en Google Maps, comparte el lugar y
-              pega el enlace aquí. Si el enlace es muy corto (maps.app.goo.gl), abre el enlace
-              y copia la URL completa.
+              <span className="font-medium">Tip:</span> {t.tip}
             </p>
           </div>
         </div>
@@ -380,18 +376,18 @@ export function LocationRegistrationModal({
             variant="outline"
             className="gap-2"
           >
-            🔄 Cargar
+            🔄 {t.buttons.load}
           </Button>
           <div className="flex items-center gap-3">
             <Button onClick={onClose} variant="outline">
-              Cerrar
+              {t.buttons.close}
             </Button>
             <Button
               onClick={handleGuardar}
               className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
               disabled={!hasChanges}
             >
-              💾 Guardar
+              💾 {t.buttons.save}
             </Button>
           </div>
         </div>
