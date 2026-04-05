@@ -21,6 +21,7 @@ import { Checkbox } from '../../../components/ui/checkbox';
 import { RHColaborador, rhColaboradores } from '../mockData';
 import { humanResourcesApi, type BackendEmployee } from '../../../api/humanResources';
 import { dashboardApi } from '../../../api/dashboard';
+import { useHRLanguage } from '../HRLanguage';
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -158,146 +159,7 @@ const toModalSeed = (colaborador: RHColaborador) => {
   };
 };
 
-const employeePageTranslations = {
-  en: {
-    title: 'Employees',
-    subtitle: 'Manage your team and workforce details',
-    configureColumns: 'Columns',
-    addEmployee: 'Add employee',
-    cards: {
-      teamTotal: 'Team total',
-      teamTotalHint: 'Registered HR employees',
-      active: 'Active',
-      activeHint: 'Employees operating today',
-      training: 'Training',
-      trainingHint: 'Onboarding and enablement',
-      activeAreas: 'Active areas',
-      activeAreasHint: (count: number) =>
-        count === 1 ? '1 employee currently on vacation' : `${count} employees currently on vacation`,
-    },
-    filters: {
-      title: 'Filters',
-      searchLabel: 'Search employee',
-      searchPlaceholder: 'Name or code...',
-      unit: 'Unit',
-      business: 'Business',
-      department: 'Department',
-      status: 'Status',
-      all: 'All',
-    },
-    table: {
-      selectAllVisible: 'Select all visible employees',
-      selectEmployee: (name: string) => `Select ${name}`,
-      emptyState: 'No employees matched the current filters.',
-      defaultNewEmployee: 'New employee',
-      defaultUnassignedRole: 'Unassigned',
-      defaultBusiness: 'Business A',
-    },
-    columns: {
-      selection: 'Selection',
-      collaborator: 'Name',
-      lastName: 'Last name',
-      email: 'Email',
-      position: 'Position',
-      department: 'Department',
-      unit: 'Unit',
-      business: 'Business',
-      status: 'Status',
-      salary: 'Salary',
-      payPeriod: 'Pay period',
-      contact: 'Contact',
-      joinDate: 'Join date',
-      birthDate: 'Date of birth',
-      address: 'Address',
-      curp: 'National ID',
-      rfc: 'Tax ID',
-      nss: 'Social security',
-      actions: 'Actions',
-    },
-    statusLabels: {
-      Activo: 'Active',
-      Vacaciones: 'Vacation',
-      Capacitacion: 'Training',
-      Inactivo: 'Inactive',
-    },
-    paymentPeriods: {
-      weekly: 'Weekly',
-      biweekly: 'Biweekly',
-      monthly: 'Monthly',
-    },
-  },
-  es: {
-    title: 'Colaboradores',
-    subtitle: 'Gestiona tu equipo de trabajo',
-    configureColumns: 'Columnas',
-    addEmployee: 'Agregar colaborador',
-    cards: {
-      teamTotal: 'Total del equipo',
-      teamTotalHint: 'Personal registrado en RH',
-      active: 'Activos',
-      activeHint: 'Colaboradores operando hoy',
-      training: 'Capacitación',
-      trainingHint: 'Integración y onboarding',
-      activeAreas: 'Áreas activas',
-      activeAreasHint: (count: number) =>
-        count === 1 ? '1 persona en vacaciones actualmente' : `${count} en vacaciones actualmente`,
-    },
-    filters: {
-      title: 'Filtros',
-      searchLabel: 'Buscar colaborador',
-      searchPlaceholder: 'Nombre o código...',
-      unit: 'Unidad',
-      business: 'Negocio',
-      department: 'Departamento',
-      status: 'Estado',
-      all: 'Todos',
-    },
-    table: {
-      selectAllVisible: 'Seleccionar todos los colaboradores visibles',
-      selectEmployee: (name: string) => `Seleccionar a ${name}`,
-      emptyState: 'No se encontraron colaboradores con los filtros actuales.',
-      defaultNewEmployee: 'Nuevo colaborador',
-      defaultUnassignedRole: 'Sin asignar',
-      defaultBusiness: 'Negocio A',
-    },
-    columns: {
-      selection: 'Selección',
-      collaborator: 'Nombre',
-      lastName: 'Apellidos',
-      email: 'Correo electrónico',
-      position: 'Puesto',
-      department: 'Departamento',
-      unit: 'Unidad',
-      business: 'Negocio',
-      status: 'Estado',
-      salary: 'Salario',
-      payPeriod: 'Periodo de pago',
-      contact: 'Contacto',
-      joinDate: 'Ingreso',
-      birthDate: 'Fecha de nacimiento',
-      address: 'Dirección',
-      curp: 'CURP',
-      rfc: 'RFC',
-      nss: 'NSS',
-      actions: 'Acciones',
-    },
-    statusLabels: {
-      Activo: 'Activo',
-      Vacaciones: 'Vacaciones',
-      Capacitacion: 'Capacitación',
-      Inactivo: 'Inactivo',
-    },
-    paymentPeriods: {
-      weekly: 'Semanal',
-      biweekly: 'Quincenal',
-      monthly: 'Mensual',
-    },
-  },
-} as const;
-
-type EmployeePageCopy =
-  | typeof employeePageTranslations.en
-  | typeof employeePageTranslations.es;
+type EmployeePageCopy = ReturnType<typeof useHRLanguage>['employees'];
 
 const createDefaultColumns = (
   copy: EmployeePageCopy,
@@ -413,23 +275,21 @@ const getInitialColumns = (defaultColumns: ColumnConfig[]): ColumnConfig[] => {
   }
 };
 
-export default function Colaboradores() {
+export default function Employees() {
+  const hr = useHRLanguage();
   const { currentLanguage } = useLanguage();
   const languageKey = currentLanguage.code.startsWith('es') ? 'es' : 'en';
-  const copy =
-    (languageKey === 'es'
-      ? employeePageTranslations.es
-      : employeePageTranslations.en) as EmployeePageCopy;
+  const copy = hr.employees as EmployeePageCopy;
   const defaultColumns = createDefaultColumns(copy);
   const fixedColumns: ColumnConfig[] = [
     { id: 'selection', label: copy.columns.selection, visible: true, locked: true },
   ];
   const [colaboradores, setColaboradores] = useState<RHColaborador[]>(rhColaboradores);
   const [unitSelectOptions, setUnitSelectOptions] = useState<Array<{ value: string; label: string }>>([
-    { value: 'all-units', label: languageKey === 'es' ? 'Todas las unidades' : 'All units' },
+    { value: 'all-units', label: copy.filters.allUnits },
   ]);
   const [businessSelectOptions, setBusinessSelectOptions] = useState<Array<{ value: string; label: string }>>([
-    { value: 'all-businesses', label: languageKey === 'es' ? 'Todos los negocios' : 'All businesses' },
+    { value: 'all-businesses', label: copy.filters.allBusinesses },
   ]);
   const [searchQuery, setSearchQuery] = useState('');
   const [unidadFilter, setUnidadFilter] = useState(allFilterValue);
@@ -496,18 +356,18 @@ export default function Colaboradores() {
 
         setColaboradores(employeesResponse.items.map(mapBackendEmployeeToColaborador));
         setUnitSelectOptions([
-          { value: 'all-units', label: languageKey === 'es' ? 'Todas las unidades' : 'All units' },
+          { value: 'all-units', label: copy.filters.allUnits },
           ...units.map((unit) => ({ value: String(unit.id), label: unit.name })),
         ]);
         setBusinessSelectOptions([
-          { value: 'all-businesses', label: languageKey === 'es' ? 'Todos los negocios' : 'All businesses' },
+          { value: 'all-businesses', label: copy.filters.allBusinesses },
           ...businesses.map((business) => ({ value: business.name, label: business.name })),
         ]);
       } catch (error) {
         if (!active) {
           return;
         }
-        setLoadError(error instanceof Error ? error.message : 'Unable to load employees.');
+        setLoadError(error instanceof Error ? error.message : copy.errors.load);
       } finally {
         if (active) {
           setIsLoading(false);
@@ -520,7 +380,7 @@ export default function Colaboradores() {
     return () => {
       active = false;
     };
-  }, [languageKey]);
+  }, [copy.errors.load, copy.filters.allBusinesses, copy.filters.allUnits]);
 
   const filteredColaboradores = colaboradores.filter((colaborador) => {
     const matchesSearch =
@@ -583,7 +443,7 @@ export default function Colaboradores() {
       setEditingColaborador(null);
       setIsModalOpen(false);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Unable to save employee.');
+      setLoadError(error instanceof Error ? error.message : copy.errors.save);
       throw error;
     }
   };
@@ -617,7 +477,7 @@ export default function Colaboradores() {
       void humanResourcesApi.deleteEmployee(colaboradorId)
         .then(() => refreshEmployees())
         .catch((error) => {
-          setLoadError(error instanceof Error ? error.message : 'Unable to delete employee.');
+          setLoadError(error instanceof Error ? error.message : copy.errors.delete);
         });
       return;
     }
@@ -635,7 +495,7 @@ export default function Colaboradores() {
       await refreshEmployees();
       setTerminatingColaborador(null);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Unable to terminate employee.');
+      setLoadError(error instanceof Error ? error.message : copy.errors.terminate);
     }
   };
 
@@ -804,12 +664,12 @@ export default function Colaboradores() {
   return (
     <>
       <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-700/30 dark:bg-blue-900/20 dark:text-blue-300">
-        Employees in this screen are now loaded from the Spring backend. Create, update, terminate, and delete actions are also connected.
+        {copy.backendConnected}
       </div>
 
       {isLoading ? (
         <div className="mb-4 rounded-lg border border-purple-200 bg-purple-50 px-4 py-3 text-sm text-purple-700 dark:border-purple-700/30 dark:bg-purple-900/20 dark:text-purple-300">
-          Loading employees...
+          {copy.loading}
         </div>
       ) : null}
 

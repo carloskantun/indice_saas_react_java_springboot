@@ -7,6 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+import { useHRLanguage } from '../BasicModules/HumanResources/HRLanguage';
 
 interface DiaAsistencia {
   dia: number;
@@ -27,6 +28,7 @@ interface CalendarioAsistenciaProps {
 }
 
 export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistenciaProps) {
+  const t = useHRLanguage().attendanceCalendar;
   const [currentDate, setCurrentDate] = useState(new Date(2026, 2, 16)); // Marzo 2026
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [diasAsistencia, setDiasAsistencia] = useState<DiaAsistencia[]>([
@@ -137,12 +139,9 @@ export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistencia
     { dia: 31, entradaRegistrada: true, salidaRegistrada: true, estatus: 'retardo', estatusSistema: 'retardo', horaEntrada: '09:30 AM', horaSalida: '05:15 PM' },
   ]);
 
-  const meses = [
-    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-  ];
+  const meses = t.months;
 
-  const diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  const diasSemana = t.weekdays;
 
   const prevMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
@@ -214,11 +213,11 @@ export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistencia
 
   const getEstatusLabel = (estatus: string | null) => {
     switch (estatus) {
-      case 'asistencia': return '✓ Asistencia';
-      case 'falta': return '✕ Falta';
-      case 'retardo': return '⚠ Retardo';
-      case 'descanso': return '☾ Descanso';
-      default: return 'Sin estatus';
+      case 'asistencia': return `✓ ${t.statuses.attendance}`;
+      case 'falta': return `✕ ${t.statuses.absence}`;
+      case 'retardo': return `⚠ ${t.statuses.tardy}`;
+      case 'descanso': return `☾ ${t.statuses.rest}`;
+      default: return t.statuses.none;
     }
   };
 
@@ -255,7 +254,7 @@ export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistencia
       {/* Header */}
       <div className="mb-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-          Calendario de Asistencia
+          {t.title}
         </h3>
         <p className="text-sm text-gray-600 dark:text-gray-400">
           {colaboradorNombre}
@@ -273,7 +272,7 @@ export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistencia
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <h4 className="font-medium text-gray-900 dark:text-white">
-          {meses[currentDate.getMonth()]} de {currentDate.getFullYear()}
+          {meses[currentDate.getMonth()]} {currentDate.getFullYear()}
         </h4>
         <Button
           variant="outline"
@@ -323,10 +322,10 @@ export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistencia
                     {diaData && (
                       <div className="flex gap-1 mb-2">
                         {diaData.entradaRegistrada && (
-                          <div className="w-2 h-2 bg-green-500 rounded-full" title="Entrada registrada" />
+                          <div className="w-2 h-2 bg-green-500 rounded-full" title={t.legend.entryRegistered} />
                         )}
                         {diaData.salidaRegistrada && (
-                          <div className="w-2 h-2 bg-blue-500 rounded-full" title="Salida registrada" />
+                          <div className="w-2 h-2 bg-blue-500 rounded-full" title={t.legend.exitRegistered} />
                         )}
                       </div>
                     )}
@@ -351,15 +350,15 @@ export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistencia
       <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600 dark:text-gray-400 pt-4 border-t border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 bg-green-500 rounded-full" />
-          <span>Entrada registrada</span>
+          <span>{t.legend.entryRegistered}</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 bg-blue-500 rounded-full" />
-          <span>Salida registrada</span>
+          <span>{t.legend.exitRegistered}</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-12 h-4 border-2 border-blue-500 rounded" />
-          <span>Día actual</span>
+          <span>{t.legend.currentDay}</span>
         </div>
       </div>
 
@@ -369,7 +368,7 @@ export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistencia
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Modificar estatus del día {selectedDay}
+                {t.statusModalTitle(selectedDay)}
               </h3>
               <button
                 onClick={() => setSelectedDay(null)}
@@ -391,10 +390,10 @@ export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistencia
                   <div className="mb-4 p-4 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600">
                     <div className="flex items-center justify-between mb-3">
                       <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                        🤖 Registro del Sistema
+                        🤖 {t.systemRecord}
                       </h4>
                       <span className="text-xs text-gray-500 dark:text-gray-400 italic">
-                        No modificable
+                        {t.notEditable}
                       </span>
                     </div>
                     
@@ -407,19 +406,19 @@ export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistencia
                       </div>
                       {diaData.horaEntrada && (
                         <p className="text-xs text-gray-600 dark:text-gray-400">
-                          Entrada: <span className="font-medium">{diaData.horaEntrada}</span>
+                          {t.entry}: <span className="font-medium">{diaData.horaEntrada}</span>
                         </p>
                       )}
                       {diaData.horaSalida && (
                         <p className="text-xs text-gray-600 dark:text-gray-400">
-                          Salida: <span className="font-medium">{diaData.horaSalida}</span>
+                          {t.exit}: <span className="font-medium">{diaData.horaSalida}</span>
                         </p>
                       )}
                       {diaData.horaEntrada && diaData.horaSalida && (
                         <div className="flex items-center gap-2 pt-1">
                           <div className="flex-1 border-t border-gray-300 dark:border-gray-600"></div>
                           <p className="text-xs font-semibold text-blue-600 dark:text-blue-400">
-                            ⏱ Tiempo total: {calcularTiempoTotal(diaData.horaEntrada, diaData.horaSalida)}
+                            ⏱ {t.totalTime}: {calcularTiempoTotal(diaData.horaEntrada, diaData.horaSalida)}
                           </p>
                           <div className="flex-1 border-t border-gray-300 dark:border-gray-600"></div>
                         </div>
@@ -433,7 +432,7 @@ export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistencia
                           <div>
                             <div className="flex items-center gap-1 mb-1">
                               <Camera className="h-3 w-3 text-green-600 dark:text-green-400" />
-                              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Entrada</span>
+                              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{t.entry}</span>
                             </div>
                             <img 
                               src={diaData.fotoEntrada} 
@@ -446,7 +445,7 @@ export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistencia
                           <div>
                             <div className="flex items-center gap-1 mb-1">
                               <Camera className="h-3 w-3 text-blue-600 dark:text-blue-400" />
-                              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Salida</span>
+                              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{t.exit}</span>
                             </div>
                             <img 
                               src={diaData.fotoSalida} 
@@ -474,7 +473,7 @@ export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistencia
                                 rel="noopener noreferrer"
                                 className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
                               >
-                                Ver en Google Maps
+                                {t.viewGoogleMaps}
                               </a>
                             </div>
                           </div>
@@ -492,7 +491,7 @@ export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistencia
                                 rel="noopener noreferrer"
                                 className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
                               >
-                                Ver en Google Maps
+                                {t.viewGoogleMaps}
                               </a>
                             </div>
                           </div>
@@ -506,7 +505,7 @@ export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistencia
             })()}
 
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Modificar estatus manualmente:
+              {t.manualUpdate}
             </h4>
 
             <div className="space-y-2">
@@ -515,7 +514,7 @@ export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistencia
                 className="w-full bg-green-600 hover:bg-green-700 text-white justify-start gap-3"
               >
                 <div className="w-4 h-4 bg-white rounded-full" />
-                ✓ Marcar como Asistencia
+                ✓ {t.buttons.attendance}
               </Button>
               
               <Button
@@ -523,7 +522,7 @@ export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistencia
                 className="w-full bg-red-600 hover:bg-red-700 text-white justify-start gap-3"
               >
                 <div className="w-4 h-4 bg-white rounded-full" />
-                ✕ Marcar como Falta
+                ✕ {t.buttons.absence}
               </Button>
               
               <Button
@@ -531,7 +530,7 @@ export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistencia
                 className="w-full bg-yellow-600 hover:bg-yellow-700 text-white justify-start gap-3"
               >
                 <div className="w-4 h-4 bg-white rounded-full" />
-                ⚠ Marcar como Retardo
+                ⚠ {t.buttons.tardy}
               </Button>
               
               <Button
@@ -539,7 +538,7 @@ export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistencia
                 className="w-full bg-gray-600 hover:bg-gray-700 text-white justify-start gap-3"
               >
                 <div className="w-4 h-4 bg-white rounded-full" />
-                ☾ Marcar como Descanso
+                ☾ {t.buttons.rest}
               </Button>
             </div>
 
@@ -548,8 +547,8 @@ export function CalendarioAsistencia({ colaboradorNombre }: CalendarioAsistencia
                 {(() => {
                   const diaData = getDiaAsistenciaData(selectedDay);
                   return diaData?.estatus 
-                    ? `Estatus actual: ${getEstatusLabel(diaData.estatus)}`
-                    : 'Sin estatus asignado';
+                    ? t.currentStatus(getEstatusLabel(diaData.estatus))
+                    : t.noStatusAssigned;
                 })()}
               </p>
             </div>

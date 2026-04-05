@@ -8,6 +8,7 @@ import {
 } from './ui/dropdown-menu';
 import { Checkbox } from './ui/checkbox';
 import { X, Search, Clock, ChevronDown, AlertCircle, MapPin } from 'lucide-react';
+import { useHRLanguage } from '../BasicModules/HumanResources/HRLanguage';
 
 interface Colaborador {
   id: number;
@@ -18,7 +19,7 @@ interface Colaborador {
 }
 
 interface HorarioDia {
-  dia: string;
+  dia: 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
   entrada: string;
   salida: string;
   comida: number;
@@ -32,34 +33,37 @@ interface HorariosModalProps {
 }
 
 export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalProps) {
+  const t = useHRLanguage().attendanceSchedules;
   const [searchQuery, setSearchQuery] = useState('');
-  const [unidadFilter, setUnidadFilter] = useState('Todas');
-  const [negocioFilter, setNegocioFilter] = useState('Todos');
+  const [unidadFilter, setUnidadFilter] = useState<'all' | '7' | '8' | '9' | '10'>('all');
+  const [negocioFilter, setNegocioFilter] = useState<'all'>('all');
   const [selectedColaboradores, setSelectedColaboradores] = useState<number[]>([]);
-  const [modoHorario, setModoHorario] = useState('Horario estricto');
+  const [modoHorario, setModoHorario] = useState<'strict' | 'open'>('strict');
   const [toleranciaIngreso, setToleranciaIngreso] = useState(10);
   const [noPermitirDespuesTolerancia, setNoPermitirDespuesTolerancia] = useState(false);
   const [noPermitirFueraUbicacion, setNoPermitirFueraUbicacion] = useState(false);
-  const [ubicacionSeleccionada, setUbicacionSeleccionada] = useState('Ninguna');
+  const [ubicacionSeleccionada, setUbicacionSeleccionada] = useState<
+    'none' | 'hq' | 'north' | 'south' | 'warehouse' | 'distribution'
+  >('none');
   
   const [horarios, setHorarios] = useState<HorarioDia[]>([
-    { dia: 'Lun', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-    { dia: 'Mar', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-    { dia: 'Mié', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-    { dia: 'Jue', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-    { dia: 'Vie', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-    { dia: 'Sáb', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-    { dia: 'Dom', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
+    { dia: 'mon', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
+    { dia: 'tue', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
+    { dia: 'wed', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
+    { dia: 'thu', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
+    { dia: 'fri', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
+    { dia: 'sat', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
+    { dia: 'sun', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
   ]);
 
   // Lista de ubicaciones disponibles
-  const ubicacionesDisponibles = [
-    'Ninguna',
-    'Oficina Central - Monterrey',
-    'Sucursal Norte',
-    'Sucursal Sur',
-    'Almacén Principal',
-    'Centro de Distribución'
+  const ubicacionesDisponibles: Array<'none' | 'hq' | 'north' | 'south' | 'warehouse' | 'distribution'> = [
+    'none',
+    'hq',
+    'north',
+    'south',
+    'warehouse',
+    'distribution',
   ];
 
   if (!isOpen) return null;
@@ -102,29 +106,31 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
 
   const limpiarHorarios = () => {
     setHorarios([
-      { dia: 'Lun', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-      { dia: 'Mar', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-      { dia: 'Mié', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-      { dia: 'Jue', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-      { dia: 'Vie', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-      { dia: 'Sáb', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-      { dia: 'Dom', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
+      { dia: 'mon', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
+      { dia: 'tue', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
+      { dia: 'wed', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
+      { dia: 'thu', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
+      { dia: 'fri', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
+      { dia: 'sat', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
+      { dia: 'sun', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
     ]);
   };
 
   const aplicarHorarios = () => {
     if (selectedColaboradores.length === 0) {
-      alert('⚠️ Debes seleccionar al menos un colaborador');
+      alert(t.alerts.selectAtLeastOne);
       return;
     }
     
-    const toleranciaMsg = modoHorario === 'Horario estricto' ? `\nTolerancia: ${toleranciaIngreso} minutos` : '';
-    alert(`✓ Horarios aplicados exitosamente\n\nColaboradores: ${selectedColaboradores.length}\nModo: ${modoHorario}${toleranciaMsg}\n\nLos horarios han sido configurados correctamente.`);
+    const modeLabel = modoHorario === 'strict' ? t.schedule.strict : t.schedule.open;
+    const toleranciaMsg =
+      modoHorario === 'strict' ? `\n${t.schedule.tolerance}: ${toleranciaIngreso} ${t.schedule.minutes}` : '';
+    alert(t.alerts.success(selectedColaboradores.length, modeLabel, toleranciaMsg));
     onClose();
   };
 
   // Variable para deshabilitar campos cuando es Horario abierto
-  const isHorarioAbierto = modoHorario === 'Horario abierto';
+  const isHorarioAbierto = modoHorario === 'open';
   const isMultipleSelected = selectedColaboradores.length > 1;
 
   return (
@@ -135,7 +141,7 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
           <div className="flex items-center gap-2">
             <Clock className="h-6 w-6 text-white" />
             <h2 className="text-xl font-semibold text-white">
-              Configurar horarios
+              {t.title}
             </h2>
           </div>
           <button
@@ -151,32 +157,32 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
             {/* Buscar */}
             <div className="md:col-span-5">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Buscar
-              </label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {t.filters.search}
+                </label>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Nombre o código"
+                  placeholder={t.filters.searchPlaceholder}
                 className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
             {/* Unidad */}
             <div className="md:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Unidad
-              </label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {t.filters.unit}
+                </label>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="w-full justify-between bg-white dark:bg-gray-800">
-                    {unidadFilter}
+                    {unidadFilter === 'all' ? t.filters.allUnits : unidadFilter}
                     <ChevronDown className="h-4 w-4 opacity-50" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-full">
-                  <DropdownMenuItem onClick={() => setUnidadFilter('Todas')}>Todas</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setUnidadFilter('all')}>{t.filters.allUnits}</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setUnidadFilter('7')}>7</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setUnidadFilter('8')}>8</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setUnidadFilter('9')}>9</DropdownMenuItem>
@@ -187,18 +193,18 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
 
             {/* Negocio */}
             <div className="md:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Negocio
-              </label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {t.filters.business}
+                </label>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="w-full justify-between bg-white dark:bg-gray-800">
-                    {negocioFilter}
+                    {negocioFilter === 'all' ? t.filters.allBusinesses : negocioFilter}
                     <ChevronDown className="h-4 w-4 opacity-50" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-full">
-                  <DropdownMenuItem onClick={() => setNegocioFilter('Todos')}>Todos</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setNegocioFilter('all')}>{t.filters.allBusinesses}</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -207,7 +213,7 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
             <div className="md:col-span-1 flex items-end">
               <Button className="w-full bg-[#143675] hover:bg-[#0f2855] text-white gap-2">
                 <Search className="h-4 w-4" />
-                Buscar
+                {t.filters.searchButton}
               </Button>
             </div>
           </div>
@@ -220,10 +226,11 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-gray-900 dark:text-white">
-                  Colaboradores
+                  {t.employees.title}
                 </h3>
                 <span className="text-sm text-gray-500 dark:text-gray-400">
-                  Seleccionados: <span className="font-medium text-blue-600 dark:text-blue-400">{selectedColaboradores.length}</span>
+                  {t.employees.selected}:{' '}
+                  <span className="font-medium text-blue-600 dark:text-blue-400">{selectedColaboradores.length}</span>
                 </span>
               </div>
 
@@ -239,13 +246,13 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
                         />
                       </th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        Código
+                        {t.employees.code}
                       </th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        Colaborador
+                        {t.employees.employee}
                       </th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        Depto
+                        {t.employees.department}
                       </th>
                     </tr>
                   </thead>
@@ -253,7 +260,7 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
                     {filteredColaboradores.length === 0 ? (
                       <tr>
                         <td colSpan={4} className="px-3 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                          No se pudo cargar colaboradores
+                          {t.employees.loadError}
                         </td>
                       </tr>
                     ) : (
@@ -289,10 +296,10 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
             <div className="p-6">
               <div className="mb-4">
                 <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
-                  Horario a aplicar
+                  {t.schedule.title}
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Se aplicará igual a todos los seleccionados
+                  {t.schedule.subtitle}
                 </p>
               </div>
 
@@ -305,7 +312,7 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
                   className="gap-2"
                   disabled={isHorarioAbierto}
                 >
-                  ✕ Limpiar
+                  ✕ {t.schedule.clear}
                 </Button>
               </div>
 
@@ -316,10 +323,10 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
                     <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
                     <div>
                       <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                        Selección múltiple
+                        {t.multiSelection.title}
                       </p>
                       <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                        Tienes <span className="font-semibold">{selectedColaboradores.length} colaboradores</span> seleccionados. El horario se aplicará a todos por igual.
+                        {t.multiSelection.body(selectedColaboradores.length)}
                       </p>
                     </div>
                   </div>
@@ -328,27 +335,27 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
 
               {/* Modo */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Modo
-                </label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {t.schedule.mode}
+                  </label>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" className="w-full justify-between bg-white dark:bg-gray-800">
-                      {modoHorario}
+                      {modoHorario === 'strict' ? t.schedule.strict : t.schedule.open}
                       <ChevronDown className="h-4 w-4 opacity-50" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent className="w-full">
-                    <DropdownMenuItem onClick={() => setModoHorario('Horario estricto')}>
-                      Horario estricto
+                    <DropdownMenuItem onClick={() => setModoHorario('strict')}>
+                      {t.schedule.strict}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setModoHorario('Horario abierto')}>
-                      Horario abierto
+                    <DropdownMenuItem onClick={() => setModoHorario('open')}>
+                      {t.schedule.open}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  <span className="font-medium">Abierto:</span> marca a cualquier hora. <span className="font-medium">Estricto:</span> sólo dentro del horario.
+                  {t.schedule.modeHelp}
                 </p>
               </div>
 
@@ -359,10 +366,10 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
                     <Clock className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
                     <div>
                       <p className="text-sm font-medium text-green-900 dark:text-green-100">
-                        Horario abierto activado
+                        {t.schedule.openEnabledTitle}
                       </p>
                       <p className="text-xs text-green-700 dark:text-green-300 mt-1">
-                        Los colaboradores podrán marcar a cualquier hora. No es necesario configurar horarios específicos.
+                        {t.schedule.openEnabledBody}
                       </p>
                     </div>
                   </div>
@@ -370,10 +377,10 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
               )}
 
               {/* Tolerancia en ingreso - Solo para Horario estricto */}
-              {modoHorario === 'Horario estricto' && (
+              {modoHorario === 'strict' && (
                 <div className="mb-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    ⏱️ Tolerancia en ingreso
+                    ⏱️ {t.schedule.tolerance}
                   </label>
                   <div className="flex items-center gap-3">
                     <input
@@ -384,16 +391,16 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
                       max="60"
                       className="w-24 px-3 py-2 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-center focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
-                    <span className="text-sm text-gray-600 dark:text-gray-400">minutos</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">{t.schedule.minutes}</span>
                   </div>
                   <p className="text-xs text-orange-700 dark:text-orange-300 mt-2">
-                    Los colaboradores podrán marcar ingreso hasta <span className="font-medium">{toleranciaIngreso} minutos tarde</span> sin penalización.
+                    {t.schedule.toleranceHelp(toleranciaIngreso)}
                   </p>
                 </div>
               )}
 
               {/* Opciones adicionales para Horario estricto */}
-              {modoHorario === 'Horario estricto' && (
+              {modoHorario === 'strict' && (
                 <div className="mb-4 space-y-3">
                   {/* Checkbox: No permitir después de tolerancia */}
                   <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
@@ -408,10 +415,10 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
                           htmlFor="no-permitir-tolerancia"
                           className="text-sm font-medium text-gray-900 dark:text-gray-100 cursor-pointer"
                         >
-                          No permitir registro después de tiempo de tolerancia
+                          {t.schedule.blockAfterToleranceTitle}
                         </label>
                         <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                          Se bloqueará el registro si pasa el tiempo de tolerancia configurado
+                          {t.schedule.blockAfterToleranceBody}
                         </p>
                       </div>
                     </div>
@@ -430,10 +437,10 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
                           htmlFor="no-permitir-ubicacion"
                           className="text-sm font-medium text-gray-900 dark:text-gray-100 cursor-pointer"
                         >
-                          No permitir registro fuera de la ubicación seleccionada
+                          {t.schedule.blockOutsideLocationTitle}
                         </label>
                         <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                          Solo se podrá registrar desde la ubicación configurada
+                          {t.schedule.blockOutsideLocationBody}
                         </p>
                         
                         {/* Selector de ubicación */}
@@ -441,7 +448,7 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
                           <div className="mt-3">
                             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
                               <MapPin className="inline h-3 w-3 mr-1" />
-                              Ubicación permitida
+                              {t.schedule.allowedLocation}
                             </label>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -449,7 +456,7 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
                                   variant="outline" 
                                   className="w-full justify-between bg-white dark:bg-gray-800 text-sm h-9"
                                 >
-                                  {ubicacionSeleccionada}
+                                  {t.schedule.availableLocations[ubicacionSeleccionada]}
                                   <ChevronDown className="h-4 w-4 opacity-50" />
                                 </Button>
                               </DropdownMenuTrigger>
@@ -459,7 +466,7 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
                                     key={ubicacion} 
                                     onClick={() => setUbicacionSeleccionada(ubicacion)}
                                   >
-                                    {ubicacion}
+                                    {t.schedule.availableLocations[ubicacion]}
                                   </DropdownMenuItem>
                                 ))}
                               </DropdownMenuContent>
@@ -479,19 +486,19 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
                     <thead className="bg-gray-50 dark:bg-gray-700">
                       <tr>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                          Día
+                          {t.schedule.columns.day}
                         </th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                          Entrada
+                          {t.schedule.columns.entry}
                         </th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                          Salida
+                          {t.schedule.columns.exit}
                         </th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                          Comida (min)
+                          {t.schedule.columns.meal}
                         </th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                          Descanso
+                          {t.schedule.columns.break}
                         </th>
                       </tr>
                     </thead>
@@ -499,7 +506,7 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
                       {horarios.map((horario, index) => (
                         <tr key={horario.dia}>
                           <td className="px-3 py-3 text-sm font-medium text-gray-900 dark:text-white">
-                            {horario.dia}
+                            {t.schedule.days[horario.dia]}
                           </td>
                           <td className="px-3 py-3">
                             <div className="flex items-center gap-2">
@@ -577,14 +584,14 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
             variant="outline" 
             onClick={onClose}
           >
-            Cancelar
+            {t.buttons.cancel}
           </Button>
           <Button 
             onClick={aplicarHorarios}
             className="bg-[#143675] hover:bg-[#0f2855] text-white gap-2"
             disabled={selectedColaboradores.length === 0}
           >
-            📋 Aplicar a seleccionados
+            📋 {t.buttons.apply}
           </Button>
         </div>
       </div>

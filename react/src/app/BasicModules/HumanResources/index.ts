@@ -1,1 +1,1 @@
-export { default } from './RecursosHumanos';
+export { default } from './HumanResources';

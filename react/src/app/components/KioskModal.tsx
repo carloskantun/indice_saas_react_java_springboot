@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { X, Search, Camera, MapPin } from 'lucide-react';
+import { useHRLanguage } from '../BasicModules/HumanResources/HRLanguage';
+import { useLanguage } from '../shared/context';
 
 interface Colaborador {
   id: number;
@@ -17,6 +19,9 @@ interface KioskModalProps {
 }
 
 export function KioskModal({ isOpen, onClose, colaboradores, registeredLocations }: KioskModalProps) {
+  const t = useHRLanguage();
+  const kiosk = t.attendanceKiosk;
+  const { currentLanguage } = useLanguage();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedColaborador, setSelectedColaborador] = useState<Colaborador | null>(null);
@@ -36,19 +41,13 @@ export function KioskModal({ isOpen, onClose, colaboradores, registeredLocations
 
   const getGreeting = () => {
     const hour = currentTime.getHours();
-    if (hour >= 5 && hour < 12) return 'Buenos días ☀️';
-    if (hour >= 12 && hour < 19) return 'Buenas tardes ⛅';
-    return 'Buenas noches 🌙';
+    if (hour >= 5 && hour < 12) return kiosk.greetings.morning;
+    if (hour >= 12 && hour < 19) return kiosk.greetings.afternoon;
+    return kiosk.greetings.evening;
   };
 
   const getMotivationalMessage = () => {
-    const messages = [
-      'Hazlo con calma y con orgullo. Vas bien.',
-      'Tu esfuerzo hace la diferencia. ¡Sigue adelante!',
-      'Cada día es una nueva oportunidad. ¡Aprovéchala!',
-      'Tu trabajo importa. Gracias por tu dedicación.',
-      'Eres parte fundamental del equipo. ¡Excelente trabajo!',
-    ];
+    const messages = kiosk.messages;
     return messages[Math.floor(Math.random() * messages.length)];
   };
 
@@ -66,7 +65,13 @@ export function KioskModal({ isOpen, onClose, colaboradores, registeredLocations
   const handleRegistrarAsistencia = () => {
     if (!hasPhoto || !hasLocation || !selectedColaborador) return;
     
-    alert(`✓ Asistencia registrada exitosamente\n\n${selectedColaborador.nombre}\nTipo: ${registroTipo === 'ingreso' ? 'Ingreso' : 'Salida'}\nHora: ${currentTime.toLocaleTimeString('es-MX')}`);
+    alert(
+      kiosk.success(
+        selectedColaborador.nombre,
+        registroTipo === 'ingreso' ? kiosk.checklist.checkIn : kiosk.checklist.checkOut,
+        currentTime.toLocaleTimeString(currentLanguage.code),
+      ),
+    );
     
     // Resetear formulario
     setSelectedColaborador(null);
@@ -87,15 +92,14 @@ export function KioskModal({ isOpen, onClose, colaboradores, registeredLocations
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <h1 className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                    Kiosco · Pase de lista
+                    {kiosk.title}
                   </h1>
                   <div className="text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                    🕐 {currentTime.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                    🕐 {currentTime.toLocaleTimeString(currentLanguage.code, { hour: '2-digit', minute: '2-digit' })}
                   </div>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Busca tu nombre y registra tu <span className="font-medium text-blue-600 dark:text-blue-400">ingreso</span>. 
-                  Al terminar tu jornada, registra tu <span className="font-medium text-green-600 dark:text-green-400">salida</span>.
+                  {kiosk.intro}
                 </p>
               </div>
               <button
@@ -125,21 +129,21 @@ export function KioskModal({ isOpen, onClose, colaboradores, registeredLocations
                 <span className={selectedColaborador ? 'text-green-600 dark:text-green-400' : ''}>
                   {selectedColaborador ? '✓' : '○'}
                 </span>
-                <span>Selecciona tu nombre</span>
+                <span>{kiosk.checklist.selectName}</span>
               </div>
               <span className="text-gray-300 dark:text-gray-600">•</span>
               <div className="flex items-center gap-2">
                 <span className={hasLocation ? 'text-green-600 dark:text-green-400' : ''}>
                   {hasLocation ? '✓' : '○'}
                 </span>
-                <span>Orden ubicación</span>
+                <span>{kiosk.checklist.getLocation}</span>
               </div>
               <span className="text-gray-300 dark:text-gray-600">•</span>
               <div className="flex items-center gap-2">
                 <span className={hasPhoto ? 'text-green-600 dark:text-green-400' : ''}>
                   {hasPhoto ? '✓' : '○'}
                 </span>
-                <span>Toma foto</span>
+                <span>{kiosk.checklist.takePhoto}</span>
               </div>
               <span className="text-gray-300 dark:text-gray-600">•</span>
               <div className="flex items-center gap-3">
@@ -152,7 +156,7 @@ export function KioskModal({ isOpen, onClose, colaboradores, registeredLocations
                     onChange={() => setRegistroTipo('ingreso')}
                     className="w-4 h-4 text-blue-600"
                   />
-                  <span>Ingreso</span>
+                  <span>{kiosk.checklist.checkIn}</span>
                 </label>
                 <span className="text-gray-300 dark:text-gray-600">/</span>
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -164,7 +168,7 @@ export function KioskModal({ isOpen, onClose, colaboradores, registeredLocations
                     onChange={() => setRegistroTipo('salida')}
                     className="w-4 h-4 text-blue-600"
                   />
-                  <span>Salida</span>
+                  <span>{kiosk.checklist.checkOut}</span>
                 </label>
               </div>
             </div>
@@ -174,15 +178,15 @@ export function KioskModal({ isOpen, onClose, colaboradores, registeredLocations
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Fecha
+                {kiosk.labels.date}
               </label>
               <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-gray-900 dark:text-white">
-                {currentTime.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' })} (hoy)
+                {currentTime.toLocaleDateString(currentLanguage.code, { day: '2-digit', month: '2-digit', year: 'numeric' })} {kiosk.today}
               </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Buscar
+                {kiosk.labels.search}
               </label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -190,7 +194,7 @@ export function KioskModal({ isOpen, onClose, colaboradores, registeredLocations
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Nombre o código"
+                  placeholder={kiosk.searchPlaceholder}
                   className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -202,7 +206,7 @@ export function KioskModal({ isOpen, onClose, colaboradores, registeredLocations
             {/* Left Panel - Colaboradores List */}
             <div className="lg:col-span-1 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
               <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                <h3 className="font-semibold text-gray-900 dark:text-white">Colaboradores</h3>
+                <h3 className="font-semibold text-gray-900 dark:text-white">{kiosk.labels.employees}</h3>
                 <span className="text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
                   {filteredColaboradores.length}
                 </span>
@@ -211,7 +215,7 @@ export function KioskModal({ isOpen, onClose, colaboradores, registeredLocations
               <div className="max-h-[500px] overflow-y-auto">
                 {filteredColaboradores.length === 0 ? (
                   <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-                    Sin resultados.
+                    {kiosk.noResults}
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -233,7 +237,7 @@ export function KioskModal({ isOpen, onClose, colaboradores, registeredLocations
                         </p>
                         {colaborador.codigo && (
                           <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                            Código: {colaborador.codigo}
+                            {kiosk.labels.code}: {colaborador.codigo}
                           </p>
                         )}
                       </button>
@@ -249,8 +253,8 @@ export function KioskModal({ isOpen, onClose, colaboradores, registeredLocations
                 <div className="flex items-center justify-center h-full min-h-[400px] text-gray-400 dark:text-gray-500">
                   <div className="text-center">
                     <div className="text-6xl mb-4">👤</div>
-                    <p className="text-lg">Selecciona un colaborador</p>
-                    <p className="text-sm mt-2">Usa el buscador o la lista de la izquierda</p>
+                    <p className="text-lg">{kiosk.selectEmployee}</p>
+                    <p className="text-sm mt-2">{kiosk.selectEmployeeHint}</p>
                   </div>
                 </div>
               ) : (
@@ -269,9 +273,9 @@ export function KioskModal({ isOpen, onClose, colaboradores, registeredLocations
                   <div>
                     <div className="flex items-center gap-2 mb-3">
                       <Camera className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                      <h4 className="font-medium text-gray-900 dark:text-white">Foto</h4>
+                      <h4 className="font-medium text-gray-900 dark:text-white">{kiosk.labels.photo}</h4>
                       <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto">
-                        {hasPhoto ? 'Requerida para marcar.' : 'Sin foto'}
+                        {hasPhoto ? kiosk.photoRequired : kiosk.noPhoto}
                       </span>
                     </div>
                     
@@ -285,11 +289,11 @@ export function KioskModal({ isOpen, onClose, colaboradores, registeredLocations
                       }`}
                     >
                       <Camera className="h-4 w-4" />
-                      {hasPhoto ? '✓ Foto tomada' : '📷 Tomar foto'}
+                      {hasPhoto ? `✓ ${kiosk.photoTaken}` : `📷 ${kiosk.takePhoto}`}
                     </Button>
                     
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      <span className="font-medium">Tip:</span> rostro centrado y buena luz.
+                      <span className="font-medium">Tip:</span> {kiosk.photoTip}
                     </p>
                   </div>
 
@@ -297,9 +301,9 @@ export function KioskModal({ isOpen, onClose, colaboradores, registeredLocations
                   <div>
                     <div className="flex items-center gap-2 mb-3">
                       <MapPin className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                      <h4 className="font-medium text-gray-900 dark:text-white">Ubicación</h4>
+                      <h4 className="font-medium text-gray-900 dark:text-white">{kiosk.labels.location}</h4>
                       <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto">
-                        {hasLocation ? 'Requerida para marcar.' : 'Sin ubicación'}
+                        {hasLocation ? kiosk.locationRequired : kiosk.noLocation}
                       </span>
                     </div>
                     
@@ -313,14 +317,14 @@ export function KioskModal({ isOpen, onClose, colaboradores, registeredLocations
                       }`}
                     >
                       <MapPin className="h-4 w-4" />
-                      {hasLocation ? '✓ Ubicación obtenida' : '📍 Obtener ubicación'}
+                      {hasLocation ? `✓ ${kiosk.locationObtained}` : `📍 ${kiosk.getLocation}`}
                     </Button>
                   </div>
 
                   {/* Info Message */}
                   <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
                     <p className="text-sm text-blue-900 dark:text-blue-200">
-                      Se habilita cuando hay foto + ubicación.
+                      {kiosk.enableWhenReady}
                     </p>
                   </div>
 
@@ -336,11 +340,11 @@ export function KioskModal({ isOpen, onClose, colaboradores, registeredLocations
                         : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                     }`}
                   >
-                    {registroTipo === 'ingreso' ? '☀️' : '🌙'} Registrar {registroTipo}
+                    {registroTipo === 'ingreso' ? '☀️' : '🌙'} {kiosk.register}
                   </Button>
 
                   <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                    <span className="font-medium">Tip:</span> botón único — alterna ingreso/salida según tu estado.
+                    <span className="font-medium">Tip:</span> {kiosk.toggleTip}
                   </p>
                 </div>
               )}

@@ -14,7 +14,7 @@ const getStatusClasses = (estado: RHIncentivo['estado']) => {
   return styles[estado];
 };
 
-export default function Incentivos() {
+export default function Incentives() {
   const [incentivos, setIncentivos] = useState<RHIncentivo[]>(rhIncentivosSeed);
   const [isModalOpen, setIsModalOpen] = useState(false);
 

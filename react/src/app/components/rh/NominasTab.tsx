@@ -23,6 +23,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { PreferenciasNominaModal } from '../PreferenciasNominaModal';
 import { EditarNominaModal } from '../EditarNominaModal';
+import { useHRLanguage } from '../../BasicModules/HumanResources/HRLanguage';
 
 interface Nomina {
   id: number;
@@ -70,6 +71,7 @@ interface NominasTabProps {
 }
 
 export function NominasTab({ colaboradores }: NominasTabProps) {
+  const t = useHRLanguage().payroll;
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [periodoFilter, setPeriodoFilter] = useState('Todos los registros');
@@ -366,6 +368,16 @@ export function NominasTab({ colaboradores }: NominasTabProps) {
   };
 
   const hasActiveFilters = periodoFilter !== 'Todos los registros' || unidadFilter !== 'Todas' || negocioFilter !== 'Todos' || searchQuery !== '';
+  const periodoFilterLabel =
+    periodoFilter === 'Todos los registros'
+      ? t.filters.allRecords
+      : periodoFilter === 'Este mes'
+        ? t.filters.thisMonth
+        : periodoFilter === 'Este año'
+          ? t.filters.thisYear
+          : periodoFilter;
+  const unidadFilterLabel = unidadFilter === 'Todas' ? t.filters.allUnits : unidadFilter;
+  const negocioFilterLabel = negocioFilter === 'Todos' ? t.filters.allBusinesses : negocioFilter;
 
   return (
     <>
@@ -375,10 +387,10 @@ export function NominasTab({ colaboradores }: NominasTabProps) {
           <div>
             <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
               <span className="text-2xl">💰</span>
-              Nómina
+              {t.title}
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Gestiona períodos de pago y procesa nóminas
+              {t.subtitle}
             </p>
           </div>
           <Button
@@ -387,7 +399,7 @@ export function NominasTab({ colaboradores }: NominasTabProps) {
             className="gap-2 border-[#143675] text-[#143675] hover:bg-[#143675] hover:text-white"
           >
             <Settings className="h-4 w-4" />
-            Preferencias de nómina
+            {t.preferences}
           </Button>
         </div>
       </div>
@@ -398,11 +410,11 @@ export function NominasTab({ colaboradores }: NominasTabProps) {
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-gray-500 dark:text-gray-400" />
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-              Filtros
+              {t.filtersTitle}
             </h3>
             {hasActiveFilters && (
               <span className="text-xs bg-[#143675]/10 text-[#143675] dark:bg-[#143675]/20 dark:text-[#4a7bc8] px-2 py-0.5 rounded-full">
-                Activos
+                {t.activeFilters}
               </span>
             )}
           </div>
@@ -414,7 +426,7 @@ export function NominasTab({ colaboradores }: NominasTabProps) {
               className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
             >
               <X className="h-4 w-4 mr-1" />
-              Limpiar filtros
+              {t.clearFilters}
             </Button>
           )}
         </div>
@@ -424,19 +436,19 @@ export function NominasTab({ colaboradores }: NominasTabProps) {
           {/* Período */}
           <div>
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
-              Período
+              {t.filters.period}
             </label>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="w-full justify-between">
-                  {periodoFilter}
+                  {periodoFilterLabel}
                   <ChevronDown className="h-4 w-4 opacity-50" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-full">
-                <DropdownMenuItem onClick={() => setPeriodoFilter('Todos los registros')}>Todos los registros</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setPeriodoFilter('Este mes')}>Este mes</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setPeriodoFilter('Este año')}>Este año</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setPeriodoFilter('Todos los registros')}>{t.filters.allRecords}</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setPeriodoFilter('Este mes')}>{t.filters.thisMonth}</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setPeriodoFilter('Este año')}>{t.filters.thisYear}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -444,17 +456,17 @@ export function NominasTab({ colaboradores }: NominasTabProps) {
           {/* Unidad */}
           <div>
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
-              Unidad
+              {t.filters.unit}
             </label>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="w-full justify-between">
-                  {unidadFilter}
+                  {unidadFilterLabel}
                   <ChevronDown className="h-4 w-4 opacity-50" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-full">
-                <DropdownMenuItem onClick={() => setUnidadFilter('Todas')}>Todas</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setUnidadFilter('Todas')}>{t.filters.allUnits}</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setUnidadFilter('7')}>7</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setUnidadFilter('8')}>8</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setUnidadFilter('9')}>9</DropdownMenuItem>
@@ -466,17 +478,17 @@ export function NominasTab({ colaboradores }: NominasTabProps) {
           {/* Negocio */}
           <div>
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
-              Negocio
+              {t.filters.business}
             </label>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="w-full justify-between">
-                  {negocioFilter}
+                  {negocioFilterLabel}
                   <ChevronDown className="h-4 w-4 opacity-50" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-full">
-                <DropdownMenuItem onClick={() => setNegocioFilter('Todos')}>Todos</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setNegocioFilter('Todos')}>{t.filters.allBusinesses}</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setNegocioFilter('Negocio A')}>Negocio A</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setNegocioFilter('Negocio B')}>Negocio B</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setNegocioFilter('Negocio C')}>Negocio C</DropdownMenuItem>
@@ -493,31 +505,31 @@ export function NominasTab({ colaboradores }: NominasTabProps) {
             <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Período
+                  {t.table.period}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Fechas
+                  {t.table.dates}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Frecuencia
+                  {t.table.frequency}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Colaboradores
+                  {t.table.employees}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Monto total
+                  {t.table.totalAmount}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Estado
+                  {t.table.status}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Unidad
+                  {t.table.unit}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Negocio
+                  {t.table.business}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Acciones
+                  {t.table.actions}
                 </th>
               </tr>
             </thead>
@@ -527,8 +539,8 @@ export function NominasTab({ colaboradores }: NominasTabProps) {
                   <td colSpan={9} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
                       <FileText className="h-12 w-12 mb-3 opacity-50" />
-                      <p className="text-sm font-medium">No se encontraron nóminas</p>
-                      <p className="text-xs mt-1">Intenta ajustar los filtros de búsqueda</p>
+                      <p className="text-sm font-medium">{t.table.noResults}</p>
+                      <p className="text-xs mt-1">{t.table.adjustFilters}</p>
                     </div>
                   </td>
                 </tr>
@@ -598,14 +610,14 @@ export function NominasTab({ colaboradores }: NominasTabProps) {
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-6">
                 <span className="text-gray-700 dark:text-gray-300">
-                  <span className="font-medium">{filteredNominas.length}</span> nómina(s)
+                  <span className="font-medium">{filteredNominas.length}</span> {t.table.payrollCount}
                 </span>
                 <span className="text-gray-700 dark:text-gray-300">
-                  <span className="font-medium">{totalColaboradores}</span> colaboradores
+                  <span className="font-medium">{totalColaboradores}</span> {t.table.employeeCount}
                 </span>
               </div>
               <span className="text-gray-900 dark:text-white font-medium">
-                Total: ${totalMonto.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                {t.table.total}: ${totalMonto.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
               </span>
             </div>
           </div>

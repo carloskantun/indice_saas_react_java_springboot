@@ -1,19 +1,19 @@
 import { Button } from '../../components/ui/button';
 import { FavoritesBar } from '../../components/FavoritesBar';
-import { useRecursosHumanosTranslations } from '../../hooks/useRecursosHumanosTranslations';
 import { useRoutedModuleTab } from '../../hooks/useRoutedModuleTab';
-import Colaboradores from './Colaboradores';
-import Asistencia from './Asistencia';
+import { useHRLanguage } from './HRLanguage';
+import Employees from './Employees';
+import Attendance from './Attendance';
 import Control from './Control';
-import Nomina from './Nomina';
-import Comunicados from './Comunicados';
-import Activos from './Activos';
-import Actas from './Actas';
-import Permisos from './Permisos';
-import Incentivos from './Incentivos';
+import Payroll from './Payroll';
+import Announcements from './Announcements';
+import Assets from './Assets';
+import Records from './Records';
+import Permissions from './Permissions';
+import Incentives from './Incentives';
 import KPIs from './KPIs';
 
-interface RecursosHumanosProps {
+interface HumanResourcesProps {
   onNavigate: (page?: string) => void;
 }
 
@@ -43,8 +43,8 @@ const legacyHumanResourcesTabAliases: Partial<Record<string, HumanResourcesTabId
   incentivos: 'incentives',
 };
 
-export default function RecursosHumanos({ onNavigate }: RecursosHumanosProps) {
-  const t = useRecursosHumanosTranslations();
+export default function HumanResources({ onNavigate }: HumanResourcesProps) {
+  const t = useHRLanguage();
   const { activeTab, setActiveTab } = useRoutedModuleTab<HumanResourcesTabId>(
     'collaborators',
     humanResourcesTabIds,
@@ -52,20 +52,20 @@ export default function RecursosHumanos({ onNavigate }: RecursosHumanosProps) {
   );
 
   const tabs = [
-    { id: 'collaborators', label: t.tabs.colaboradores, emoji: '👥', component: Colaboradores },
-    { id: 'attendance', label: t.tabs.asistencia, emoji: '📅', component: Asistencia },
-    { id: 'control', label: t.tabs.control, emoji: '⏱️', component: Control },
-    { id: 'payroll', label: t.tabs.nomina, emoji: '💰', component: Nomina },
-    { id: 'announcements', label: t.tabs.comunicados, emoji: '📢', component: Comunicados },
-    { id: 'assets', label: t.tabs.activos, emoji: '💼', component: Activos },
-    { id: 'records', label: t.tabs.actas, emoji: '📋', component: Actas },
-    { id: 'permissions', label: t.tabs.permisos, emoji: '✅', component: Permisos },
-    { id: 'incentives', label: t.tabs.incentivos, emoji: '🎁', component: Incentivos },
-    { id: 'kpis', label: t.tabs.kpis, emoji: '📊', component: KPIs },
+    { id: 'collaborators', label: t.shell.tabs.collaborators, emoji: '👥', component: Employees },
+    { id: 'attendance', label: t.shell.tabs.attendance, emoji: '📅', component: Control },
+    { id: 'control', label: t.shell.tabs.control, emoji: '⏱️', component: Attendance },
+    { id: 'payroll', label: t.shell.tabs.payroll, emoji: '💰', component: Payroll },
+    { id: 'announcements', label: t.shell.tabs.announcements, emoji: '📢', component: Announcements },
+    { id: 'assets', label: t.shell.tabs.assets, emoji: '💼', component: Assets },
+    { id: 'records', label: t.shell.tabs.records, emoji: '📋', component: Records },
+    { id: 'permissions', label: t.shell.tabs.permissions, emoji: '✅', component: Permissions },
+    { id: 'incentives', label: t.shell.tabs.incentives, emoji: '🎁', component: Incentives },
+    { id: 'kpis', label: t.shell.tabs.kpis, emoji: '📊', component: KPIs },
   ];
 
   // Get the active component
-  const ActiveComponent = tabs.find(tab => tab.id === activeTab)?.component || Colaboradores;
+  const ActiveComponent = tabs.find(tab => tab.id === activeTab)?.component || Employees;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -84,10 +84,10 @@ export default function RecursosHumanos({ onNavigate }: RecursosHumanosProps) {
           <div className="flex items-start justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                {t.title}
+                {t.shell.title}
               </h1>
               <p className="text-gray-600 dark:text-gray-400">
-                {t.subtitle}
+                {t.shell.subtitle}
               </p>
             </div>
             <Button 
@@ -95,7 +95,7 @@ export default function RecursosHumanos({ onNavigate }: RecursosHumanosProps) {
               onClick={() => onNavigate()}
               className="text-sm gap-2"
             >
-              <span className="text-lg">🏠</span> {t.back}
+              <span className="text-lg">🏠</span> {t.shell.back}
             </Button>
           </div>
 
