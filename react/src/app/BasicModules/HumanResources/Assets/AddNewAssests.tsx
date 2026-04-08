@@ -10,9 +10,15 @@ import {
 } from '../../../components/ui/dialog';
 import { cn } from '../../../components/ui/utils';
 import { useHRLanguage } from '../HRLanguage';
+import { useAssetsPortalTheme } from './useAssetsPortalTheme';
 
 export type AddNewAssetType = 'laptop' | 'attendance' | 'operations' | 'maintenance';
-export type AddNewAssetStatus = 'Disponible' | 'Asignado' | 'Mantenimiento' | 'Resguardo';
+export type AddNewAssetStatus = 'available' | 'assigned' | 'maintenance' | 'custody' | 'inactive';
+
+export interface AddNewAssetOption {
+  value: string;
+  label: string;
+}
 
 export interface AddNewAssetDraft {
   id: string;
@@ -31,12 +37,14 @@ export interface AddNewAssetDraft {
 interface AddNewAssestsProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (draft: AddNewAssetDraft) => void;
-  responsibleOptions: string[];
-  unitOptions: string[];
+  onSave: (draft: AddNewAssetDraft) => Promise<boolean | void> | boolean | void;
+  responsibleOptions: AddNewAssetOption[];
+  unitOptions: AddNewAssetOption[];
+  mode?: 'create' | 'edit';
+  initialDraft?: AddNewAssetDraft | null;
 }
 
-const initialDraft: AddNewAssetDraft = {
+const emptyDraft: AddNewAssetDraft = {
   id: '',
   assetType: 'laptop',
   name: '',
@@ -44,7 +52,7 @@ const initialDraft: AddNewAssetDraft = {
   serialNumber: '',
   responsible: '',
   unit: '',
-  status: 'Disponible',
+  status: 'available',
   assignedDate: '',
   value: '',
   notes: '',
@@ -56,45 +64,39 @@ export function AddNewAssests({
   onSave,
   responsibleOptions,
   unitOptions,
+  mode = 'create',
+  initialDraft = null,
 }: AddNewAssestsProps) {
   const t = useHRLanguage().assets.addNewAsset;
-  const [draft, setDraft] = useState<AddNewAssetDraft>(initialDraft);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const baseDraft = initialDraft ?? emptyDraft;
+  const [draft, setDraft] = useState<AddNewAssetDraft>(baseDraft);
+  const isDarkMode = useAssetsPortalTheme();
+  const isEditMode = mode === 'edit';
 
   useEffect(() => {
-    if (!isOpen) {
-      setDraft(initialDraft);
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (typeof document === 'undefined') {
+    if (isOpen) {
+      setDraft(baseDraft);
       return;
     }
 
-    const resolveTheme = () => {
-      const appRoot = document.querySelector('.notranslate');
-      setIsDarkMode(Boolean(appRoot?.classList.contains('dark')));
-    };
+    setDraft(emptyDraft);
+  }, [baseDraft, isOpen]);
 
-    resolveTheme();
-
-    const appRoot = document.querySelector('.notranslate');
-    if (!appRoot) {
-      return;
-    }
-
-    const observer = new MutationObserver(resolveTheme);
-    observer.observe(appRoot, { attributes: true, attributeFilter: ['class'] });
-
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
+  const hasChanges = useMemo(
+    () => JSON.stringify(draft) !== JSON.stringify(baseDraft),
+    [baseDraft, draft],
+  );
 
   const canSave = useMemo(
-    () => Boolean(draft.id.trim() && draft.assetType && draft.name.trim()),
-    [draft.assetType, draft.id, draft.name],
+    () =>
+      Boolean(
+        draft.id.trim()
+        && draft.assetType
+        && draft.name.trim()
+        && (!['assigned', 'custody'].includes(draft.status) || draft.responsible)
+        && (!isEditMode || hasChanges)
+      ),
+    [draft.assetType, draft.id, draft.name, draft.responsible, draft.status, hasChanges, isEditMode],
   );
 
   const handleFieldChange = <K extends keyof AddNewAssetDraft>(field: K, value: AddNewAssetDraft[K]) => {
@@ -102,17 +104,21 @@ export function AddNewAssests({
   };
 
   const handleCancel = () => {
-    setDraft(initialDraft);
+    setDraft(emptyDraft);
     onClose();
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!canSave) {
       return;
     }
 
-    onSave(draft);
-    setDraft(initialDraft);
+    const result = await onSave(draft);
+    if (result === false) {
+      return;
+    }
+
+    setDraft(emptyDraft);
   };
 
   const inputClassName = cn(
@@ -128,6 +134,35 @@ export function AddNewAssests({
     'rounded-xl border p-4',
     isDarkMode ? 'border-gray-700 bg-gray-900/35' : 'border-gray-200 bg-gray-50/90',
   );
+  const isAssignmentStatus = ['assigned', 'custody'].includes(draft.status);
+  const modalTitle = isEditMode ? t.editTitle : t.title;
+  const modalSubtitle = isEditMode ? t.editSubtitle : t.subtitle;
+  const saveLabel = isEditMode ? t.buttons.saveChanges : t.buttons.save;
+
+  const handleStatusChange = (nextStatus: AddNewAssetStatus) => {
+    setDraft((current) => ({
+      ...current,
+      status: nextStatus,
+      responsible: ['assigned', 'custody'].includes(nextStatus) ? current.responsible : '',
+      assignedDate: ['assigned', 'custody'].includes(nextStatus) ? current.assignedDate : '',
+    }));
+  };
+
+  const handleResponsibleChange = (value: string) => {
+    setDraft((current) => ({
+      ...current,
+      responsible: value,
+      status: value && !['assigned', 'custody'].includes(current.status) ? 'assigned' : current.status,
+    }));
+  };
+
+  const handleAssignedDateChange = (value: string) => {
+    setDraft((current) => ({
+      ...current,
+      assignedDate: value,
+      status: value && !['assigned', 'custody'].includes(current.status) ? 'assigned' : current.status,
+    }));
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => (!open ? handleCancel() : undefined)}>
@@ -149,10 +184,10 @@ export function AddNewAssests({
         >
           <DialogTitle className={cn('flex items-center gap-2 text-2xl font-semibold', isDarkMode ? 'text-white' : 'text-gray-900')}>
             <span className="text-xl">🏢</span>
-            {t.title}
+            {modalTitle}
           </DialogTitle>
           <DialogDescription className={cn('text-sm', isDarkMode ? 'text-slate-300' : 'text-gray-600')}>
-            {t.subtitle}
+            {modalSubtitle}
           </DialogDescription>
         </DialogHeader>
 
@@ -244,13 +279,13 @@ export function AddNewAssests({
                   <label className={labelClassName}>{t.fields.responsible}</label>
                   <select
                     value={draft.responsible}
-                    onChange={(event) => handleFieldChange('responsible', event.target.value)}
+                    onChange={(event) => handleResponsibleChange(event.target.value)}
                     className={selectClassName}
                   >
                     <option value="">{t.placeholders.responsible}</option>
                     {responsibleOptions.map((responsible) => (
-                      <option key={responsible} value={responsible}>
-                        {responsible}
+                      <option key={responsible.value} value={responsible.value}>
+                        {responsible.label}
                       </option>
                     ))}
                   </select>
@@ -265,8 +300,8 @@ export function AddNewAssests({
                   >
                     <option value="">{t.placeholders.unit}</option>
                     {unitOptions.map((unit) => (
-                      <option key={unit} value={unit}>
-                        {unit}
+                      <option key={unit.value} value={unit.value}>
+                        {unit.label}
                       </option>
                     ))}
                   </select>
@@ -276,13 +311,14 @@ export function AddNewAssests({
                   <label className={labelClassName}>{t.fields.status}</label>
                   <select
                     value={draft.status}
-                    onChange={(event) => handleFieldChange('status', event.target.value as AddNewAssetStatus)}
+                    onChange={(event) => handleStatusChange(event.target.value as AddNewAssetStatus)}
                     className={selectClassName}
                   >
-                    <option value="Disponible">{t.options.available}</option>
-                    <option value="Asignado">{t.options.assigned}</option>
-                    <option value="Mantenimiento">{t.options.maintenance}</option>
-                    <option value="Resguardo">{t.options.custody}</option>
+                    <option value="available">{t.options.available}</option>
+                    <option value="assigned">{t.options.assigned}</option>
+                    <option value="maintenance">{t.options.maintenance}</option>
+                    <option value="custody">{t.options.custody}</option>
+                    <option value="inactive">{t.options.inactive}</option>
                   </select>
                 </div>
 
@@ -291,7 +327,7 @@ export function AddNewAssests({
                   <input
                     type="date"
                     value={draft.assignedDate}
-                    onChange={(event) => handleFieldChange('assignedDate', event.target.value)}
+                    onChange={(event) => handleAssignedDateChange(event.target.value)}
                     className={inputClassName}
                   />
                 </div>
@@ -357,7 +393,7 @@ export function AddNewAssests({
             disabled={!canSave}
             className="bg-[#5d35ff] text-white hover:bg-[#4e29ef] disabled:cursor-not-allowed disabled:bg-[#3c365f] disabled:text-slate-400"
           >
-            {t.buttons.save}
+            {saveLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

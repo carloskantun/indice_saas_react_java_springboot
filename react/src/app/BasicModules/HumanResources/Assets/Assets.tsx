@@ -1,219 +1,567 @@
-import { useMemo, useState } from 'react';
-import { ChevronDown, Eye, PenLine, Plus, Search, Trash2, Wrench } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Eye, Pencil, Plus, Search, Settings2, Trash2 } from 'lucide-react';
+import { dashboardApi } from '../../../api/dashboard';
+import {
+  hrAssetsApi,
+  type HrAsset,
+  type HrAssetsSummary,
+  type HrAssetStatus,
+} from '../../../api/HumanResources/assets';
+import { humanResourcesApi } from '../../../api/humanResources';
+import { LoadingBarOverlay, runWithMinimumDuration } from '../../../components/LoadingBarOverlay';
 import { ConfirmDeleteDialog } from '../../../components/ConfirmDeleteDialog';
 import { SuccessToast } from '../../../components/SuccessToast';
 import { Button } from '../../../components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '../../../components/ui/dropdown-menu';
-import { rhColaboradores } from '../mockData';
-import { AddNewAssests, type AddNewAssetDraft, type AddNewAssetType } from './AddNewAssests';
+import { useLocalStorageState } from '../../../hooks/useLocalStorageState';
+import { useLanguage } from '../../../shared/context';
+import { AddNewAssests, type AddNewAssetDraft, type AddNewAssetOption, type AddNewAssetType } from './AddNewAssests';
+import { AssetDetailsModal } from './AssetDetailsModal';
+import { AssetColumnConfig, AssetColumnsModal } from './AssetColumnsModal';
 import { useHRLanguage } from '../HRLanguage';
-import { RHActivoAsignado, rhActivosSeed } from '../mockData';
 
 type AssetType = AddNewAssetType;
+type AssetTypeFilter = AssetType | 'other';
+type AssetColumnId =
+  | 'id'
+  | 'type'
+  | 'asset'
+  | 'model'
+  | 'serialNumber'
+  | 'responsible'
+  | 'unit'
+  | 'status'
+  | 'assignedAt'
+  | 'value'
+  | 'notes'
+  | 'actions';
 
-interface AssetRow extends RHActivoAsignado {
-  icon: string;
-  serial: string;
-  unidad: string;
-  valor: string;
-  tipoFiltro: AssetType;
-  modelo?: string;
-  notas?: string;
+interface AssetRow {
+  backendId: number;
+  assetCode: string;
+  assetType: string;
+  assetTypeFilter: AssetTypeFilter;
+  name: string;
+  model: string;
+  serialNumber: string;
+  responsibleName: string;
+  responsibleId: number | null;
+  responsibleEmail: string | null;
+  unitName: string;
+  unitId: number | null;
+  status: HrAssetStatus;
+  assignedAt: string | null;
+  valueAmount: number | null;
+  notes: string;
 }
 
-const assetCatalog: AssetRow[] = [
-  {
-    ...rhActivosSeed[0],
-    icon: '💻',
-    serial: 'SN: MBP-2023-1456',
-    unidad: 'Unidad 10',
-    valor: '$45,000',
-    tipoFiltro: 'laptop',
-    modelo: 'Latitude 7440',
-  },
-  {
-    ...rhActivosSeed[1],
-    icon: '🖥️',
-    serial: 'SN: DLT-2023-8921',
-    unidad: 'Unidad 10',
-    valor: '$18,500',
-    tipoFiltro: 'attendance',
-    modelo: 'Kiosk Biometric Pro',
-  },
-  {
-    ...rhActivosSeed[2],
-    icon: '📱',
-    serial: 'IMEI: 356789012345678',
-    unidad: 'Unidad 10',
-    valor: '$24,999',
-    tipoFiltro: 'operations',
-    modelo: 'iPhone 14 Pro',
-  },
-  {
-    ...rhActivosSeed[3],
-    icon: '🧰',
-    serial: 'KIT: MTTO-8841',
-    unidad: 'Unidad 7',
-    valor: '$7,800',
-    tipoFiltro: 'maintenance',
-    modelo: 'Industrial service kit',
-  },
+const allAssetColumnIds: AssetColumnId[] = [
+  'id',
+  'type',
+  'asset',
+  'model',
+  'serialNumber',
+  'responsible',
+  'unit',
+  'status',
+  'assignedAt',
+  'value',
+  'notes',
+  'actions',
 ];
 
-const getAssetStatusClasses = (status: RHActivoAsignado['estado']) => {
-  const styles: Record<RHActivoAsignado['estado'], string> = {
-    Disponible: 'bg-[#5c7cff]/15 text-[#89a0ff]',
-    Asignado: 'bg-emerald-500/15 text-emerald-400',
-    Mantenimiento: 'bg-amber-500/15 text-amber-400',
-    Resguardo: 'bg-slate-500/15 text-slate-300',
+const lockedAssetColumnIds: AssetColumnId[] = ['asset', 'actions'];
+
+const emptySummary: HrAssetsSummary = {
+  total_count: 0,
+  available_count: 0,
+  assigned_count: 0,
+  maintenance_count: 0,
+  custody_count: 0,
+  inactive_count: 0,
+  total_value_amount: 0,
+};
+
+const assignableStatuses: HrAssetStatus[] = ['assigned', 'custody'];
+
+const normalizeErrorMessage = (error: unknown, fallback: string) => (
+  error instanceof Error && error.message ? error.message : fallback
+);
+
+const getAssetTypeFilter = (assetType: string): AssetTypeFilter => {
+  const normalized = assetType.trim().toLowerCase();
+
+  if (normalized === 'laptop') {
+    return 'laptop';
+  }
+  if (normalized === 'attendance') {
+    return 'attendance';
+  }
+  if (normalized === 'operations') {
+    return 'operations';
+  }
+  if (normalized === 'maintenance') {
+    return 'maintenance';
+  }
+
+  return 'other';
+};
+
+const getAssetTypeIcon = (assetType: string) => {
+  const iconMap: Record<AssetTypeFilter, string> = {
+    laptop: '💻',
+    attendance: '🖥️',
+    operations: '📱',
+    maintenance: '🧰',
+    other: '📦',
+  };
+
+  return iconMap[getAssetTypeFilter(assetType)];
+};
+
+const getAssetStatusClasses = (status: HrAssetStatus) => {
+  const styles: Record<HrAssetStatus, string> = {
+    available: 'bg-[#5c7cff]/15 text-[#89a0ff]',
+    assigned: 'bg-emerald-500/15 text-emerald-400',
+    maintenance: 'bg-amber-500/15 text-amber-400',
+    custody: 'bg-slate-500/15 text-slate-300',
+    inactive: 'bg-rose-500/15 text-rose-300',
   };
 
   return styles[status];
 };
 
-const getAssetTypeIcon = (type: AssetType) => {
-  const iconMap: Record<AssetType, string> = {
-    laptop: '💻',
-    attendance: '🖥️',
-    operations: '📱',
-    maintenance: '🧰',
-  };
-
-  return iconMap[type];
-};
-
-const getAssetTypeLabel = (type: AssetType, t: ReturnType<typeof useHRLanguage>) => {
-  const labelMap: Record<AssetType, string> = {
+const getAssetTypeLabel = (assetType: string, t: ReturnType<typeof useHRLanguage>) => {
+  const labelMap: Partial<Record<AssetTypeFilter, string>> = {
     laptop: t.assets.addNewAsset.options.laptop,
     attendance: t.assets.filters.attendanceControl,
     operations: t.assets.filters.operation,
     maintenance: t.assets.filters.maintenance,
   };
 
-  return labelMap[type];
+  const normalizedType = getAssetTypeFilter(assetType);
+  if (normalizedType !== 'other') {
+    return labelMap[normalizedType] ?? assetType;
+  }
+
+  return assetType
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 };
+
+const getAssetStatusLabel = (status: HrAssetStatus, t: ReturnType<typeof useHRLanguage>) => {
+  const labelMap: Record<HrAssetStatus, string> = {
+    available: t.assets.filters.available,
+    assigned: t.assets.filters.assigned,
+    maintenance: t.assets.filters.inMaintenance,
+    custody: t.assets.filters.custody,
+    inactive: t.assets.filters.inactive,
+  };
+
+  return labelMap[status];
+};
+
+const getAssetColumnConfig = (
+  t: ReturnType<typeof useHRLanguage>,
+  visibleIds: AssetColumnId[],
+): AssetColumnConfig[] => [
+  { id: 'id', label: t.assets.table.id, visible: visibleIds.includes('id') },
+  { id: 'type', label: t.assets.table.type, visible: visibleIds.includes('type') },
+  { id: 'asset', label: t.assets.table.asset, visible: visibleIds.includes('asset'), locked: true },
+  { id: 'model', label: t.assets.table.model, visible: visibleIds.includes('model') },
+  { id: 'serialNumber', label: t.assets.table.serialNumber, visible: visibleIds.includes('serialNumber') },
+  { id: 'responsible', label: t.assets.table.responsible, visible: visibleIds.includes('responsible') },
+  { id: 'unit', label: t.assets.table.unit, visible: visibleIds.includes('unit') },
+  { id: 'status', label: t.assets.table.status, visible: visibleIds.includes('status') },
+  { id: 'assignedAt', label: t.assets.table.assignedAt, visible: visibleIds.includes('assignedAt') },
+  { id: 'value', label: t.assets.table.value, visible: visibleIds.includes('value') },
+  { id: 'notes', label: t.assets.table.notes, visible: visibleIds.includes('notes') },
+  { id: 'actions', label: t.assets.table.actions, visible: visibleIds.includes('actions'), locked: true },
+];
+
+const formatAssetDate = (value: string | null, locale: string) => {
+  if (!value) {
+    return '-';
+  }
+
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+  const parsedDate = new Date(normalized);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(locale, {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(parsedDate);
+};
+
+const formatAssetValue = (value: number | null, locale: string) => {
+  if (value === null || value === undefined) {
+    return '-';
+  }
+
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value);
+};
+
+const normalizeComparableDate = (value: string | null) => {
+  if (!value) {
+    return '';
+  }
+
+  return value.slice(0, 10);
+};
+
+const mapAssetRow = (asset: HrAsset): AssetRow => ({
+  backendId: asset.id,
+  assetCode: asset.asset_code,
+  assetType: asset.asset_type,
+  assetTypeFilter: getAssetTypeFilter(asset.asset_type),
+  name: asset.name,
+  model: asset.model ?? '',
+  serialNumber: asset.serial_number ?? '',
+  responsibleName: asset.responsible_name || '',
+  responsibleId: asset.responsible_employee_id,
+  responsibleEmail: asset.responsible_email ?? null,
+  unitName: asset.unit_name ?? '',
+  unitId: asset.unit_id,
+  status: asset.status,
+  assignedAt: asset.assigned_at,
+  valueAmount: asset.value_amount,
+  notes: asset.notes ?? '',
+});
 
 export default function Assets() {
   const t = useHRLanguage();
-  const [assetRows, setAssetRows] = useState<AssetRow[]>(assetCatalog);
+  const { currentLanguage } = useLanguage();
+  const [assetRows, setAssetRows] = useState<AssetRow[]>([]);
+  const [summary, setSummary] = useState<HrAssetsSummary>(emptySummary);
+  const [responsibleOptions, setResponsibleOptions] = useState<AddNewAssetOption[]>([]);
+  const [unitOptions, setUnitOptions] = useState<AddNewAssetOption[]>([]);
+  const [visibleColumnIds, setVisibleColumnIds] = useLocalStorageState<AssetColumnId[]>(
+    'indice.hr.assets.visibleColumns.v2',
+    allAssetColumnIds,
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | AssetType>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | RHActivoAsignado['estado']>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | HrAssetStatus>('all');
   const [unitFilter, setUnitFilter] = useState<'all' | string>('all');
   const [toastMessage, setToastMessage] = useState('');
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingTitle, setLoadingTitle] = useState('');
   const [assetPendingDeactivate, setAssetPendingDeactivate] = useState<AssetRow | null>(null);
+  const [selectedAssetDetails, setSelectedAssetDetails] = useState<HrAsset | null>(null);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isAddAssetOpen, setIsAddAssetOpen] = useState(false);
+  const [isColumnsModalOpen, setIsColumnsModalOpen] = useState(false);
+  const [assetEditing, setAssetEditing] = useState<AssetRow | null>(null);
+
+  const normalizedVisibleColumnIds = useMemo(() => {
+    const nextVisible = allAssetColumnIds.filter(
+      (columnId) => visibleColumnIds.includes(columnId) || lockedAssetColumnIds.includes(columnId),
+    );
+    return nextVisible.length ? nextVisible : allAssetColumnIds;
+  }, [visibleColumnIds]);
+
+  const visibleColumnSet = useMemo(() => new Set(normalizedVisibleColumnIds), [normalizedVisibleColumnIds]);
+  const assetColumnConfig = useMemo(
+    () => getAssetColumnConfig(t, normalizedVisibleColumnIds),
+    [normalizedVisibleColumnIds, t],
+  );
 
   const filteredAssets = useMemo(
     () =>
       assetRows.filter((asset) => {
-        const matchesSearch = `${asset.nombre} ${asset.colaborador} ${asset.departamento} ${asset.serial}`
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase());
-        const matchesType = typeFilter === 'all' || asset.tipoFiltro === typeFilter;
-        const matchesStatus = statusFilter === 'all' || asset.estado === statusFilter;
-        const matchesUnit = unitFilter === 'all' || asset.unidad === unitFilter;
+        const haystack = [
+          asset.assetCode,
+          asset.name,
+          asset.assetType,
+          asset.model,
+          asset.serialNumber,
+          asset.responsibleName,
+          asset.unitName,
+          asset.notes,
+        ]
+          .join(' ')
+          .toLowerCase();
+        const matchesSearch = haystack.includes(searchQuery.trim().toLowerCase());
+        const matchesType = typeFilter === 'all' || asset.assetTypeFilter === typeFilter;
+        const matchesStatus = statusFilter === 'all' || asset.status === statusFilter;
+        const matchesUnit = unitFilter === 'all' || String(asset.unitId ?? '') === unitFilter;
 
         return matchesSearch && matchesType && matchesStatus && matchesUnit;
       }),
     [assetRows, searchQuery, statusFilter, typeFilter, unitFilter],
   );
 
-  const totalAssets = assetRows.length;
-  const assignedAssets = assetRows.filter((asset) => asset.estado === 'Asignado').length;
-  const availableAssets = assetRows.filter((asset) => ['Disponible', 'Resguardo'].includes(asset.estado)).length;
-  const maintenanceAssets = assetRows.filter((asset) => asset.estado === 'Mantenimiento').length;
+  const runAssetOperation = async <T,>(title: string, task: () => Promise<T>) => {
+    setIsSubmitting(true);
+    setLoadingTitle(title);
 
-  const responsibleOptions = useMemo(
-    () => Array.from(new Set(rhColaboradores.map((collaborator) => collaborator.nombre))),
-    [],
-  );
-  const unitOptions = useMemo(
-    () => Array.from(new Set(assetRows.map((asset) => asset.unidad))).sort(),
-    [assetRows],
-  );
+    try {
+      return await runWithMinimumDuration(task());
+    } finally {
+      setIsSubmitting(false);
+      setLoadingTitle('');
+    }
+  };
+
+  const loadAssets = async () => {
+    const response = await hrAssetsApi.listAssets({ page: 1, size: 100 });
+    setAssetRows(response.items.map(mapAssetRow));
+    setSummary(response.summary ?? emptySummary);
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadPage = async () => {
+      setIsInitialLoading(true);
+      setLoadError(null);
+
+      const [assetsResult, employeesResult, unitsResult] = await Promise.allSettled([
+        hrAssetsApi.listAssets({ page: 1, size: 100 }),
+        humanResourcesApi.listEmployees(),
+        dashboardApi.listUnits(),
+      ]);
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (assetsResult.status === 'fulfilled') {
+        setAssetRows(assetsResult.value.items.map(mapAssetRow));
+        setSummary(assetsResult.value.summary ?? emptySummary);
+      } else {
+        setAssetRows([]);
+        setSummary(emptySummary);
+        setLoadError(normalizeErrorMessage(assetsResult.reason, t.assets.errors.load));
+      }
+
+      if (employeesResult.status === 'fulfilled') {
+        const activeEmployees = employeesResult.value.items.filter((employee) => {
+          const status = String(employee.status ?? '').trim().toLowerCase();
+          return !status || status === 'active' || status === 'activo';
+        });
+
+        setResponsibleOptions(
+          activeEmployees.map((employee) => ({
+            value: String(employee.id),
+            label: employee.full_name,
+          })),
+        );
+      } else {
+        setResponsibleOptions([]);
+      }
+
+      if (unitsResult.status === 'fulfilled') {
+        const activeUnits = unitsResult.value.filter((unit) => {
+          const status = String(unit.status ?? '').trim().toLowerCase();
+          return !status || status === 'active' || status === 'activo';
+        });
+
+        setUnitOptions(
+          activeUnits.map((unit) => ({
+            value: String(unit.id),
+            label: unit.name,
+          })),
+        );
+      } else {
+        setUnitOptions([]);
+      }
+
+      setIsInitialLoading(false);
+    };
+
+    void loadPage();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [t.assets.errors.load]);
 
   const handleCreateAsset = () => {
+    setAssetEditing(null);
     setIsAddAssetOpen(true);
   };
 
-  const handleViewDetails = (asset: AssetRow) => {
-    window.alert(
-      [
-        t.assets.actionAlerts.details,
-        '',
-        `${t.assets.table.id}: ${asset.id}`,
-        `${t.assets.table.asset}: ${asset.nombre}`,
-        `Serial: ${asset.serial.replace(/^SN:\s?|^IMEI:\s?|^KIT:\s?/u, '')}`,
-        `${t.assets.table.responsible}: ${asset.colaborador}`,
-        `${t.assets.table.unit}: ${asset.unidad}`,
-        `${t.assets.table.status}: ${asset.estado}`,
-        `${t.assets.table.assignedAt}: ${asset.fechaAsignacion}`,
-        `${t.assets.table.value}: ${asset.valor}`,
-      ].join('\n'),
-    );
+  const handleViewDetails = async (asset: AssetRow) => {
+    try {
+      const detail = await runAssetOperation(t.assets.actionsMenu.viewDetails, () =>
+        hrAssetsApi.getAssetDetails(asset.backendId),
+      );
+      setSelectedAssetDetails(detail);
+      setIsDetailsModalOpen(true);
+    } catch (error) {
+      window.alert(normalizeErrorMessage(error, t.assets.errors.details));
+    }
   };
 
-  const handleReassign = () => {
-    window.alert(t.assets.actionAlerts.reassignPending);
+  const handleEditAsset = (asset: AssetRow) => {
+    setAssetEditing(asset);
+    setIsAddAssetOpen(true);
   };
 
-  const handleMoveToMaintenance = (asset: AssetRow) => {
-    setAssetRows((current) =>
-      current.map((row) => (row.id === asset.id ? { ...row, estado: 'Mantenimiento' } : row)),
-    );
-    setToastMessage(t.assets.actionAlerts.movedToMaintenance(asset.nombre));
-  };
-
-  const handleConfirmDeactivate = () => {
+  const handleConfirmDeactivate = async () => {
     if (!assetPendingDeactivate) {
       return;
     }
 
-    setAssetRows((current) =>
-      current.map((row) => (row.id === assetPendingDeactivate.id ? { ...row, estado: 'Resguardo' } : row)),
-    );
-    setToastMessage(t.assets.actionAlerts.deactivated(assetPendingDeactivate.nombre));
-    setAssetPendingDeactivate(null);
+    try {
+      await runAssetOperation(t.assets.confirmDeactivate.confirm, () =>
+        hrAssetsApi.changeAssetStatus(assetPendingDeactivate.backendId, {
+          status: 'inactive',
+          change_reason: 'deactivated',
+        }),
+      );
+      await loadAssets();
+      setToastMessage(t.assets.actionAlerts.deactivated(assetPendingDeactivate.name));
+      setAssetPendingDeactivate(null);
+    } catch (error) {
+      window.alert(normalizeErrorMessage(error, t.assets.errors.status));
+    }
   };
 
-  const handleSaveAsset = (draft: AddNewAssetDraft) => {
-    const collaborator = rhColaboradores.find((row) => row.nombre === draft.responsible);
-    const newAsset: AssetRow = {
-      id: draft.id,
-      nombre: draft.name,
-      categoria: getAssetTypeLabel(draft.assetType, t),
-      colaborador: draft.responsible || 'Sin asignar',
-      departamento: collaborator?.departamento ?? 'General',
-      estado: draft.status,
-      condicion: draft.status === 'Mantenimiento' ? 'Revision' : 'Excelente',
-      fechaAsignacion: draft.assignedDate
-        ? new Intl.DateTimeFormat('en-GB', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-          }).format(new Date(`${draft.assignedDate}T00:00:00`))
-        : '-',
-      icon: getAssetTypeIcon(draft.assetType),
-      serial: draft.serialNumber
-        ? `${draft.assetType === 'operations' ? 'IMEI' : draft.assetType === 'maintenance' ? 'KIT' : 'SN'}: ${draft.serialNumber}`
-        : '-',
-      unidad: draft.unit || '-',
-      valor: draft.value || '-',
-      tipoFiltro: draft.assetType,
-      modelo: draft.model,
-      notas: draft.notes,
-    };
+  const handleSaveAsset = async (draft: AddNewAssetDraft) => {
+    const trimmedResponsible = draft.responsible.trim();
+    const trimmedUnit = draft.unit.trim();
+    const trimmedValue = draft.value.trim();
+    const trimmedNotes = draft.notes.trim();
 
-    setAssetRows((current) => [newAsset, ...current]);
-    setIsAddAssetOpen(false);
-    setToastMessage(t.assets.addNewAsset.success(draft.name));
+    try {
+      if (assetEditing) {
+        const desiredUnitId = trimmedUnit ? Number(trimmedUnit) : null;
+        const desiredResponsibleId = trimmedResponsible ? Number(trimmedResponsible) : null;
+        const desiredAssignedDate = draft.assignedDate || '';
+        const currentAssignedDate = normalizeComparableDate(assetEditing.assignedAt);
+        const currentIsAssignmentStatus = assignableStatuses.includes(assetEditing.status);
+        const desiredIsAssignmentStatus = assignableStatuses.includes(draft.status);
+        const lifecycleStatusChanged = assetEditing.status !== draft.status;
+        const unitHandledByUpdate = !currentIsAssignmentStatus && !desiredIsAssignmentStatus && !lifecycleStatusChanged;
+
+        const updatePayload = {
+          asset_code: draft.id.trim(),
+          asset_type: draft.assetType,
+          name: draft.name.trim(),
+          model: draft.model.trim() || null,
+          serial_number: draft.serialNumber.trim() || null,
+          unit_id: unitHandledByUpdate ? desiredUnitId : undefined,
+          value: trimmedValue || null,
+          notes: trimmedNotes || null,
+        };
+
+        const needsMetadataUpdate =
+          updatePayload.asset_code !== assetEditing.assetCode
+          || updatePayload.asset_type !== assetEditing.assetType
+          || updatePayload.name !== assetEditing.name
+          || (updatePayload.model ?? '') !== assetEditing.model
+          || (updatePayload.serial_number ?? '') !== assetEditing.serialNumber
+          || (trimmedValue ? Number(trimmedValue.replace(/[^0-9.-]/g, '')) : null) !== assetEditing.valueAmount
+          || (trimmedNotes || '') !== assetEditing.notes
+          || (unitHandledByUpdate && desiredUnitId !== assetEditing.unitId);
+
+        await runAssetOperation(t.assets.actionsMenu.edit, async () => {
+          if (needsMetadataUpdate) {
+            await hrAssetsApi.updateAsset(assetEditing.backendId, updatePayload);
+          }
+
+          if (desiredIsAssignmentStatus) {
+            const assignmentStatus = draft.status as Extract<HrAssetStatus, 'assigned' | 'custody'>;
+            const assignmentChanged =
+              assetEditing.status !== draft.status
+              || assetEditing.responsibleId !== desiredResponsibleId
+              || assetEditing.unitId !== desiredUnitId
+              || currentAssignedDate !== desiredAssignedDate;
+
+            if (assignmentChanged) {
+              await hrAssetsApi.reassignAsset(assetEditing.backendId, {
+                responsible_employee_id: Number(desiredResponsibleId),
+                unit_id: desiredUnitId ?? undefined,
+                status: assignmentStatus,
+                assigned_date: desiredAssignedDate || undefined,
+                notes: trimmedNotes || undefined,
+              });
+            }
+          } else if (assetEditing.status !== draft.status) {
+            await hrAssetsApi.changeAssetStatus(assetEditing.backendId, {
+              status: draft.status,
+              unit_id: desiredUnitId,
+              notes: trimmedNotes || undefined,
+              change_reason: 'manual_update',
+            });
+          }
+        });
+
+        await loadAssets();
+        setIsAddAssetOpen(false);
+        setAssetEditing(null);
+        setToastMessage(t.assets.addNewAsset.successUpdated(draft.name));
+        return true;
+      }
+
+      const payload = {
+        asset_code: draft.id.trim(),
+        asset_type: draft.assetType,
+        name: draft.name.trim(),
+        model: draft.model.trim() || undefined,
+        serial_number: draft.serialNumber.trim() || undefined,
+        unit_id: trimmedUnit ? Number(trimmedUnit) : undefined,
+        status: draft.status,
+        assigned_date: assignableStatuses.includes(draft.status) ? draft.assignedDate || undefined : undefined,
+        responsible_employee_id:
+          assignableStatuses.includes(draft.status) && trimmedResponsible
+            ? Number(trimmedResponsible)
+            : undefined,
+        value: trimmedValue || undefined,
+        notes: trimmedNotes || undefined,
+      };
+
+      await runAssetOperation(t.assets.addNewAsset.buttons.save, () => hrAssetsApi.createAsset(payload));
+      await loadAssets();
+      setIsAddAssetOpen(false);
+      setAssetEditing(null);
+      setToastMessage(t.assets.addNewAsset.success(draft.name));
+      return true;
+    } catch (error) {
+      window.alert(normalizeErrorMessage(error, t.assets.errors.save));
+      return false;
+    }
   };
+
+  const handleApplyColumns = (columns: AssetColumnConfig[]) => {
+    const nextVisibleIds = allAssetColumnIds.filter((columnId) => {
+      const column = columns.find((item) => item.id === columnId);
+      return column?.visible || lockedAssetColumnIds.includes(columnId);
+    });
+
+    setVisibleColumnIds(nextVisibleIds);
+  };
+
+  const assetDraftForModal = useMemo<AddNewAssetDraft | null>(
+    () => (assetEditing
+      ? {
+          id: assetEditing.assetCode,
+          assetType: assetEditing.assetTypeFilter === 'other' ? 'operations' : assetEditing.assetTypeFilter,
+          name: assetEditing.name,
+          model: assetEditing.model,
+          serialNumber: assetEditing.serialNumber,
+          responsible: assetEditing.responsibleId ? String(assetEditing.responsibleId) : '',
+          unit: assetEditing.unitId ? String(assetEditing.unitId) : '',
+          status: assetEditing.status,
+          assignedDate: assetEditing.assignedAt ? assetEditing.assignedAt.slice(0, 10) : '',
+          value: assetEditing.valueAmount === null ? '' : String(assetEditing.valueAmount),
+          notes: assetEditing.notes,
+        }
+      : null),
+    [assetEditing],
+  );
 
   return (
     <>
@@ -230,6 +578,14 @@ export default function Assets() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="outline"
+              className="gap-2 border-[#143675]/30 bg-white/70 text-[#143675] hover:bg-[#143675] hover:text-white dark:border-[#4a7bc8]/30 dark:bg-gray-800/50 dark:text-white dark:hover:bg-[#143675]"
+              onClick={() => setIsColumnsModalOpen(true)}
+            >
+              <Settings2 className="h-4 w-4" />
+              {t.assets.columnPicker.button}
+            </Button>
             <Button className="gap-2 bg-[#3121a8] text-white hover:bg-[#261882]" onClick={handleCreateAsset}>
               <Plus className="h-4 w-4" />
               {t.assets.newAsset}
@@ -243,7 +599,7 @@ export default function Assets() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">{t.assets.cards.total}</p>
-              <p className="mt-2 text-4xl font-bold text-gray-900 dark:text-white">{totalAssets}</p>
+              <p className="mt-2 text-4xl font-bold text-gray-900 dark:text-white">{summary.total_count}</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#7c5cff]/18 text-xl">📦</div>
           </div>
@@ -252,7 +608,7 @@ export default function Assets() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">{t.assets.cards.assigned}</p>
-              <p className="mt-2 text-4xl font-bold text-emerald-400">{assignedAssets}</p>
+              <p className="mt-2 text-4xl font-bold text-emerald-400">{summary.assigned_count}</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/18 text-xl">✅</div>
           </div>
@@ -261,7 +617,7 @@ export default function Assets() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">{t.assets.cards.available}</p>
-              <p className="mt-2 text-4xl font-bold text-[#7e92ff]">{availableAssets}</p>
+              <p className="mt-2 text-4xl font-bold text-[#7e92ff]">{summary.available_count}</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#5c7cff]/18 text-[10px] font-bold text-[#90a1ff]">
               FREE
@@ -272,7 +628,7 @@ export default function Assets() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">{t.assets.cards.maintenance}</p>
-              <p className="mt-2 text-4xl font-bold text-amber-400">{maintenanceAssets}</p>
+              <p className="mt-2 text-4xl font-bold text-amber-400">{summary.maintenance_count}</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/18 text-xl">🔧</div>
           </div>
@@ -305,25 +661,26 @@ export default function Assets() {
 
         <select
           value={statusFilter}
-          onChange={(event) => setStatusFilter(event.target.value as 'all' | RHActivoAsignado['estado'])}
+          onChange={(event) => setStatusFilter(event.target.value as 'all' | HrAssetStatus)}
           className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-[#4f5dff] focus:ring-2 focus:ring-[#4f5dff]/20 dark:border-gray-700 dark:bg-gray-700/50 dark:text-white"
         >
           <option value="all">{t.assets.filters.allStatuses}</option>
-          <option value="Disponible">{t.assets.filters.available}</option>
-          <option value="Asignado">{t.assets.filters.assigned}</option>
-          <option value="Mantenimiento">{t.assets.filters.inMaintenance}</option>
-          <option value="Resguardo">{t.assets.filters.custody}</option>
+          <option value="available">{t.assets.filters.available}</option>
+          <option value="assigned">{t.assets.filters.assigned}</option>
+          <option value="maintenance">{t.assets.filters.inMaintenance}</option>
+          <option value="custody">{t.assets.filters.custody}</option>
+          <option value="inactive">{t.assets.filters.inactive}</option>
         </select>
 
         <select
           value={unitFilter}
-          onChange={(event) => setUnitFilter(event.target.value as 'all' | string)}
+          onChange={(event) => setUnitFilter(event.target.value)}
           className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-[#4f5dff] focus:ring-2 focus:ring-[#4f5dff]/20 dark:border-gray-700 dark:bg-gray-700/50 dark:text-white"
         >
           <option value="all">{t.assets.filters.allUnits}</option>
           {unitOptions.map((unit) => (
-            <option key={unit} value={unit}>
-              {unit}
+            <option key={unit.value} value={unit.value}>
+              {unit.label}
             </option>
           ))}
         </select>
@@ -334,98 +691,144 @@ export default function Assets() {
           <table className="min-w-full">
             <thead className="border-b border-gray-200 bg-gray-50/80 dark:border-gray-700 dark:bg-gray-700/60">
               <tr>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
-                  {t.assets.table.id}
-                </th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
-                  {t.assets.table.type}
-                </th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
-                  {t.assets.table.asset}
-                </th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
-                  {t.assets.table.responsible}
-                </th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
-                  {t.assets.table.unit}
-                </th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
-                  {t.assets.table.status}
-                </th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
-                  {t.assets.table.assignedAt}
-                </th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
-                  {t.assets.table.value}
-                </th>
-                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
-                  {t.assets.table.actions}
-                </th>
+                {assetColumnConfig
+                  .filter((column) => column.visible)
+                  .map((column) => (
+                    <th
+                      key={column.id}
+                      className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400"
+                    >
+                      {column.label}
+                    </th>
+                  ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {filteredAssets.map((asset) => (
-                <tr
-                  key={asset.id}
-                  className="transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/30"
-                >
-                  <td className="px-5 py-4 text-sm font-semibold text-gray-900 dark:text-white">{asset.id}</td>
-                  <td className="px-5 py-4 text-lg">{asset.icon}</td>
-                  <td className="px-5 py-4">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">{asset.nombre}</p>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{asset.serial}</p>
-                  </td>
-                  <td className="px-5 py-4 text-sm text-gray-700 dark:text-gray-300">{asset.colaborador}</td>
-                  <td className="px-5 py-4 text-sm text-gray-700 dark:text-gray-300">{asset.unidad}</td>
-                  <td className="px-5 py-4">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getAssetStatusClasses(
-                        asset.estado,
-                      )}`}
-                    >
-                      {asset.estado === 'Asignado'
-                        ? `✅ ${t.assets.statuses[asset.estado]}`
-                        : t.assets.statuses[asset.estado]}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 text-sm text-gray-700 dark:text-gray-300">{asset.fechaAsignacion}</td>
-                  <td className="px-5 py-4 text-sm font-semibold text-gray-900 dark:text-white">{asset.valor}</td>
-                  <td className="px-5 py-4">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 text-gray-500 transition hover:bg-gray-200 hover:text-gray-700 dark:bg-gray-700/60 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
-                          aria-label={t.assets.actionsMenu.moreActions(asset.nombre)}
-                        >
-                          <ChevronDown className="h-4 w-4" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="min-w-[11rem]">
-                        <DropdownMenuItem onClick={() => handleViewDetails(asset)} className="gap-2">
-                          <Eye className="h-4 w-4" />
-                          {t.assets.actionsMenu.viewDetails}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={handleReassign} className="gap-2">
-                          <PenLine className="h-4 w-4" />
-                          {t.assets.actionsMenu.reassign}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleMoveToMaintenance(asset)} className="gap-2 text-amber-600 focus:text-amber-700 dark:text-amber-300 dark:focus:text-amber-200">
-                          <Wrench className="h-4 w-4" />
-                          {t.assets.actionsMenu.maintenance}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => setAssetPendingDeactivate(asset)}
-                          className="gap-2 text-red-600 focus:text-red-700 dark:text-red-300 dark:focus:text-red-200"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          {t.assets.actionsMenu.deactivate}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+              {isInitialLoading ? (
+                <tr>
+                  <td
+                    colSpan={assetColumnConfig.filter((column) => column.visible).length}
+                    className="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400"
+                  >
+                    {t.assets.loading}
                   </td>
                 </tr>
-              ))}
+              ) : loadError ? (
+                <tr>
+                  <td
+                    colSpan={assetColumnConfig.filter((column) => column.visible).length}
+                    className="px-5 py-10 text-center text-sm text-rose-500 dark:text-rose-300"
+                  >
+                    {loadError}
+                  </td>
+                </tr>
+              ) : filteredAssets.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={assetColumnConfig.filter((column) => column.visible).length}
+                    className="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400"
+                  >
+                    {t.assets.emptyState}
+                  </td>
+                </tr>
+              ) : (
+                filteredAssets.map((asset) => (
+                  <tr
+                    key={asset.backendId}
+                    className="transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/30"
+                  >
+                    {visibleColumnSet.has('id') ? (
+                      <td className="px-5 py-4 text-sm font-semibold text-gray-900 dark:text-white">{asset.assetCode}</td>
+                    ) : null}
+                    {visibleColumnSet.has('type') ? (
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{getAssetTypeIcon(asset.assetType)}</span>
+                          <span className="text-sm text-gray-700 dark:text-gray-300">{getAssetTypeLabel(asset.assetType, t)}</span>
+                        </div>
+                      </td>
+                    ) : null}
+                    {visibleColumnSet.has('asset') ? (
+                      <td className="px-5 py-4">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white">{asset.name}</p>
+                      </td>
+                    ) : null}
+                    {visibleColumnSet.has('model') ? (
+                      <td className="px-5 py-4 text-sm text-gray-700 dark:text-gray-300">{asset.model || '-'}</td>
+                    ) : null}
+                    {visibleColumnSet.has('serialNumber') ? (
+                      <td className="px-5 py-4 text-sm text-gray-700 dark:text-gray-300">{asset.serialNumber || '-'}</td>
+                    ) : null}
+                    {visibleColumnSet.has('responsible') ? (
+                      <td className="px-5 py-4 text-sm text-gray-700 dark:text-gray-300">{asset.responsibleName || '-'}</td>
+                    ) : null}
+                    {visibleColumnSet.has('unit') ? (
+                      <td className="px-5 py-4 text-sm text-gray-700 dark:text-gray-300">{asset.unitName || '-'}</td>
+                    ) : null}
+                    {visibleColumnSet.has('status') ? (
+                      <td className="px-5 py-4">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getAssetStatusClasses(
+                            asset.status,
+                          )}`}
+                        >
+                          {asset.status === 'assigned'
+                            ? `✅ ${getAssetStatusLabel(asset.status, t)}`
+                            : getAssetStatusLabel(asset.status, t)}
+                        </span>
+                      </td>
+                    ) : null}
+                    {visibleColumnSet.has('assignedAt') ? (
+                      <td className="px-5 py-4 text-sm text-gray-700 dark:text-gray-300">
+                        {formatAssetDate(asset.assignedAt, currentLanguage.code)}
+                      </td>
+                    ) : null}
+                    {visibleColumnSet.has('value') ? (
+                      <td className="px-5 py-4 text-sm font-semibold text-gray-900 dark:text-white">
+                        {formatAssetValue(asset.valueAmount, currentLanguage.code)}
+                      </td>
+                    ) : null}
+                    {visibleColumnSet.has('notes') ? (
+                      <td className="max-w-[14rem] px-5 py-4 text-sm text-gray-700 dark:text-gray-300">
+                        <p className="line-clamp-2">{asset.notes || '-'}</p>
+                      </td>
+                    ) : null}
+                    {visibleColumnSet.has('actions') ? (
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3 text-sm">
+                          <button
+                            type="button"
+                            onClick={() => void handleViewDetails(asset)}
+                            aria-label={t.assets.actionsMenu.viewDetails}
+                            title={t.assets.actionsMenu.viewDetails}
+                            className="text-gray-400 transition hover:text-gray-200"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEditAsset(asset)}
+                            aria-label={t.assets.actionsMenu.edit}
+                            title={t.assets.actionsMenu.edit}
+                            className="text-[#7b82ff] transition hover:text-[#9fa4ff]"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAssetPendingDeactivate(asset)}
+                            aria-label={t.assets.actionsMenu.delete}
+                            title={t.assets.actionsMenu.delete}
+                            className="text-red-500 transition hover:text-red-400"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    ) : null}
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -434,11 +837,11 @@ export default function Assets() {
       <ConfirmDeleteDialog
         isVisible={assetPendingDeactivate !== null}
         title={t.assets.confirmDeactivate.title}
-        itemName={assetPendingDeactivate?.nombre}
+        itemName={assetPendingDeactivate?.name}
         description={t.assets.confirmDeactivate.description}
         confirmLabel={t.assets.confirmDeactivate.confirm}
         cancelLabel={t.assets.confirmDeactivate.cancel}
-        onConfirm={handleConfirmDeactivate}
+        onConfirm={() => void handleConfirmDeactivate()}
         onCancel={() => setAssetPendingDeactivate(null)}
       />
 
@@ -448,12 +851,38 @@ export default function Assets() {
         onClose={() => setToastMessage('')}
       />
 
+      <LoadingBarOverlay
+        isVisible={isSubmitting}
+        title={loadingTitle || t.assets.loading}
+      />
+
       <AddNewAssests
         isOpen={isAddAssetOpen}
-        onClose={() => setIsAddAssetOpen(false)}
+        onClose={() => {
+          setIsAddAssetOpen(false);
+          setAssetEditing(null);
+        }}
         onSave={handleSaveAsset}
         responsibleOptions={responsibleOptions}
         unitOptions={unitOptions}
+        mode={assetEditing ? 'edit' : 'create'}
+        initialDraft={assetDraftForModal}
+      />
+
+      <AssetDetailsModal
+        isOpen={isDetailsModalOpen}
+        asset={selectedAssetDetails}
+        onClose={() => {
+          setIsDetailsModalOpen(false);
+          setSelectedAssetDetails(null);
+        }}
+      />
+
+      <AssetColumnsModal
+        isOpen={isColumnsModalOpen}
+        onClose={() => setIsColumnsModalOpen(false)}
+        columns={assetColumnConfig}
+        onApply={handleApplyColumns}
       />
     </>
   );
