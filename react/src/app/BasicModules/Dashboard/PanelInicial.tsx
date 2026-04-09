@@ -7,6 +7,7 @@ import { useRoutedModuleTab } from '../../hooks/useRoutedModuleTab';
 import Profile from './Profile';
 import BusinessStructure from './BusinessStructure';
 import BusinessProfile from './BusinessProfile';
+import PersonalPerformance from './PersonalPerformance';
 import Plan from './Plan';
 import Billing from './Billing';
 import Users from './Users';
@@ -19,6 +20,7 @@ const subTabIds = [
   'profile',
   'business-structure',
   'business-profile',
+  'personal-performance',
   'plan',
   'billing',
   'users',
@@ -46,6 +48,7 @@ export default function PanelInicial({ onNavigate }: PanelInicialProps) {
     { id: 'profile', label: t.panelInicial.tabs.profile, emoji: '👤', component: Profile },
     { id: 'business-structure', label: t.panelInicial.tabs.businessStructure, emoji: '🏢', component: BusinessStructure },
     { id: 'business-profile', label: t.panelInicial.tabs.businessProfile, emoji: '📊', component: BusinessProfile },
+    { id: 'personal-performance', label: t.panelInicial.tabs.personalPerformance, emoji: '📈', component: PersonalPerformance },
     { id: 'plan', label: t.panelInicial.tabs.plan, emoji: '📋', component: Plan },
     { id: 'billing', label: t.panelInicial.tabs.billing, emoji: '🧾', component: Billing },
     { id: 'users', label: t.panelInicial.tabs.users, emoji: '👥', component: Users },
