@@ -277,6 +277,7 @@ type TranslationDictionary = {
         profile: string;
         businessStructure: string;
         businessProfile: string;
+        personalPerformance: string;
         billing: string;
         plan: string;
         users: string;
@@ -970,6 +971,7 @@ const translations: Translations = {
         profile: 'Perfil',
         businessStructure: 'Estructura Empresarial',
         businessProfile: 'Perfil empresarial',
+        personalPerformance: 'Rendimiento personal',
         billing: 'Facturación',
         plan: 'Plan',
         users: 'Usuarios',
@@ -1712,6 +1714,7 @@ const translations: Translations = {
         profile: 'Perfil',
         businessStructure: 'Estructura Empresarial',
         businessProfile: 'Perfil empresarial',
+        personalPerformance: 'Rendimiento personal',
         billing: 'Facturación',
         plan: 'Plan',
         users: 'Usuarios',
@@ -2454,6 +2457,7 @@ const translations: Translations = {
         profile: 'Profile',
         businessStructure: 'Business Structure',
         businessProfile: 'Business Profile',
+        personalPerformance: 'Personal Performance',
         billing: 'Billing',
         plan: 'Plan',
         users: 'Users',
@@ -3196,6 +3200,7 @@ const translations: Translations = {
         profile: 'Profile',
         businessStructure: 'Business Structure',
         businessProfile: 'Business Profile',
+        personalPerformance: 'Personal Performance',
         billing: 'Billing',
         plan: 'Plan',
         users: 'Users',
@@ -3938,6 +3943,7 @@ const translations: Translations = {
         profile: 'Profil',
         businessStructure: 'Structure d\'entreprise',
         businessProfile: 'Profil d\'entreprise',
+        personalPerformance: 'Performance personnelle',
         billing: 'Facturation',
         plan: 'Plan',
         users: 'Utilisateurs',
@@ -4680,6 +4686,7 @@ const translations: Translations = {
         profile: 'Perfil',
         businessStructure: 'Estrutura Empresarial',
         businessProfile: 'Perfil empresarial',
+        personalPerformance: 'Desempenho pessoal',
         billing: 'Faturamento',
         plan: 'Plano',
         users: 'Usuários',
@@ -5422,6 +5429,7 @@ const translations: Translations = {
         profile: '프로필',
         businessStructure: '기업 구조',
         businessProfile: '기업 프로필',
+        personalPerformance: '개인 성과',
         billing: '청구',
         plan: '계획',
         users: '사용자',
@@ -6164,6 +6172,7 @@ const translations: Translations = {
         profile: '简介',
         businessStructure: '企业结构',
         businessProfile: '企业简介',
+        personalPerformance: '个人表现',
         billing: '计费',
         plan: '计划',
         users: '用户',

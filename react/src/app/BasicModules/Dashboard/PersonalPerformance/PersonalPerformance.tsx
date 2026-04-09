@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, ChevronLeft, ChevronRight, Printer } from 'lucide-react';
+
 import {
-  businessProfileApi,
-  type BusinessProfileResponse,
-  type BusinessProfileSection,
-  type BusinessProfileSectionKey,
-  type BusinessProfileSectionStatus,
-  type SaveBusinessProfilePayload,
-} from '../../../api/HomePanel/BusinessProfile/businessProfile';
+  personalPerformanceApi,
+  type PersonalPerformanceResponse,
+  type PersonalPerformanceSection,
+  type PersonalPerformanceSectionKey,
+  type PersonalPerformanceSectionStatus,
+  type SavePersonalPerformancePayload,
+} from '../../../api/HomePanel/PersonalPerformance/personalPerformance';
 import {
   LoadingBarOverlay,
   runWithMinimumDuration,
@@ -17,13 +18,13 @@ import { SuccessToast } from '../../../components/SuccessToast';
 import { Button } from '../../../components/ui/button';
 import { useLanguage } from '../../../shared/context';
 import {
-  BusinessDiagnosisPrintPortal,
-  type BusinessDiagnosisPdfDocumentProps,
-} from './BusinessDiagnosisPdf';
-import { buildBusinessDiagnosisScoreReport } from './businessDiagnosisScoring';
+  PersonalPerformancePrintPortal,
+  type PersonalPerformancePdfDocumentProps,
+} from './PersonalPerformancePdf';
+import { buildPersonalPerformanceScoreReport } from './personalPerformanceScoring';
 
-type PillarId = BusinessProfileSectionKey;
-type PillarColor = 'blue' | 'yellow' | 'orange' | 'green';
+type SectionId = PersonalPerformanceSectionKey;
+type SectionColor = 'blue' | 'yellow' | 'orange' | 'green';
 type QuestionDefinition = {
   question: string;
   options: string[];
@@ -31,47 +32,135 @@ type QuestionDefinition = {
 
 type SectionState = {
   id: number | null;
-  status: BusinessProfileSectionStatus;
+  status: PersonalPerformanceSectionStatus;
   completedAt: string | null;
   questionCount: number;
   uiKey: string;
   answers: Record<number, number>;
 };
 
-type DiagnosticoState = Record<PillarId, SectionState>;
-type DiagnosticoQuestions = Record<PillarId, QuestionDefinition[]>;
+type PersonalPerformanceState = Record<SectionId, SectionState>;
+type PersonalPerformanceQuestions = Record<SectionId, QuestionDefinition[]>;
 
-const DEFAULT_SECTION_UI_KEYS: Record<PillarId, string> = {
-  people: 'personas',
-  processes: 'procesos',
-  products: 'productos',
-  finance: 'finanzas',
+const DEFAULT_SECTION_UI_KEYS: Record<SectionId, string> = {
+  sleep_recovery: 'sleep_recovery',
+  nutrition_energy: 'nutrition_energy',
+  stress_clarity: 'stress_clarity',
+  balance_sustainability: 'balance_sustainability',
 };
 
-const ANSWER_KEY_PREFIXES: Record<PillarId, string> = {
-  people: 'p',
-  processes: 'pr',
-  products: 'prod',
-  finance: 'fin',
+const ANSWER_KEY_PREFIXES: Record<SectionId, string> = {
+  sleep_recovery: 'sr',
+  nutrition_energy: 'ne',
+  stress_clarity: 'sc',
+  balance_sustainability: 'bs',
 };
 
 const DEFAULT_QUESTION_COUNT = 10;
-const BUSINESS_PROFILE_SAVE_MINIMUM_LOADING_MS = 2500;
-const BUSINESS_PROFILE_REPORT_ID_PREFIX = 'IDX-BD';
+const PERSONAL_PERFORMANCE_SAVE_MINIMUM_LOADING_MS = 2500;
+const PERSONAL_PERFORMANCE_REPORT_ID_PREFIX = 'IDX-PPI';
 
-const PILLAR_METADATA: Array<{
-  id: PillarId;
+const SECTION_METADATA: Array<{
+  id: SectionId;
   emoji: string;
-  titleKey: PillarId;
-  color: PillarColor;
+  color: SectionColor;
 }> = [
-  { id: 'people', emoji: '👥', titleKey: 'people', color: 'blue' },
-  { id: 'processes', emoji: '⚙️', titleKey: 'processes', color: 'yellow' },
-  { id: 'products', emoji: '📦', titleKey: 'products', color: 'orange' },
-  { id: 'finance', emoji: '💰', titleKey: 'finance', color: 'green' },
+  { id: 'sleep_recovery', emoji: '😴', color: 'blue' },
+  { id: 'nutrition_energy', emoji: '🥗', color: 'green' },
+  { id: 'stress_clarity', emoji: '🧠', color: 'orange' },
+  { id: 'balance_sustainability', emoji: '⚖️', color: 'yellow' },
 ];
 
-const createEmptySectionState = (sectionKey: PillarId, questionCount = DEFAULT_QUESTION_COUNT): SectionState => ({
+const PPI_COPY = {
+  title: 'Personal Performance Index (PPI)',
+  description: 'Measures habits and wellbeing conditions that affect sustainable work performance.',
+  centerTitle: 'Personal Performance Center',
+  centerDescription: 'Complete the 4 sections to understand recovery, energy, clarity, and sustainability over time.',
+  questionCount: '10 questions each',
+  questionCountLabel: 'The assessment contains',
+  progress: 'Personal performance progress',
+  progressOf: 'completed',
+  printReport: 'Print report',
+  restart: 'Restart section',
+  messages: {
+    loading: 'Loading personal performance...',
+    loadError: 'We could not load personal performance.',
+    saveSuccess: 'Personal performance saved.',
+    saveError: 'We could not save personal performance.',
+    unsavedChanges: 'You have unsaved changes in personal performance.',
+  },
+  sections: {
+    sleep_recovery: {
+      title: 'Sleep & Recovery',
+      description: 'Sleep quality, recovery consistency, and fatigue risk.',
+    },
+    nutrition_energy: {
+      title: 'Nutrition & Physical Energy',
+      description: 'Fueling, hydration, movement, and energy stability.',
+    },
+    stress_clarity: {
+      title: 'Stress & Mental Clarity',
+      description: 'Emotional load, anxiety, mental fatigue, and clarity for decisions.',
+    },
+    balance_sustainability: {
+      title: 'Balance & Sustainability',
+      description: 'Work-life balance, burnout risk, and long-term sustainability.',
+    },
+  },
+} as const;
+
+const PPI_QUESTIONS: PersonalPerformanceQuestions = {
+  sleep_recovery: [
+    { question: 'How many hours do you usually sleep per night?', options: ['Less than 5', '5 to 6', '6 to 7', '7 to 8+'] },
+    { question: 'How often do you wake up feeling rested?', options: ['Never', 'Rarely', 'Often', 'Almost always'] },
+    { question: 'How regular is your sleep schedule?', options: ['Totally irregular', 'Somewhat irregular', 'Mostly regular', 'Very regular'] },
+    { question: 'How often do you wake up during the night?', options: ['Very often', 'Sometimes', 'Rarely', 'Almost never'] },
+    { question: 'How often do you use your phone or laptop right before sleeping?', options: ['Always', 'Often', 'Sometimes', 'Rarely/Never'] },
+    { question: 'How often do you feel sleepy during the workday?', options: ['Constantly', 'Frequently', 'Sometimes', 'Rarely'] },
+    { question: 'How often do you rest properly on weekends or days off?', options: ['Never', 'Rarely', 'Sometimes', 'Usually'] },
+    { question: 'How quickly do you recover after a demanding workday?', options: ['Very poorly', 'Slowly', 'Reasonably well', 'Very well'] },
+    { question: 'How often do you work late at night?', options: ['Almost every day', 'Several times a week', 'Occasionally', 'Rarely'] },
+    { question: 'How would you rate your overall sleep quality?', options: ['Very poor', 'Poor', 'Good', 'Very good'] },
+  ],
+  nutrition_energy: [
+    { question: 'How many complete meals do you usually eat per day?', options: ['One or fewer', 'Two', 'Three', 'Three or more, consistently'] },
+    { question: 'How often do you skip breakfast or your first meal?', options: ['Always', 'Often', 'Sometimes', 'Rarely/Never'] },
+    { question: 'How often do you eat processed or fast food?', options: ['Daily', 'Several times a week', 'Occasionally', 'Rarely'] },
+    { question: 'How much water do you usually drink per day?', options: ['Very little', 'Less than recommended', 'Close to enough', 'Enough consistently'] },
+    { question: 'How often do you eat fruits or vegetables?', options: ['Almost never', 'Sometimes', 'Frequently', 'Daily'] },
+    { question: 'How stable is your energy during the day?', options: ['Very unstable', 'Somewhat unstable', 'Mostly stable', 'Very stable'] },
+    { question: 'How often do you exercise or move intentionally?', options: ['Never', '1 time per week', '2-3 times per week', '4+ times per week'] },
+    { question: 'How long do you stay seated without breaks during work?', options: ['Almost all day', 'Long periods', 'Moderate periods', 'I take regular active breaks'] },
+    { question: 'How often do you feel physically heavy or sluggish while working?', options: ['Constantly', 'Frequently', 'Sometimes', 'Rarely'] },
+    { question: 'How would you rate your physical energy overall?', options: ['Very low', 'Low', 'Good', 'High'] },
+  ],
+  stress_clarity: [
+    { question: 'How often do you feel overwhelmed by work?', options: ['Constantly', 'Frequently', 'Sometimes', 'Rarely'] },
+    { question: 'How often do you feel mentally saturated?', options: ['Every day', 'Several times a week', 'Occasionally', 'Rarely'] },
+    { question: 'How easy is it for you to focus on one task at a time?', options: ['Very difficult', 'Difficult', 'Manageable', 'Easy'] },
+    { question: 'How often do you feel anxious because of work responsibilities?', options: ['Constantly', 'Frequently', 'Sometimes', 'Rarely'] },
+    { question: 'How clear do you feel when making important decisions?', options: ['Very unclear', 'Somewhat unclear', 'Mostly clear', 'Very clear'] },
+    { question: 'How often do you carry work problems into personal time?', options: ['Always', 'Often', 'Sometimes', 'Rarely'] },
+    { question: 'How well can you disconnect mentally from work?', options: ['I cannot disconnect', 'It is difficult', 'I can sometimes', 'I can do it well'] },
+    { question: 'How often do small issues feel bigger than they should?', options: ['Very often', 'Often', 'Sometimes', 'Rarely'] },
+    { question: 'How supported do you feel emotionally in your current work life?', options: ['Not supported at all', 'Slightly supported', 'Moderately supported', 'Well supported'] },
+    { question: 'How would you rate your mental clarity overall?', options: ['Very poor', 'Poor', 'Good', 'Very good'] },
+  ],
+  balance_sustainability: [
+    { question: 'How many days per week do you work?', options: ['7 days', '6 days', '5-6 days with some balance', '5 days or balanced schedule'] },
+    { question: 'How often do you work on weekends?', options: ['Every weekend', 'Most weekends', 'Sometimes', 'Rarely/Never'] },
+    { question: 'Do you have time during the week for personal life or hobbies?', options: ['Never', 'Rarely', 'Sometimes', 'Consistently'] },
+    { question: 'How often do you feel guilty when resting?', options: ['Always', 'Often', 'Sometimes', 'Rarely'] },
+    { question: 'How sustainable does your current routine feel?', options: ['Not sustainable at all', 'Hard to sustain', 'Mostly sustainable', 'Very sustainable'] },
+    { question: 'How often do you take real breaks during the workday?', options: ['Never', 'Rarely', 'Sometimes', 'Frequently'] },
+    { question: 'How often do you take vacations or recovery days?', options: ['Never', 'Rarely', 'Occasionally', 'Regularly'] },
+    { question: 'How dependent is your work on your constant presence?', options: ['Completely dependent', 'Highly dependent', 'Moderately dependent', 'Low dependency'] },
+    { question: 'How often do you feel close to burnout?', options: ['Constantly', 'Frequently', 'Sometimes', 'Rarely'] },
+    { question: 'How would you rate your life-work balance overall?', options: ['Very poor', 'Poor', 'Good', 'Very good'] },
+  ],
+};
+
+const createEmptySectionState = (sectionKey: SectionId, questionCount = DEFAULT_QUESTION_COUNT): SectionState => ({
   id: null,
   status: 'draft',
   completedAt: null,
@@ -80,11 +169,11 @@ const createEmptySectionState = (sectionKey: PillarId, questionCount = DEFAULT_Q
   answers: {},
 });
 
-const createEmptyDiagnosticoState = (): DiagnosticoState => ({
-  people: createEmptySectionState('people'),
-  processes: createEmptySectionState('processes'),
-  products: createEmptySectionState('products'),
-  finance: createEmptySectionState('finance'),
+const createEmptyPersonalPerformanceState = (): PersonalPerformanceState => ({
+  sleep_recovery: createEmptySectionState('sleep_recovery'),
+  nutrition_energy: createEmptySectionState('nutrition_energy'),
+  stress_clarity: createEmptySectionState('stress_clarity'),
+  balance_sustainability: createEmptySectionState('balance_sustainability'),
 });
 
 const extractQuestionIndex = (questionKey: string) => {
@@ -124,7 +213,7 @@ const deserializeAnswers = (rawAnswers: Record<string, number> | undefined): Rec
 };
 
 const serializeAnswers = (
-  sectionKey: PillarId,
+  sectionKey: SectionId,
   answers: Record<number, number>,
 ) => Object.entries(answers)
   .sort(([leftIndex], [rightIndex]) => Number(leftIndex) - Number(rightIndex))
@@ -134,9 +223,9 @@ const serializeAnswers = (
   }, {});
 
 const createStateFromSection = (
-  sectionKey: PillarId,
-  section: BusinessProfileSection | undefined,
-  questions: DiagnosticoQuestions,
+  sectionKey: SectionId,
+  section: PersonalPerformanceSection | undefined,
+  questions: PersonalPerformanceQuestions,
 ): SectionState => {
   const fallbackQuestionCount = questions[sectionKey]?.length || DEFAULT_QUESTION_COUNT;
 
@@ -158,14 +247,14 @@ const createStateFromSection = (
   };
 };
 
-const createDiagnosticoStateFromResponse = (
-  response: BusinessProfileResponse,
-  questions: DiagnosticoQuestions,
-): DiagnosticoState => ({
-  people: createStateFromSection('people', response.sections.people, questions),
-  processes: createStateFromSection('processes', response.sections.processes, questions),
-  products: createStateFromSection('products', response.sections.products, questions),
-  finance: createStateFromSection('finance', response.sections.finance, questions),
+const createStateFromResponse = (
+  response: PersonalPerformanceResponse,
+  questions: PersonalPerformanceQuestions,
+): PersonalPerformanceState => ({
+  sleep_recovery: createStateFromSection('sleep_recovery', response.sections.sleep_recovery, questions),
+  nutrition_energy: createStateFromSection('nutrition_energy', response.sections.nutrition_energy, questions),
+  stress_clarity: createStateFromSection('stress_clarity', response.sections.stress_clarity, questions),
+  balance_sustainability: createStateFromSection('balance_sustainability', response.sections.balance_sustainability, questions),
 });
 
 const areSectionAnswersEqual = (
@@ -189,15 +278,12 @@ const areSectionsEqual = (
   && currentSection.uiKey === baselineSection.uiKey
   && areSectionAnswersEqual(currentSection.answers, baselineSection.answers);
 
-const areDiagnosticoStatesEqual = (
-  currentState: DiagnosticoState,
-  baselineState: DiagnosticoState,
-) => PILLAR_METADATA.every(({ id }) => {
-  const currentSection = currentState[id];
-  const baselineSection = baselineState[id];
-
-  return areSectionsEqual(currentSection, baselineSection);
-});
+const areStatesEqual = (
+  currentState: PersonalPerformanceState,
+  baselineState: PersonalPerformanceState,
+) => SECTION_METADATA.every(({ id }) => (
+  areSectionsEqual(currentState[id], baselineState[id])
+));
 
 const deriveSectionStatus = (section: SectionState) => {
   const answeredCount = Object.keys(section.answers).length;
@@ -214,10 +300,10 @@ const deriveSectionStatus = (section: SectionState) => {
 };
 
 const buildSavePayload = (
-  currentState: DiagnosticoState,
-  baselineState: DiagnosticoState,
-): SaveBusinessProfilePayload => {
-  const sections = PILLAR_METADATA.reduce<SaveBusinessProfilePayload['sections']>((result, { id }) => {
+  currentState: PersonalPerformanceState,
+  baselineState: PersonalPerformanceState,
+): SavePersonalPerformancePayload => {
+  const sections = SECTION_METADATA.reduce<SavePersonalPerformancePayload['sections']>((result, { id }) => {
     const currentSection = currentState[id];
     const baselineSection = baselineState[id];
 
@@ -272,42 +358,36 @@ const getSectionEntryQuestionIndex = (section: SectionState, questions: Question
   return getNextQuestionIndex(section, questions);
 };
 
-export default function BusinessProfile() {
+export default function PersonalPerformance() {
   const { t } = useLanguage();
-  const diagnosisCopy = t.panelInicial.diagnosis;
-  const [activePillar, setActivePillar] = useState<PillarId | null>(null);
+  const diagnosisUi = t.panelInicial.diagnosis;
+  const [activeSection, setActiveSection] = useState<SectionId | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [sectionState, setSectionState] = useState<DiagnosticoState>(createEmptyDiagnosticoState);
-  const [baselineSectionState, setBaselineSectionState] = useState<DiagnosticoState | null>(null);
+  const [sectionState, setSectionState] = useState<PersonalPerformanceState>(createEmptyPersonalPerformanceState);
+  const [baselineSectionState, setBaselineSectionState] = useState<PersonalPerformanceState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
-  const [printJob, setPrintJob] = useState<BusinessDiagnosisPdfDocumentProps | null>(null);
+  const [printJob, setPrintJob] = useState<PersonalPerformancePdfDocumentProps | null>(null);
 
-  const diagnosticoQuestions = useMemo<DiagnosticoQuestions>(() => ({
-    people: diagnosisCopy.questions.people,
-    processes: diagnosisCopy.questions.processes,
-    products: diagnosisCopy.questions.products,
-    finance: diagnosisCopy.questions.finance,
-  }), [diagnosisCopy.questions.finance, diagnosisCopy.questions.people, diagnosisCopy.questions.processes, diagnosisCopy.questions.products]);
-
-  const pilares = useMemo(() => PILLAR_METADATA.map((pillar) => ({
-    ...pillar,
-    title: diagnosisCopy.pillars[pillar.titleKey].title,
-    description: diagnosisCopy.pillars[pillar.titleKey].description,
-  })), [diagnosisCopy.pillars]);
-  const pillarTitles = useMemo(() => ({
-    people: diagnosisCopy.pillars.people.title,
-    processes: diagnosisCopy.pillars.processes.title,
-    products: diagnosisCopy.pillars.products.title,
-    finance: diagnosisCopy.pillars.finance.title,
-  }), [diagnosisCopy.pillars.finance.title, diagnosisCopy.pillars.people.title, diagnosisCopy.pillars.processes.title, diagnosisCopy.pillars.products.title]);
-  const diagnosisScoreReport = useMemo(() => buildBusinessDiagnosisScoreReport({
-    questions: diagnosticoQuestions,
+  const questions = useMemo<PersonalPerformanceQuestions>(() => PPI_QUESTIONS, []);
+  const sections = useMemo(() => SECTION_METADATA.map((section) => ({
+    ...section,
+    title: PPI_COPY.sections[section.id].title,
+    description: PPI_COPY.sections[section.id].description,
+  })), []);
+  const sectionTitles = useMemo(() => ({
+    sleep_recovery: PPI_COPY.sections.sleep_recovery.title,
+    nutrition_energy: PPI_COPY.sections.nutrition_energy.title,
+    stress_clarity: PPI_COPY.sections.stress_clarity.title,
+    balance_sustainability: PPI_COPY.sections.balance_sustainability.title,
+  }), []);
+  const scoreReport = useMemo(() => buildPersonalPerformanceScoreReport({
+    questions,
     sections: sectionState,
-    pillarTitles,
-  }), [diagnosticoQuestions, pillarTitles, sectionState]);
+    sectionTitles,
+  }), [questions, sectionState, sectionTitles]);
   const reportId = useMemo(() => {
     const now = new Date();
     const stamp = [
@@ -318,31 +398,31 @@ export default function BusinessProfile() {
       String(now.getMinutes()).padStart(2, '0'),
     ].join('');
 
-    return `${BUSINESS_PROFILE_REPORT_ID_PREFIX}-${stamp}`;
+    return `${PERSONAL_PERFORMANCE_REPORT_ID_PREFIX}-${stamp}`;
   }, []);
 
   useEffect(() => {
     let active = true;
 
-    businessProfileApi.getBusinessProfile()
+    personalPerformanceApi.getPersonalPerformance()
       .then((response) => {
         if (!active) {
           return;
         }
 
-        const nextSectionState = createDiagnosticoStateFromResponse(response, diagnosticoQuestions);
-
-        setSectionState(nextSectionState);
-        setBaselineSectionState(nextSectionState);
+        const nextState = createStateFromResponse(response, questions);
+        setSectionState(nextState);
+        setBaselineSectionState(nextState);
       })
       .catch((error) => {
         if (!active) {
           return;
         }
 
-        const emptyState = createDiagnosticoStateFromResponse({
+        const emptyState = createStateFromResponse({
           profile: {
             id: null,
+            user_id: 0,
             company_id: 0,
             version: 1,
             status: 'draft',
@@ -350,68 +430,68 @@ export default function BusinessProfile() {
             completed_at: null,
           },
           sections: {
-            people: {
+            sleep_recovery: {
               id: null,
-              section_key: 'people',
+              section_key: 'sleep_recovery',
               status: 'draft',
               completed_at: null,
               data: {
-                ui_key: DEFAULT_SECTION_UI_KEYS.people,
+                ui_key: DEFAULT_SECTION_UI_KEYS.sleep_recovery,
                 answers: {},
                 saved_at: null,
                 answered_count: 0,
-                question_count: diagnosticoQuestions.people.length || DEFAULT_QUESTION_COUNT,
+                question_count: questions.sleep_recovery.length || DEFAULT_QUESTION_COUNT,
               },
             },
-            processes: {
+            nutrition_energy: {
               id: null,
-              section_key: 'processes',
+              section_key: 'nutrition_energy',
               status: 'draft',
               completed_at: null,
               data: {
-                ui_key: DEFAULT_SECTION_UI_KEYS.processes,
+                ui_key: DEFAULT_SECTION_UI_KEYS.nutrition_energy,
                 answers: {},
                 saved_at: null,
                 answered_count: 0,
-                question_count: diagnosticoQuestions.processes.length || DEFAULT_QUESTION_COUNT,
+                question_count: questions.nutrition_energy.length || DEFAULT_QUESTION_COUNT,
               },
             },
-            products: {
+            stress_clarity: {
               id: null,
-              section_key: 'products',
+              section_key: 'stress_clarity',
               status: 'draft',
               completed_at: null,
               data: {
-                ui_key: DEFAULT_SECTION_UI_KEYS.products,
+                ui_key: DEFAULT_SECTION_UI_KEYS.stress_clarity,
                 answers: {},
                 saved_at: null,
                 answered_count: 0,
-                question_count: diagnosticoQuestions.products.length || DEFAULT_QUESTION_COUNT,
+                question_count: questions.stress_clarity.length || DEFAULT_QUESTION_COUNT,
               },
             },
-            finance: {
+            balance_sustainability: {
               id: null,
-              section_key: 'finance',
+              section_key: 'balance_sustainability',
               status: 'draft',
               completed_at: null,
               data: {
-                ui_key: DEFAULT_SECTION_UI_KEYS.finance,
+                ui_key: DEFAULT_SECTION_UI_KEYS.balance_sustainability,
                 answers: {},
                 saved_at: null,
                 answered_count: 0,
-                question_count: diagnosticoQuestions.finance.length || DEFAULT_QUESTION_COUNT,
+                question_count: questions.balance_sustainability.length || DEFAULT_QUESTION_COUNT,
               },
             },
           },
-        }, diagnosticoQuestions);
+        }, questions);
 
         setSectionState((currentState) => (
-          areDiagnosticoStatesEqual(currentState, createEmptyDiagnosticoState())
+          areStatesEqual(currentState, createEmptyPersonalPerformanceState())
             ? emptyState
             : currentState
         ));
         setBaselineSectionState(emptyState);
-        setErrorMessage(error instanceof Error ? error.message : diagnosisCopy.messages.loadError);
+        setErrorMessage(error instanceof Error ? error.message : PPI_COPY.messages.loadError);
       })
       .finally(() => {
         if (active) {
@@ -422,13 +502,13 @@ export default function BusinessProfile() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [questions]);
 
-  const calculateProgress = (pillarId: PillarId) => Object.keys(sectionState[pillarId].answers).length;
+  const calculateProgress = (sectionId: SectionId) => Object.keys(sectionState[sectionId].answers).length;
 
   const totalQuestions = useMemo(
-    () => Object.values(diagnosticoQuestions).reduce((acc, questions) => acc + questions.length, 0),
-    [diagnosticoQuestions],
+    () => Object.values(questions).reduce((acc, sectionQuestions) => acc + sectionQuestions.length, 0),
+    [questions],
   );
 
   const totalAnswered = useMemo(
@@ -437,35 +517,36 @@ export default function BusinessProfile() {
   );
 
   const totalProgress = totalQuestions > 0 ? Math.round((totalAnswered / totalQuestions) * 100) : 0;
-  const hasUnsavedChanges = baselineSectionState !== null && !areDiagnosticoStatesEqual(sectionState, baselineSectionState);
-  const isSectionDirty = (pillarId: PillarId) => (
+  const hasUnsavedChanges = baselineSectionState !== null && !areStatesEqual(sectionState, baselineSectionState);
+  const isSectionDirty = (sectionId: SectionId) => (
     baselineSectionState !== null
-      ? !areSectionsEqual(sectionState[pillarId], baselineSectionState[pillarId])
-      : Object.keys(sectionState[pillarId].answers).length > 0
+      ? !areSectionsEqual(sectionState[sectionId], baselineSectionState[sectionId])
+      : Object.keys(sectionState[sectionId].answers).length > 0
   );
-  const getPillarActionLabel = (pillarId: PillarId) => {
-    const currentSection = sectionState[pillarId];
+
+  const getSectionActionLabel = (sectionId: SectionId) => {
+    const currentSection = sectionState[sectionId];
     const answeredCount = Object.keys(currentSection.answers).length;
-    const totalPillarQuestions = diagnosticoQuestions[pillarId].length;
+    const totalSectionQuestions = questions[sectionId].length;
 
     if (answeredCount <= 0) {
-      return diagnosisCopy.start;
+      return diagnosisUi.start;
     }
 
-    if (answeredCount >= totalPillarQuestions) {
-      return isSectionDirty(pillarId) ? diagnosisCopy.reviewAnswers : diagnosisCopy.doAgain;
+    if (answeredCount >= totalSectionQuestions) {
+      return isSectionDirty(sectionId) ? diagnosisUi.reviewAnswers : diagnosisUi.doAgain;
     }
 
-    return diagnosisCopy.continue;
+    return diagnosisUi.continue;
   };
 
-  const handleAnswer = (pillarId: PillarId, questionIndex: number, answerIndex: number) => {
+  const handleAnswer = (sectionId: SectionId, questionIndex: number, answerIndex: number) => {
     setSectionState((currentState) => ({
       ...currentState,
-      [pillarId]: {
-        ...currentState[pillarId],
+      [sectionId]: {
+        ...currentState[sectionId],
         answers: {
-          ...currentState[pillarId].answers,
+          ...currentState[sectionId].answers,
           [questionIndex]: answerIndex,
         },
       },
@@ -480,11 +561,11 @@ export default function BusinessProfile() {
     }
   };
 
-  const handleRestartPillar = (pillarId: PillarId) => {
+  const handleRestartSection = (sectionId: SectionId) => {
     setSectionState((currentState) => ({
       ...currentState,
-      [pillarId]: {
-        ...currentState[pillarId],
+      [sectionId]: {
+        ...currentState[sectionId],
         completedAt: null,
         answers: {},
       },
@@ -501,12 +582,12 @@ export default function BusinessProfile() {
   };
 
   const handleNextQuestion = () => {
-    if (!activePillar) {
+    if (!activeSection) {
       return;
     }
 
-    const pillarQuestions = diagnosticoQuestions[activePillar];
-    if (currentQuestion < pillarQuestions.length - 1) {
+    const sectionQuestions = questions[activeSection];
+    if (currentQuestion < sectionQuestions.length - 1) {
       setCurrentQuestion((previousValue) => previousValue + 1);
     }
   };
@@ -517,9 +598,9 @@ export default function BusinessProfile() {
     }
   };
 
-  const handleStartPillar = (pillarId: PillarId) => {
-    setActivePillar(pillarId);
-    setCurrentQuestion(getSectionEntryQuestionIndex(sectionState[pillarId], diagnosticoQuestions[pillarId]));
+  const handleStartSection = (sectionId: SectionId) => {
+    setActiveSection(sectionId);
+    setCurrentQuestion(getSectionEntryQuestionIndex(sectionState[sectionId], questions[sectionId]));
   };
 
   const handleDiscardChanges = () => {
@@ -531,12 +612,12 @@ export default function BusinessProfile() {
     setErrorMessage('');
     setSaveMessage('');
 
-    if (activePillar) {
-      setCurrentQuestion(getNextQuestionIndex(baselineSectionState[activePillar], diagnosticoQuestions[activePillar]));
+    if (activeSection) {
+      setCurrentQuestion(getNextQuestionIndex(baselineSectionState[activeSection], questions[activeSection]));
     }
   };
 
-  const handleSaveDiagnosis = async () => {
+  const handleSave = async () => {
     if (!baselineSectionState || !hasUnsavedChanges) {
       return;
     }
@@ -547,42 +628,42 @@ export default function BusinessProfile() {
 
     try {
       const response = await runWithMinimumDuration(
-        businessProfileApi.saveBusinessProfile(
+        personalPerformanceApi.savePersonalPerformance(
           buildSavePayload(sectionState, baselineSectionState),
         ),
-        BUSINESS_PROFILE_SAVE_MINIMUM_LOADING_MS,
+        PERSONAL_PERFORMANCE_SAVE_MINIMUM_LOADING_MS,
       );
 
-      const nextSectionState = createDiagnosticoStateFromResponse(response, diagnosticoQuestions);
+      const nextState = createStateFromResponse(response, questions);
 
-      setSectionState(nextSectionState);
-      setBaselineSectionState(nextSectionState);
-      setSaveMessage(diagnosisCopy.messages.saveSuccess);
+      setSectionState(nextState);
+      setBaselineSectionState(nextState);
+      setSaveMessage(PPI_COPY.messages.saveSuccess);
 
-      if (activePillar) {
-        setActivePillar(null);
+      if (activeSection) {
+        setActiveSection(null);
         setCurrentQuestion(0);
       }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : diagnosisCopy.messages.saveError);
+      setErrorMessage(error instanceof Error ? error.message : PPI_COPY.messages.saveError);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handlePrintDiagnosis = () => {
+  const handlePrint = () => {
     setErrorMessage('');
     setPrintJob({
-      report: diagnosisScoreReport,
-      title: diagnosisCopy.title,
-      subtitle: diagnosisCopy.description,
+      report: scoreReport,
+      title: PPI_COPY.title,
+      subtitle: PPI_COPY.description,
       generatedAt: new Date(),
       reportId,
     });
   };
 
-  const getColorClasses = (color: PillarColor) => {
-    const colorMap: Record<PillarColor, { bg: string; text: string; border: string; icon: string }> = {
+  const getColorClasses = (color: SectionColor) => {
+    const colorMap: Record<SectionColor, { bg: string; text: string; border: string; icon: string }> = {
       blue: {
         bg: 'bg-blue-50 dark:bg-blue-900/20',
         text: 'text-blue-700 dark:text-blue-300',
@@ -619,28 +700,28 @@ export default function BusinessProfile() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h2 className="mb-1 flex items-center gap-2 text-2xl font-semibold text-gray-900 dark:text-white">
-                <span className="text-2xl">📊</span>
-                {diagnosisCopy.title}
+                <span className="text-2xl">📈</span>
+                {PPI_COPY.title}
               </h2>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                {diagnosisCopy.description}
+                {PPI_COPY.description}
               </p>
             </div>
             <Button
               variant="outline"
               size="sm"
-              onClick={handlePrintDiagnosis}
+              onClick={handlePrint}
               className="w-full gap-2 border-purple-600 bg-purple-600 text-white hover:border-purple-700 hover:bg-purple-700 sm:w-auto"
             >
               <Printer className="h-4 w-4" />
-              {diagnosisCopy.printDiagnosis}
+              {PPI_COPY.printReport}
             </Button>
           </div>
         </div>
 
         {isLoading ? (
           <div className="rounded-lg border border-purple-200 bg-purple-50 px-4 py-3 text-sm text-purple-700 dark:border-purple-700/30 dark:bg-purple-900/20 dark:text-purple-300">
-            {diagnosisCopy.messages.loading}
+            {PPI_COPY.messages.loading}
           </div>
         ) : null}
 
@@ -652,23 +733,23 @@ export default function BusinessProfile() {
 
         <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-6">
           <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">
-            {diagnosisCopy.centerTitle}
+            {PPI_COPY.centerTitle}
           </h3>
           <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
-            {diagnosisCopy.centerDescription}
+            {PPI_COPY.centerDescription}
           </p>
           <p className="mb-4 text-sm font-medium text-gray-900 dark:text-white">
-            {diagnosisCopy.questionCountLabel}{' '}
-            <span className="text-purple-600">{diagnosisCopy.questionCount}</span>
+            {PPI_COPY.questionCountLabel}{' '}
+            <span className="text-purple-600">{PPI_COPY.questionCount}</span>
           </p>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {pilares.map((pilar) => {
-              const progress = calculateProgress(pilar.id);
-              const isComplete = progress === diagnosticoQuestions[pilar.id].length;
+            {sections.map((section) => {
+              const progress = calculateProgress(section.id);
+              const isComplete = progress === questions[section.id].length;
 
               return (
-                <div key={pilar.id} className="flex items-center gap-2">
+                <div key={section.id} className="flex items-center gap-2">
                   <div
                     className={`flex h-5 w-5 items-center justify-center rounded border-2 ${
                       isComplete ? 'border-purple-600 bg-purple-600' : 'border-gray-300 dark:border-gray-600'
@@ -677,7 +758,7 @@ export default function BusinessProfile() {
                     {isComplete && <CheckCircle2 className="h-4 w-4 text-white" />}
                   </div>
                   <span className="text-sm text-gray-700 dark:text-gray-300">
-                    {pilar.emoji} {pilar.title}
+                    {section.emoji} {section.title}
                   </span>
                 </div>
               );
@@ -687,18 +768,18 @@ export default function BusinessProfile() {
 
         <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-6">
           <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">
-            {diagnosisCopy.progress}
+            {PPI_COPY.progress}
           </h3>
           <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
-            {totalProgress}% {diagnosisCopy.progressOf}
+            {totalProgress}% {PPI_COPY.progressOf}
           </p>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {pilares.map((pilar) => {
-              const progress = calculateProgress(pilar.id);
-              const isComplete = progress === diagnosticoQuestions[pilar.id].length;
+            {sections.map((section) => {
+              const progress = calculateProgress(section.id);
+              const isComplete = progress === questions[section.id].length;
 
               return (
-                <div key={pilar.id} className="flex items-center gap-2">
+                <div key={section.id} className="flex items-center gap-2">
                   <div
                     className={`flex h-5 w-5 items-center justify-center rounded border-2 ${
                       isComplete ? 'border-purple-600 bg-purple-600' : 'border-gray-300 dark:border-gray-600'
@@ -706,7 +787,7 @@ export default function BusinessProfile() {
                   >
                     {isComplete && <CheckCircle2 className="h-4 w-4 text-white" />}
                   </div>
-                  <span className="text-sm text-gray-700 dark:text-gray-300">{pilar.title}</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">{section.title}</span>
                 </div>
               );
             })}
@@ -714,35 +795,35 @@ export default function BusinessProfile() {
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {pilares.map((pilar) => {
-            const progress = calculateProgress(pilar.id);
-            const totalPillarQuestions = diagnosticoQuestions[pilar.id].length;
-            const isActive = activePillar === pilar.id;
-            const colors = getColorClasses(pilar.color);
-            const activeQuestionIndex = Math.min(currentQuestion, Math.max(totalPillarQuestions - 1, 0));
+          {sections.map((section) => {
+            const progress = calculateProgress(section.id);
+            const totalSectionQuestions = questions[section.id].length;
+            const isActive = activeSection === section.id;
+            const colors = getColorClasses(section.color);
+            const activeQuestionIndex = Math.min(currentQuestion, Math.max(totalSectionQuestions - 1, 0));
 
             return (
-              <div key={pilar.id}>
+              <div key={section.id}>
                 <div className={`rounded-lg border-2 p-4 transition-all sm:p-6 ${colors.border} ${colors.bg}`}>
                   <div className="mb-4 flex items-start gap-4">
                     <div className={`flex h-12 w-12 items-center justify-center rounded-lg text-2xl ${colors.icon}`}>
-                      {pilar.emoji}
+                      {section.emoji}
                     </div>
                     <div className="flex-1">
-                      <h3 className={`mb-1 font-semibold ${colors.text}`}>{pilar.title}</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{pilar.description}</p>
+                      <h3 className={`mb-1 font-semibold ${colors.text}`}>{section.title}</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{section.description}</p>
                     </div>
                   </div>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {progress}/{totalPillarQuestions}
+                      {progress}/{totalSectionQuestions}
                     </span>
                     <Button
-                      onClick={() => handleStartPillar(pilar.id)}
+                      onClick={() => handleStartSection(section.id)}
                       size="sm"
                       className="w-full bg-purple-600 text-white hover:bg-purple-700 sm:w-auto"
                     >
-                      {getPillarActionLabel(pilar.id)}
+                      {getSectionActionLabel(section.id)}
                     </Button>
                   </div>
                 </div>
@@ -751,38 +832,38 @@ export default function BusinessProfile() {
                   <div className="mt-4 rounded-lg border-2 border-purple-600 bg-white p-4 shadow-lg dark:bg-gray-800 sm:p-8">
                     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        {pilar.emoji} {pilar.title}
+                        {section.emoji} {section.title}
                       </h4>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setActivePillar(null)}
+                        onClick={() => setActiveSection(null)}
                         className="w-full sm:w-auto"
                       >
-                        {diagnosisCopy.close}
+                        {diagnosisUi.close}
                       </Button>
                     </div>
 
                     <div className="mb-8">
                       <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          {diagnosisCopy.question} {activeQuestionIndex + 1} {diagnosisCopy.of} {totalPillarQuestions}
+                          {diagnosisUi.question} {activeQuestionIndex + 1} {diagnosisUi.of} {totalSectionQuestions}
                         </span>
                         <span className="text-sm text-gray-600 dark:text-gray-400">
-                          {progress}/{totalPillarQuestions} {diagnosisCopy.completed}
+                          {progress}/{totalSectionQuestions} {diagnosisUi.completed}
                         </span>
                       </div>
                       <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
                         <div
                           className="h-2 rounded-full bg-purple-600 transition-all duration-300"
-                          style={{ width: `${((activeQuestionIndex + 1) / totalPillarQuestions) * 100}%` }}
+                          style={{ width: `${((activeQuestionIndex + 1) / totalSectionQuestions) * 100}%` }}
                         />
                       </div>
                     </div>
 
                     {(() => {
-                      const currentQ = diagnosticoQuestions[pilar.id][activeQuestionIndex];
-                      const selectedAnswer = sectionState[pilar.id].answers[activeQuestionIndex];
+                      const currentQ = questions[section.id][activeQuestionIndex];
+                      const selectedAnswer = sectionState[section.id].answers[activeQuestionIndex];
 
                       return (
                         <div className="mb-8">
@@ -794,7 +875,7 @@ export default function BusinessProfile() {
                               <button
                                 key={optionIndex}
                                 type="button"
-                                onClick={() => handleAnswer(pilar.id, activeQuestionIndex, optionIndex)}
+                                onClick={() => handleAnswer(section.id, activeQuestionIndex, optionIndex)}
                                 className={`rounded-lg border-2 px-4 py-4 text-left text-sm font-medium transition-all sm:px-6 sm:text-base ${
                                   selectedAnswer === optionIndex
                                     ? 'border-purple-600 bg-purple-600 text-white shadow-md'
@@ -818,30 +899,30 @@ export default function BusinessProfile() {
                         className="w-full gap-2 sm:w-auto"
                       >
                         <ChevronLeft className="h-4 w-4" />
-                        {diagnosisCopy.previous}
+                        {diagnosisUi.previous}
                       </Button>
 
-                      {activeQuestionIndex < totalPillarQuestions - 1 ? (
+                      {activeQuestionIndex < totalSectionQuestions - 1 ? (
                         <Button
                           size="sm"
                           onClick={handleNextQuestion}
                           className="w-full gap-2 bg-purple-600 hover:bg-purple-700 sm:w-auto"
                         >
-                          {diagnosisCopy.next}
+                          {diagnosisUi.next}
                           <ChevronRight className="h-4 w-4" />
                         </Button>
                       ) : null}
                     </div>
 
-                    {progress === totalPillarQuestions ? (
+                    {progress === totalSectionQuestions ? (
                       <div className="mt-4 text-center">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleRestartPillar(pilar.id)}
+                          onClick={() => handleRestartSection(section.id)}
                           className="text-sm"
                         >
-                          {diagnosisCopy.restart}
+                          {PPI_COPY.restart}
                         </Button>
                       </div>
                     ) : null}
@@ -856,17 +937,17 @@ export default function BusinessProfile() {
       <SaveChangesBar
         isVisible={hasUnsavedChanges}
         isSaving={isSaving}
-        onSave={handleSaveDiagnosis}
+        onSave={handleSave}
         onDiscard={handleDiscardChanges}
-        saveLabel={diagnosisCopy.actions.save}
-        savingLabel={diagnosisCopy.actions.saving}
-        discardLabel={diagnosisCopy.actions.discard}
-        message={diagnosisCopy.messages.unsavedChanges}
+        saveLabel={diagnosisUi.actions.save}
+        savingLabel={diagnosisUi.actions.saving}
+        discardLabel={diagnosisUi.actions.discard}
+        message={PPI_COPY.messages.unsavedChanges}
       />
 
       <LoadingBarOverlay
         isVisible={isSaving}
-        title={diagnosisCopy.actions.saving}
+        title={diagnosisUi.actions.saving}
       />
 
       <SuccessToast
@@ -875,7 +956,7 @@ export default function BusinessProfile() {
         onClose={() => setSaveMessage('')}
       />
 
-      <BusinessDiagnosisPrintPortal
+      <PersonalPerformancePrintPortal
         job={printJob}
         onComplete={() => setPrintJob(null)}
       />
