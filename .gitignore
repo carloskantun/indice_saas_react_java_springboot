@@ -39,3 +39,8 @@ react/.env.local
 
 ### Local handoff helpers ###
 handoff/
+
+### Deployment env files ###
+deployment/env/.env
+deployment/env/*.local
+deployment/env/*.secret
