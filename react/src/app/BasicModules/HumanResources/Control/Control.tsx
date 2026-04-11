@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import {
   AlertTriangle,
@@ -30,6 +30,7 @@ import { ApiClientError } from '../../../lib/apiClient';
 import {
   type AttendanceAccessMethod,
   type AttendanceAccessMethodPayload,
+  type AttendanceCalendarDay,
   type AttendanceAccessProfile,
   type AttendanceAccessProfilePayload,
   humanResourcesApi,
@@ -46,11 +47,15 @@ import {
 import { useLanguage } from '../../../shared/context';
 
 const todayIsoDate = () => new Date().toISOString().slice(0, 10);
+const toMonthValue = (value: string | Date) => {
+  const date = typeof value === 'string' ? new Date(`${value}T00:00:00`) : value;
+  return `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, '0')}`;
+};
 
 const controlCopy = {
   en: {
-    title: 'Attendance control center',
-    subtitle: 'Review schedule coverage, active locations, and operational attendance posture for a specific day.',
+    title: 'Control',
+    subtitle: 'Monitor attendance in real time and manage settings.',
     refresh: 'Refresh',
     loading: 'Loading control data',
     retry: 'Retry',
@@ -141,6 +146,30 @@ const controlCopy = {
       unassignedWarning: 'This employee has no active schedule assignment for the selected date.',
       ruleForDay: 'Rule for selected day',
       noRuleForDay: 'There is no schedule rule active for the selected day.',
+      dailyAttendance: 'Daily attendance',
+      attendanceCalendar: 'Attendance Calendar',
+      noRegistration: 'No registration',
+      loadingCalendar: 'Loading calendar',
+      selectEmployeeCalendar: 'Select an employee to load the attendance calendar.',
+      openLocation: 'Location',
+      currentDay: 'Current day',
+      faceEnrollmentStatus: 'Face enrollment',
+      faceNotEnrolled: 'No biometric enrollment available.',
+      modifyStatusOfDay: 'Modify status of day',
+      systemRegistration: 'System Registration',
+      notModifiable: 'Not modifiable',
+      totalTime: 'Total time',
+      manuallyModifyStatus: 'Manually modify status',
+      currentStatus: 'Current status',
+      noEvidence: 'No photo evidence stored for this day.',
+      noLocationHistory: 'No location recorded for this day.',
+      markAsAttendance: 'Mark as Attendance',
+      markAsAbsent: 'Mark as Absent',
+      markAsDelay: 'Mark as Delay',
+      markAsRest: 'Mark as Rest',
+      clearManualCorrection: 'Clear manual correction',
+      correctionApplied: 'Correction applied successfully.',
+      correctionCleared: 'Correction cleared successfully.',
       searchLabel: 'Search employees',
       selectedTemplate: 'Selected template',
       selectedEmployee: 'Selected employee',
@@ -210,8 +239,8 @@ const controlCopy = {
     },
   },
   es: {
-    title: 'Centro de control de asistencia',
-    subtitle: 'Revisa cobertura de horarios, ubicaciones activas y el estado operativo de asistencia para una fecha específica.',
+    title: 'Control',
+    subtitle: 'Monitorea la asistencia en tiempo real y administra la configuracion.',
     refresh: 'Actualizar',
     loading: 'Cargando control operativo',
     retry: 'Reintentar',
@@ -302,6 +331,30 @@ const controlCopy = {
       unassignedWarning: 'Este colaborador no tiene un horario activo asignado para la fecha seleccionada.',
       ruleForDay: 'Regla del día seleccionado',
       noRuleForDay: 'No existe una regla activa de horario para la fecha seleccionada.',
+      dailyAttendance: 'Asistencia diaria',
+      attendanceCalendar: 'Calendario de asistencia',
+      noRegistration: 'Sin registro',
+      loadingCalendar: 'Cargando calendario',
+      selectEmployeeCalendar: 'Selecciona un colaborador para cargar el calendario de asistencia.',
+      openLocation: 'Ubicacion',
+      currentDay: 'Dia actual',
+      faceEnrollmentStatus: 'Inscripcion facial',
+      faceNotEnrolled: 'No hay inscripcion biometrica disponible.',
+      modifyStatusOfDay: 'Modificar estatus del dia',
+      systemRegistration: 'Registro del sistema',
+      notModifiable: 'No modificable',
+      totalTime: 'Tiempo total',
+      manuallyModifyStatus: 'Modificar estatus manualmente',
+      currentStatus: 'Estatus actual',
+      noEvidence: 'No hay evidencia fotografica guardada para este dia.',
+      noLocationHistory: 'No hay ubicacion registrada para este dia.',
+      markAsAttendance: 'Marcar como asistencia',
+      markAsAbsent: 'Marcar como ausencia',
+      markAsDelay: 'Marcar como retardo',
+      markAsRest: 'Marcar como descanso',
+      clearManualCorrection: 'Limpiar correccion manual',
+      correctionApplied: 'Correccion aplicada correctamente.',
+      correctionCleared: 'Correccion eliminada correctamente.',
       searchLabel: 'Buscar colaboradores',
       selectedTemplate: 'Plantilla seleccionada',
       selectedEmployee: 'Colaborador seleccionado',
@@ -545,9 +598,11 @@ export default function Control() {
   const copy = currentLanguage.code.startsWith('es') ? controlCopy.es : controlCopy.en;
 
   const [controlDate, setControlDate] = useState(todayIsoDate());
+  const [calendarMonth, setCalendarMonth] = useState(toMonthValue(todayIsoDate()));
   const [searchQuery, setSearchQuery] = useState('');
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'assigned' | 'unassigned' | 'late' | 'corrected'>('all');
   const [overview, setOverview] = useState<AttendanceControlOverviewResponse | null>(null);
+  const [attendanceCalendarDays, setAttendanceCalendarDays] = useState<AttendanceCalendarDay[]>([]);
   const [locations, setLocations] = useState<AttendanceControlLocation[]>([]);
   const [templates, setTemplates] = useState<AttendanceControlTemplate[]>([]);
   const [kioskDevices, setKioskDevices] = useState<AttendanceKioskDevice[]>([]);
@@ -555,8 +610,12 @@ export default function Control() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
   const [selectedKioskDeviceId, setSelectedKioskDeviceId] = useState<number | null>(null);
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState<AttendanceCalendarDay | null>(null);
+  const [pendingCalendarStatus, setPendingCalendarStatus] = useState<AttendanceCalendarDay['effective_status'] | ''>('');
   const [faceEnrollment, setFaceEnrollment] = useState<{ id: number; status: string; enrolled_at?: string | null } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
+  const [isUpdatingCalendarDay, setIsUpdatingCalendarDay] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -629,6 +688,11 @@ export default function Control() {
   }, [controlDate]);
 
   useEffect(() => {
+    const nextMonth = controlDate.slice(0, 7);
+    setCalendarMonth((current) => (current === nextMonth ? current : nextMonth));
+  }, [controlDate]);
+
+  useEffect(() => {
     if (!successMessage) {
       return;
     }
@@ -660,6 +724,67 @@ export default function Control() {
       active = false;
     };
   }, [selectedEmployeeId, successMessage]);
+
+  useEffect(() => {
+    if (!selectedEmployeeId) {
+      setAttendanceCalendarDays([]);
+      setSelectedCalendarDay(null);
+      setIsLoadingCalendar(false);
+      return;
+    }
+
+    let active = true;
+    setIsLoadingCalendar(true);
+
+    humanResourcesApi.getAttendanceCalendar(selectedEmployeeId, calendarMonth)
+      .then((response) => {
+        if (active) {
+          setAttendanceCalendarDays(response.items);
+        }
+      })
+      .catch((error) => {
+        if (!active) {
+          return;
+        }
+
+        setAttendanceCalendarDays([]);
+        setErrorMessage(toErrorMessage(error, copy));
+      })
+      .finally(() => {
+        if (active) {
+          setIsLoadingCalendar(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [calendarMonth, copy, selectedEmployeeId, successMessage]);
+
+  useEffect(() => {
+    if (!selectedCalendarDay) {
+      return;
+    }
+
+    const refreshedDay = attendanceCalendarDays.find((day) => day.date === selectedCalendarDay.date);
+    if (!refreshedDay) {
+      setSelectedCalendarDay(null);
+      return;
+    }
+
+    if (refreshedDay !== selectedCalendarDay) {
+      setSelectedCalendarDay(refreshedDay);
+    }
+  }, [attendanceCalendarDays, selectedCalendarDay]);
+
+  useEffect(() => {
+    if (!selectedCalendarDay) {
+      setPendingCalendarStatus('');
+      return;
+    }
+
+    setPendingCalendarStatus(selectedCalendarDay.corrected_status ?? '');
+  }, [selectedCalendarDay]);
 
   const filteredAssignments = useMemo(() => {
     if (!overview) {
@@ -713,6 +838,61 @@ export default function Control() {
     [accessProfiles, selectedEmployeeId],
   );
 
+  const attendanceCalendarMap = useMemo(
+    () => new Map(attendanceCalendarDays.map((day) => [day.day, day])),
+    [attendanceCalendarDays],
+  );
+
+  const calendarCells = useMemo(() => {
+    const [year, month] = calendarMonth.split('-').map(Number);
+    const firstDay = new Date(year, month - 1, 1);
+    const startOffset = firstDay.getDay();
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const cells: Array<number | null> = [];
+
+    for (let index = 0; index < startOffset; index += 1) {
+      cells.push(null);
+    }
+
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      cells.push(day);
+    }
+
+    while (cells.length % 7 !== 0) {
+      cells.push(null);
+    }
+
+    return cells;
+  }, [calendarMonth]);
+
+  const weekdayLabels = useMemo(
+    () =>
+      Array.from({ length: 7 }).map((_, index) =>
+        new Intl.DateTimeFormat(currentLanguage.code, { weekday: 'short' }).format(new Date(2026, 0, 4 + index)),
+      ),
+    [currentLanguage.code],
+  );
+
+  const controlDateLabel = useMemo(
+    () =>
+      new Intl.DateTimeFormat(currentLanguage.code, {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      }).format(new Date(`${controlDate}T00:00:00`)),
+    [controlDate, currentLanguage.code],
+  );
+
+  const calendarMonthLabel = useMemo(
+    () =>
+      new Intl.DateTimeFormat(currentLanguage.code, {
+        month: 'long',
+        year: 'numeric',
+      }).format(new Date(`${calendarMonth}-01T00:00:00`)),
+    [calendarMonth, currentLanguage.code],
+  );
+
   const selectedRuleForDate = useMemo(
     () => findRuleForSelectedDay(selectedTemplate, controlDate),
     [controlDate, selectedTemplate],
@@ -733,6 +913,77 @@ export default function Control() {
         { label: copy.summary.overrides, value: overview.summary.override_count },
       ]
     : [];
+
+  const shiftCalendarMonth = (direction: -1 | 1) => {
+    const [year, month] = calendarMonth.split('-').map(Number);
+    const base = new Date(year, month - 1, 1);
+    const next = new Date(base.getFullYear(), base.getMonth() + direction, 1);
+    const nextMonth = toMonthValue(next);
+    const currentDay = Number(controlDate.slice(8, 10));
+    const lastDayOfNextMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+    const nextDay = `${Math.min(currentDay, lastDayOfNextMonth)}`.padStart(2, '0');
+
+    setCalendarMonth(nextMonth);
+    setControlDate(`${nextMonth}-${nextDay}`);
+  };
+
+  const handleCalendarStatusUpdate = async (
+    date: string,
+    status: AttendanceCalendarDay['effective_status'] | '',
+  ) => {
+    if (!selectedEmployeeId) {
+      return false;
+    }
+
+    try {
+      setIsUpdatingCalendarDay(true);
+      const result = await humanResourcesApi.updateAttendanceDailyRecord(selectedEmployeeId, date, { status });
+      setControlDate(date);
+
+      setAttendanceCalendarDays((current) =>
+        current.map((day) => (day.date === date ? applyCalendarDayUpdate(day, result) : day)),
+      );
+      setSelectedCalendarDay((current) =>
+        current && current.date === date ? applyCalendarDayUpdate(current, result) : current,
+      );
+
+      setOverview((current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          date,
+          assignments: current.assignments.map((assignment) =>
+            assignment.employee_id === selectedEmployeeId
+              ? {
+                  ...assignment,
+                  today_status: result.effective_status as AttendanceControlAssignment['today_status'],
+                  system_status: result.system_status as AttendanceControlAssignment['system_status'],
+                  corrected_status: (result.corrected_status ?? null) as AttendanceControlAssignment['corrected_status'],
+                }
+              : assignment,
+          ),
+        };
+      });
+
+      const [calendarResponse] = await Promise.all([
+        humanResourcesApi.getAttendanceCalendar(selectedEmployeeId, calendarMonth),
+        loadControl(date),
+      ]);
+
+      setAttendanceCalendarDays(calendarResponse.items);
+      setSelectedCalendarDay(calendarResponse.items.find((day) => day.date === date) ?? null);
+      setSuccessMessage(status ? copy.labels.correctionApplied : copy.labels.correctionCleared);
+      return true;
+    } catch (error) {
+      setErrorMessage(toErrorMessage(error, copy) || copy.saveError);
+      return false;
+    } finally {
+      setIsUpdatingCalendarDay(false);
+    }
+  };
 
   const openNewLocationDialog = () => {
     setEditingLocation(null);
@@ -1031,658 +1282,371 @@ export default function Control() {
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <h2 className="mb-1 flex items-center gap-2 text-2xl font-semibold text-gray-900 dark:text-white">
-              <span className="text-2xl">⏱️</span>
+              <span className="text-2xl">📅</span>
               {copy.title}
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">{copy.subtitle}</p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div>
-              <label className="mb-2 block text-xs font-medium uppercase tracking-[0.12em] text-[#143675] dark:text-[#8bb3ff]">
-                {copy.labels.controlDate}
-              </label>
-              <input
-                type="date"
-                value={controlDate}
-                onChange={(event) => setControlDate(event.target.value)}
-                className="rounded-lg border border-[#143675]/20 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#143675] focus:outline-none dark:border-[#143675]/30 dark:bg-gray-800 dark:text-white"
-              />
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button
-                variant="outline"
-                className="h-8 whitespace-nowrap rounded-md border-gray-300 bg-white px-3 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-                onClick={() => void loadControl(controlDate)}
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                {copy.refresh}
-              </Button>
-              <Button
-                variant="outline"
-                className="h-8 whitespace-nowrap rounded-md border-gray-300 bg-white px-3 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-                onClick={() => setIsLocationRegistrationModalOpen(true)}
-              >
-                <MapPin className="h-3.5 w-3.5" />
-                Register locations
-              </Button>
-              <Button
-                variant="outline"
-                className="h-8 whitespace-nowrap rounded-md border-gray-300 bg-white px-3 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-                onClick={() => setIsSchedulesModalOpen(true)}
-              >
-                <CalendarDays className="h-3.5 w-3.5" />
-                Schedules
-              </Button>
-              <Button
-                variant="outline"
-                className="h-8 whitespace-nowrap rounded-md border-gray-300 bg-white px-3 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-                onClick={openNewKioskDialog}
-              >
-                <ShieldCheck className="h-3.5 w-3.5" />
-                Kiosk
-              </Button>
-              <Button
-                className="h-8 whitespace-nowrap rounded-md bg-[#143675] px-3 text-xs font-medium text-white shadow-sm hover:bg-[#0f2855]"
-                onClick={async () => {
-                  const pageId = params.pageId;
-                  if (!pageId) {
-                    return;
-                  }
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              variant="outline"
+              className="h-8 whitespace-nowrap rounded-md border-gray-300 bg-white px-3 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              onClick={() => setIsLocationRegistrationModalOpen(true)}
+            >
+              <MapPin className="h-3.5 w-3.5" />
+              Register locations
+            </Button>
+            <Button
+              variant="outline"
+              className="h-8 whitespace-nowrap rounded-md border-gray-300 bg-white px-3 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              onClick={() => setIsSchedulesModalOpen(true)}
+            >
+              <CalendarDays className="h-3.5 w-3.5" />
+              Schedules
+            </Button>
+            <Button
+              variant="outline"
+              className="h-8 whitespace-nowrap rounded-md border-gray-300 bg-white px-3 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              onClick={openNewKioskDialog}
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Kiosk
+            </Button>
+            <Button
+              className="h-8 whitespace-nowrap rounded-md bg-[#143675] px-3 text-xs font-medium text-white shadow-sm hover:bg-[#0f2855]"
+              onClick={async () => {
+                const pageId = params.pageId;
+                if (!pageId) {
+                  return;
+                }
 
-                  const targetUrl = `${window.location.origin}/${pageId}/attendance`;
-                  try {
-                    await navigator.clipboard.writeText(targetUrl);
-                    setSuccessMessage('Kiosk link copied.');
-                  } catch {
-                    setSuccessMessage('Opening kiosk tab.');
-                  }
-                  navigate(`/${pageId}/attendance`, { state: { openKiosk: true } });
-                }}
-              >
-                <Link2 className="h-3.5 w-3.5" />
-                Kiosk Link
-              </Button>
-            </div>
+                const targetUrl = `${window.location.origin}/${pageId}/attendance`;
+                try {
+                  await navigator.clipboard.writeText(targetUrl);
+                  setSuccessMessage('Kiosk link copied.');
+                } catch {
+                  setSuccessMessage('Opening kiosk tab.');
+                }
+                navigate(`/${pageId}/attendance`, { state: { openKiosk: true } });
+              }}
+            >
+              <Link2 className="h-3.5 w-3.5" />
+              Kiosk Link
+            </Button>
           </div>
         </div>
       </div>
 
       {isLoading ? (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {Array.from({ length: 8 }).map((_, index) => (
-              <div key={index} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <Skeleton className="mb-3 h-4 w-28" />
-                <Skeleton className="h-8 w-16" />
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_1.2fr]">
-            <Skeleton className="h-[880px] rounded-lg" />
-            <Skeleton className="h-[880px] rounded-lg" />
+          <Skeleton className="h-[110px] rounded-2xl" />
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.9fr_1.8fr]">
+            <Skeleton className="h-[900px] rounded-2xl" />
+            <Skeleton className="h-[900px] rounded-2xl" />
           </div>
         </div>
       ) : overview ? (
-        <>
-          <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {summaryCards.map((card, index) => {
-              const extendedSummaryIcons = [...summaryIcons, ShieldCheck, AlertTriangle, Pencil] as const;
-              const Icon = extendedSummaryIcons[index];
-              return (
-                <div key={card.label} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">{card.label}</p>
-                    <Icon className="h-4 w-4 text-[#143675] dark:text-[#8bb3ff]" />
-                  </div>
-                  <p className="mt-3 text-3xl font-bold text-gray-900 dark:text-white">{card.value}</p>
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.92fr_1.78fr]">
+          <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div className="border-b border-gray-200 px-6 py-6 dark:border-gray-700">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-2xl font-semibold text-gray-900 dark:text-white">{copy.labels.dailyAttendance}</h3>
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{controlDateLabel}</p>
                 </div>
-              );
-            })}
-          </div>
-
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_1.2fr]">
-            <div className="space-y-6">
-              <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{copy.sections.locations}</h3>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{copy.sections.locationsHint}</p>
-                  </div>
-                  <Button variant="outline" size="sm" className="gap-2" onClick={openNewLocationDialog}>
-                    <Plus className="h-4 w-4" />
-                    {copy.labels.addLocation}
-                  </Button>
+                <div className="w-full max-w-[180px]">
+                  <label className="mb-2 block text-xs font-medium uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
+                    {copy.labels.controlDate}
+                  </label>
+                  <input
+                    type="date"
+                    value={controlDate}
+                    onChange={(event) => setControlDate(event.target.value)}
+                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#143675] focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  />
                 </div>
-
-                {locations.length > 0 ? (
-                  <div className="mt-5 space-y-3">
-                    {locations.map((location) => (
-                      <div key={location.id} className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium text-gray-900 dark:text-white">{location.name}</p>
-                              <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusClasses[location.status ?? 'active']}`}>
-                                {copy.statuses[(location.status ?? 'active') as 'active' | 'inactive']}
-                              </span>
-                            </div>
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                              {copy.labels.coordinates}: {location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}
-                            </p>
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                              {copy.labels.radius}: {location.radius_meters}m
-                            </p>
-                          </div>
-                          <Button variant="ghost" size="icon" onClick={() => openEditLocationDialog(location)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mt-5 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
-                    {copy.labels.noLocations}
-                  </div>
-                )}
               </div>
+            </div>
 
-              <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{copy.sections.kiosks}</h3>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{copy.sections.kiosksHint}</p>
-                  </div>
-                  <Button variant="outline" size="sm" className="gap-2" onClick={openNewKioskDialog}>
-                    <Plus className="h-4 w-4" />
-                    {copy.labels.addKiosk}
-                  </Button>
+            <div className="max-h-[860px] overflow-y-auto">
+              {filteredAssignments.length > 0 ? (
+                filteredAssignments.map((assignment) => (
+                  <ControlAttendanceRow
+                    key={assignment.employee_id}
+                    assignment={assignment}
+                    copy={copy}
+                    locale={currentLanguage.code}
+                    selected={selectedEmployeeId === assignment.employee_id}
+                    onSelect={() => {
+                      setSelectedEmployeeId(assignment.employee_id);
+                      if (assignment.schedule_template_id) {
+                        setSelectedTemplateId(assignment.schedule_template_id);
+                      }
+                    }}
+                  />
+                ))
+              ) : (
+                <div className="px-6 py-10 text-sm text-gray-500 dark:text-gray-400">
+                  {copy.labels.noEmployees}
                 </div>
+              )}
+            </div>
+          </section>
 
-                {kioskDevices.length > 0 ? (
-                  <div className="mt-5 space-y-3">
-                    {kioskDevices.map((device) => (
-                      <button
-                        key={device.id}
-                        type="button"
-                        onClick={() => setSelectedKioskDeviceId(device.id)}
-                        className={`w-full rounded-lg border px-4 py-4 text-left transition-all ${
-                          selectedKioskDeviceId === device.id
-                            ? 'border-[#143675] bg-[#143675]/5 shadow-sm dark:bg-[#143675]/10'
-                            : 'border-gray-200 bg-gray-50 hover:border-[#143675]/30 dark:border-gray-700 dark:bg-gray-900/40'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium text-gray-900 dark:text-white">{device.name}</p>
-                              <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusClasses[device.status]}`}>
-                                {copy.statuses[device.status]}
-                              </span>
-                            </div>
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                              {copy.labels.code}: {device.code}
-                            </p>
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                              {copy.labels.kioskScope}: {device.unit_name || copy.labels.noUnit} · {device.business_name || copy.labels.noBusiness}
-                            </p>
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                              {copy.labels.linkedLocation}: {device.location_name || copy.labels.noLinkedLocation}
-                            </p>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              openEditKioskDialog(device);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mt-5 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
-                    {copy.labels.noKiosks}
-                  </div>
-                )}
-
-                {selectedKioskDevice ? (
-                  <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
-                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white">{selectedKioskDevice.name}</h4>
-                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                      <DetailCard label={copy.labels.code} value={selectedKioskDevice.code} />
-                      <DetailCard label={copy.labels.kioskScope} value={`${selectedKioskDevice.unit_name || copy.labels.noUnit} · ${selectedKioskDevice.business_name || copy.labels.noBusiness}`} />
-                      <DetailCard label={copy.labels.linkedLocation} value={selectedKioskDevice.location_name || copy.labels.noLinkedLocation} />
-                    </div>
+          <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div>
+                <h3 className="text-2xl font-semibold text-gray-900 dark:text-white">{copy.labels.attendanceCalendar}</h3>
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  {selectedEmployee ? selectedEmployee.employee_name : copy.labels.selectEmployeeCalendar}
+                </p>
+                {selectedEmployee ? (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <CompactInfoChip>{selectedEmployee.position_title || selectedEmployee.department || copy.labels.noDepartment}</CompactInfoChip>
+                    <CompactInfoChip>{selectedEmployee.schedule_template_name || copy.labels.noSchedule}</CompactInfoChip>
+                    <CompactInfoChip tone={statusClasses[selectedEmployee.today_status]}>
+                      {copy.statuses[selectedEmployee.today_status]}
+                    </CompactInfoChip>
+                    <CompactInfoChip tone={faceEnrollment?.status === 'active' ? statusClasses.on_time : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}>
+                      {copy.labels.faceEnrollmentStatus}: {faceEnrollment?.status ?? 'not_enrolled'}
+                    </CompactInfoChip>
                   </div>
                 ) : null}
               </div>
 
-              <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{copy.sections.templates}</h3>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{copy.sections.templatesHint}</p>
-                  </div>
-                  <Button variant="outline" size="sm" className="gap-2" onClick={openNewTemplateDialog}>
-                    <Plus className="h-4 w-4" />
-                    {copy.labels.addTemplate}
+              {selectedEmployee ? (
+                <div className="flex flex-wrap gap-2 xl:justify-end">
+                  <Button variant="outline" size="sm" onClick={selectedAccessProfile ? () => openEditAccessProfileDialog(selectedAccessProfile) : openCreateAccessProfileDialog}>
+                    {selectedAccessProfile ? copy.labels.editAccessProfile : copy.labels.addAccessProfile}
+                  </Button>
+                  {selectedAccessProfile ? (
+                    <Button variant="outline" size="sm" onClick={openCreateAccessMethodDialog}>
+                      {copy.labels.addAccessMethod}
+                    </Button>
+                  ) : null}
+                  <Button variant="outline" size="sm" onClick={() => setIsFaceEnrollmentModalOpen(true)}>
+                    {faceEnrollment ? 'Re-enroll face' : 'Enroll face'}
+                  </Button>
+                  {faceEnrollment ? (
+                    <Button variant="outline" size="sm" onClick={() => void handleDeleteFaceEnrollment()}>
+                      Delete face
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            {selectedEmployee ? (
+              <>
+                <div className="mt-8 flex items-center justify-between gap-4">
+                  <Button variant="outline" size="icon" onClick={() => shiftCalendarMonth(-1)}>
+                    <span aria-hidden="true">‹</span>
+                  </Button>
+                  <p className="text-lg font-semibold text-gray-900 dark:text-white">{calendarMonthLabel}</p>
+                  <Button variant="outline" size="icon" onClick={() => shiftCalendarMonth(1)}>
+                    <span aria-hidden="true">›</span>
                   </Button>
                 </div>
 
-                {templates.length > 0 ? (
-                  <>
-                    <div className="mt-5 space-y-3">
-                      {templates.map((template) => (
-                        <button
-                          key={template.id}
-                          type="button"
-                          onClick={() => setSelectedTemplateId(template.id)}
-                          className={`w-full rounded-lg border px-4 py-4 text-left transition-all ${
-                            selectedTemplateId === template.id
-                              ? 'border-[#143675] bg-[#143675]/5 shadow-sm dark:bg-[#143675]/10'
-                              : 'border-gray-200 bg-gray-50 hover:border-[#143675]/30 dark:border-gray-700 dark:bg-gray-900/40'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium text-gray-900 dark:text-white">{template.name}</p>
-                                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusClasses[template.status]}`}>
-                                  {copy.statuses[template.status as 'active' | 'inactive']}
-                                </span>
-                              </div>
-                              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                {copy.labels.assignedEmployees}: {template.employees_assigned_count}
-                              </p>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openEditTemplateDialog(template);
-                              }}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </button>
-                      ))}
+                <div className="mt-8 grid grid-cols-7 gap-3">
+                  {weekdayLabels.map((label) => (
+                    <div key={label} className="px-2 text-center text-xs font-medium uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
+                      {label}
                     </div>
-
-                    <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
-                      <h4 className="text-sm font-semibold text-gray-900 dark:text-white">{copy.sections.templateDetail}</h4>
-                      {selectedTemplate ? (
-                        <>
-                          <p className="mt-2 text-sm font-medium text-gray-900 dark:text-white">{selectedTemplate.name}</p>
-                          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            {weekdayNumbers.map((dayOfWeek) => {
-                              const rule = selectedTemplate.days.find((day) => day.day_of_week === dayOfWeek) ?? null;
-                              const isSelectedRule = selectedRuleForDate?.day_of_week === dayOfWeek;
-
-                              return (
-                                <div
-                                  key={dayOfWeek}
-                                  className={`rounded-lg border p-3 ${
-                                    isSelectedRule
-                                      ? 'border-[#143675] bg-[#143675]/5 dark:bg-[#143675]/10'
-                                      : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                      {weekdayLabel(dayOfWeek, currentLanguage.code)}
-                                    </p>
-                                    {rule?.is_rest_day ? (
-                                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-                                        {copy.labels.restDay}
-                                      </span>
-                                    ) : null}
-                                  </div>
-
-                                  {rule ? (
-                                    <div className="mt-3 space-y-1 text-xs text-gray-500 dark:text-gray-400">
-                                      <p>
-                                        {copy.labels.start}: {formatTime(rule.start_time, currentLanguage.code, copy.labels.noTime)}
-                                      </p>
-                                      <p>
-                                        {copy.labels.end}: {formatTime(rule.end_time, currentLanguage.code, copy.labels.noTime)}
-                                      </p>
-                                      <p>
-                                        {copy.labels.tolerance}: {rule.late_after_minutes} min
-                                      </p>
-                                    </div>
-                                  ) : (
-                                    <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{copy.labels.noTime}</p>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </>
-                      ) : (
-                        <div className="mt-4 rounded-lg border border-dashed border-gray-300 bg-white px-4 py-6 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
-                          {copy.labels.noTemplateSelected}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <div className="mt-5 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
-                    {copy.labels.noTemplates}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{copy.sections.employees}</h3>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{copy.sections.employeesHint}</p>
-                  </div>
-                  <Button variant="outline" size="sm" className="gap-2" onClick={openAssignmentDialog}>
-                    <Plus className="h-4 w-4" />
-                    {copy.labels.bulkAssign}
-                  </Button>
+                  ))}
                 </div>
 
-                <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto]">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(event) => setSearchQuery(event.target.value)}
-                      placeholder={copy.searchPlaceholder}
-                      className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 text-gray-900 focus:border-[#143675] focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                    />
-                  </div>
-                  <select
-                    value={assignmentFilter}
-                    onChange={(event) => setAssignmentFilter(event.target.value as typeof assignmentFilter)}
-                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#143675] focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                  >
-                    <option value="all">{copy.filters.all}</option>
-                    <option value="assigned">{copy.filters.assigned}</option>
-                    <option value="unassigned">{copy.filters.unassigned}</option>
-                    <option value="late">{copy.filters.late}</option>
-                    <option value="corrected">{copy.filters.corrected}</option>
-                  </select>
-                </div>
-
-                <div className="mt-5 max-h-[360px] space-y-3 overflow-y-auto pr-1">
-                  {filteredAssignments.length > 0 ? (
-                    filteredAssignments.map((assignment) => (
-                      <button
-                        key={assignment.employee_id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedEmployeeId(assignment.employee_id);
-                          if (assignment.schedule_template_id) {
-                            setSelectedTemplateId(assignment.schedule_template_id);
-                          }
-                        }}
-                        className={`w-full rounded-lg border px-4 py-4 text-left transition-all ${
-                          selectedEmployeeId === assignment.employee_id
-                            ? 'border-[#143675] bg-[#143675]/5 shadow-sm dark:bg-[#143675]/10'
-                            : 'border-gray-200 bg-gray-50 hover:border-[#143675]/30 dark:border-gray-700 dark:bg-gray-900/40'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-medium text-gray-900 dark:text-white">{assignment.employee_name}</p>
-                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                              {assignment.employee_number || '—'} · {assignment.position_title || '—'}
-                            </p>
-                            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                              {assignment.schedule_template_name || copy.labels.noSchedule}
-                            </p>
-                          </div>
-                          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusClasses[assignment.today_status]}`}>
-                            {copy.statuses[assignment.today_status]}
-                          </span>
-                        </div>
-                      </button>
-                    ))
-                  ) : (
-                    <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
-                      {copy.labels.noEmployees}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{copy.sections.employeeDetail}</h3>
-
-                {selectedEmployee ? (
-                  <div className="mt-5 space-y-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">{copy.labels.selectedEmployee}</p>
-                        <p className="text-lg font-semibold text-gray-900 dark:text-white">{selectedEmployee.employee_name}</p>
-                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                          {selectedEmployee.position_title || '—'}
-                        </p>
-                      </div>
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusClasses[selectedEmployee.today_status]}`}>
-                        {copy.statuses[selectedEmployee.today_status]}
-                      </span>
-                    </div>
-
-                    {!selectedEmployee.schedule_template_id ? (
-                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
-                        {copy.labels.unassignedWarning}
-                      </div>
-                    ) : null}
-
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <DetailCard label={copy.labels.schedule} value={selectedEmployee.schedule_template_name || copy.labels.noSchedule} />
-                      <DetailCard
-                        label={copy.labels.dateRange}
-                        value={`${formatDate(selectedEmployee.effective_start_date, currentLanguage.code, '—')} → ${formatDate(selectedEmployee.effective_end_date, currentLanguage.code, '—')}`}
-                      />
-                      <DetailCard label={copy.labels.effectiveStatus} value={copy.statuses[selectedEmployee.today_status]} />
-                      <DetailCard label={copy.labels.systemStatus} value={copy.statuses[selectedEmployee.system_status]} />
-                      <DetailCard
-                        label={copy.labels.correction}
-                        value={selectedEmployee.corrected_status ? copy.statuses[selectedEmployee.corrected_status] : copy.labels.noCorrection}
-                      />
-                      <DetailCard label={copy.labels.minutesLate} value={String(selectedEmployee.minutes_late)} />
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <DetailCard label={copy.labels.checkIn} value={formatDateTime(selectedEmployee.first_check_in_at, currentLanguage.code, '—')} />
-                      <DetailCard label={copy.labels.checkOut} value={formatDateTime(selectedEmployee.last_check_out_at, currentLanguage.code, '—')} />
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                      <DetailCard label={copy.labels.department} value={selectedEmployee.department || copy.labels.noDepartment} />
-                      <DetailCard label={copy.labels.unit} value={selectedEmployee.unit_name || copy.labels.noUnit} />
-                      <DetailCard label={copy.labels.business} value={selectedEmployee.business_name || copy.labels.noBusiness} />
-                    </div>
-
-                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
-                      <p className="text-xs font-medium uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
-                        {copy.labels.ruleForDay}
-                      </p>
-                      {selectedEmployee.today_rule ? (
-                        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                          <DetailStat label={copy.labels.start} value={selectedEmployee.today_rule.is_rest_day ? copy.labels.dayOff : formatTime(selectedEmployee.today_rule.start_time, currentLanguage.code, copy.labels.noTime)} />
-                          <DetailStat label={copy.labels.end} value={selectedEmployee.today_rule.is_rest_day ? copy.labels.dayOff : formatTime(selectedEmployee.today_rule.end_time, currentLanguage.code, copy.labels.noTime)} />
-                          <DetailStat label={copy.labels.tolerance} value={`${selectedEmployee.today_rule.late_after_minutes} min`} />
-                        </div>
-                      ) : (
-                        <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">{copy.labels.noRuleForDay}</p>
-                      )}
-                    </div>
-
-                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-medium uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
-                            {copy.sections.access}
-                          </p>
-                          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{copy.labels.metadataHint}</p>
-                        </div>
-                        {selectedAccessProfile ? (
-                          <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={() => openEditAccessProfileDialog(selectedAccessProfile)}>
-                              {copy.labels.editAccessProfile}
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={openCreateAccessMethodDialog}>
-                              {copy.labels.addAccessMethod}
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={() => setIsFaceEnrollmentModalOpen(true)}>
-                              {faceEnrollment ? 'Re-enroll face' : 'Enroll face'}
-                            </Button>
-                            {faceEnrollment ? (
-                              <Button variant="outline" size="sm" onClick={() => void handleDeleteFaceEnrollment()}>
-                                Delete face
-                              </Button>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={openCreateAccessProfileDialog}>
-                              {copy.labels.addAccessProfile}
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={() => setIsFaceEnrollmentModalOpen(true)}>
-                              {faceEnrollment ? 'Re-enroll face' : 'Enroll face'}
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="mt-4 rounded-lg border border-gray-200 bg-white px-3 py-3 text-sm dark:border-gray-700 dark:bg-gray-800">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="font-medium text-gray-900 dark:text-white">Face enrollment</span>
-                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                            faceEnrollment?.status === 'active'
-                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300'
-                              : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                          }`}>
-                            {faceEnrollment?.status ?? 'not_enrolled'}
-                          </span>
-                        </div>
-                        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                          {faceEnrollment?.enrolled_at ? `Last enrolled: ${formatDateTime(faceEnrollment.enrolled_at, currentLanguage.code, '—')}` : 'No biometric enrollment available for this employee.'}
-                        </p>
-                      </div>
-
-                      {selectedAccessProfile ? (
-                        <div className="mt-4 space-y-3">
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <DetailCard label={copy.labels.accessProfileStatus} value={copy.statuses[selectedAccessProfile.status]} />
-                            <DetailCard label={copy.labels.defaultMethod} value={copy.labels.authMethods[selectedAccessProfile.default_method]} />
-                          </div>
-
-                          <div>
-                            <p className="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
-                              {copy.labels.methods}
-                            </p>
-                            <div className="space-y-2">
-                              {selectedAccessProfile.methods.length > 0 ? (
-                                selectedAccessProfile.methods.map((method) => (
-                                  <div
-                                    key={method.id}
-                                    className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-3 dark:border-gray-700 dark:bg-gray-800"
-                                  >
-                                    <div>
-                                      <div className="flex items-center gap-2">
-                                        <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                          {copy.labels.authMethods[method.method_type]}
-                                        </p>
-                                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusClasses[method.status]}`}>
-                                          {copy.statuses[method.status]}
-                                        </span>
-                                      </div>
-                                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                        {copy.labels.credentialRef}: {method.credential_ref || copy.labels.noCredentialRef}
-                                      </p>
-                                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                        {copy.labels.priority}: {method.priority}
-                                      </p>
-                                    </div>
-                                    <Button variant="ghost" size="icon" onClick={() => openEditAccessMethodDialog(method)}>
-                                      <Pencil className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                ))
-                              ) : (
-                                <div className="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-6 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
-                                  {copy.labels.noMethods}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="mt-4 rounded-lg border border-dashed border-gray-300 bg-white px-4 py-6 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
-                          {copy.labels.noAccessProfile}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
-                      <p className="text-xs font-medium uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
-                        {copy.sections.recentActivity}
-                      </p>
-                      <div className="mt-3 space-y-2">
-                        {overview.recent_events.filter((event) => event.employee_id === selectedEmployee.employee_id).length > 0 ? (
-                          overview.recent_events
-                            .filter((event) => event.employee_id === selectedEmployee.employee_id)
-                            .slice(0, 6)
-                            .map((event) => (
-                              <RecentActivityRow key={event.id} copy={copy} event={event} locale={currentLanguage.code} />
-                            ))
-                        ) : (
-                          <div className="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-6 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
-                            {copy.labels.noRecentEvents}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                {isLoadingCalendar ? (
+                  <div className="mt-4 grid grid-cols-7 gap-3">
+                    {Array.from({ length: 35 }).map((_, index) => (
+                      <Skeleton key={index} className="h-[92px] rounded-2xl" />
+                    ))}
                   </div>
                 ) : (
-                  <div className="mt-5 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-10 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
-                    {copy.labels.noEmployeeSelected}
+                  <div className="mt-4 grid grid-cols-7 gap-3">
+                    {calendarCells.map((dayNumber, index) => {
+                      if (dayNumber === null) {
+                        return <div key={`empty-${index}`} className="h-[92px]" />;
+                      }
+
+                      const day = attendanceCalendarMap.get(dayNumber) ?? null;
+                      const dateKey = `${calendarMonth}-${`${dayNumber}`.padStart(2, '0')}`;
+
+                      return (
+                        <ControlCalendarDayCell
+                          key={dateKey}
+                          copy={copy}
+                          day={day}
+                          dayNumber={dayNumber}
+                          isSelected={controlDate === dateKey}
+                          onSelect={() => {
+                            setControlDate(dateKey);
+                            if (day) {
+                              setSelectedCalendarDay(day);
+                            }
+                          }}
+                        />
+                      );
+                    })}
                   </div>
                 )}
-              </div>
-            </div>
-          </div>
 
-          <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{copy.sections.recentActivity}</h3>
-            <div className="mt-4 space-y-2">
-              {overview.recent_events.length > 0 ? (
-                overview.recent_events.map((event) => (
-                  <RecentActivityRow key={event.id} copy={copy} event={event} locale={currentLanguage.code} />
-                ))
-              ) : (
-                <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
-                  {copy.labels.noRecentEvents}
+                <div className="mt-6 border-t border-gray-200 pt-4 dark:border-gray-700">
+                  <div className="flex flex-wrap gap-5 text-xs text-gray-600 dark:text-gray-300">
+                    <LegendPill color="bg-emerald-500" label={copy.labels.checkIn} />
+                    <LegendPill color="bg-sky-500" label={copy.labels.checkOut} />
+                    <LegendOutline label={copy.labels.currentDay} />
+                  </div>
                 </div>
-              )}
-            </div>
-          </div>
-        </>
+              </>
+            ) : (
+              <div className="mt-8 rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-6 py-12 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
+                {copy.labels.selectEmployeeCalendar}
+              </div>
+            )}
+          </section>
+        </div>
       ) : (
         <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-10 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
           {copy.loading}
         </div>
       )}
+
+      <Dialog
+        open={Boolean(selectedCalendarDay)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedCalendarDay(null);
+          }
+        }}
+      >
+        {selectedCalendarDay ? (
+          <DialogContent className="max-h-[92vh] overflow-y-auto p-0 sm:max-w-[760px]">
+            <DialogHeader className="border-b border-gray-200 px-6 py-5 dark:border-gray-700">
+              <DialogTitle>
+                {copy.labels.modifyStatusOfDay} {new Date(`${selectedCalendarDay.date}T00:00:00`).getDate()}
+              </DialogTitle>
+              <DialogDescription>
+                {selectedEmployee?.employee_name || '—'} · {formatDate(selectedCalendarDay.date, currentLanguage.code, selectedCalendarDay.date)}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-5 px-6 py-5">
+              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">{copy.labels.systemRegistration}</p>
+                    <div className={`mt-3 inline-flex rounded-full px-3 py-1 text-sm font-medium ${dayStatusPillTone(selectedCalendarDay)}`}>
+                      {copy.statuses[resolvedDayStatus(selectedCalendarDay)]}
+                    </div>
+                  </div>
+                  <span className="text-xs font-medium uppercase tracking-[0.12em] text-gray-400 dark:text-gray-500">
+                    {copy.labels.notModifiable}
+                  </span>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <DayInfoStat label={copy.labels.checkIn} value={formatTimeOnly(selectedCalendarDay.first_check_in_at, currentLanguage.code, copy.labels.noRegistration)} />
+                  <DayInfoStat label={copy.labels.checkOut} value={formatTimeOnly(selectedCalendarDay.last_check_out_at, currentLanguage.code, copy.labels.noRegistration)} />
+                  <DayInfoStat label={copy.labels.totalTime} value={formatWorkDuration(selectedCalendarDay.first_check_in_at, selectedCalendarDay.last_check_out_at, copy.labels.noRegistration)} />
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <DayEvidenceCard
+                    label={copy.labels.checkIn}
+                    photoUrl={selectedCalendarDay.first_photo_url ?? null}
+                    location={selectedCalendarDay.first_location?.name ?? null}
+                    copy={copy}
+                  />
+                  <DayEvidenceCard
+                    label={copy.labels.checkOut}
+                    photoUrl={selectedCalendarDay.last_photo_url ?? null}
+                    location={selectedCalendarDay.last_location?.name ?? null}
+                    copy={copy}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">{copy.labels.manuallyModifyStatus}</p>
+                <div className="grid gap-2">
+                  <Button
+                    type="button"
+                    disabled={isUpdatingCalendarDay}
+                    className={`justify-start bg-emerald-600 text-white hover:bg-emerald-700 ${pendingCalendarStatus === 'on_time' ? 'ring-2 ring-emerald-300 ring-offset-2' : ''}`}
+                    onClick={() => setPendingCalendarStatus('on_time')}
+                  >
+                    {copy.labels.markAsAttendance}
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={isUpdatingCalendarDay}
+                    className={`justify-start bg-rose-600 text-white hover:bg-rose-700 ${pendingCalendarStatus === 'absence' ? 'ring-2 ring-rose-300 ring-offset-2' : ''}`}
+                    onClick={() => setPendingCalendarStatus('absence')}
+                  >
+                    {copy.labels.markAsAbsent}
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={isUpdatingCalendarDay}
+                    className={`justify-start bg-amber-500 text-white hover:bg-amber-600 ${pendingCalendarStatus === 'late' ? 'ring-2 ring-amber-300 ring-offset-2' : ''}`}
+                    onClick={() => setPendingCalendarStatus('late')}
+                  >
+                    {copy.labels.markAsDelay}
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={isUpdatingCalendarDay}
+                    className={`justify-start bg-slate-500 text-white hover:bg-slate-600 ${pendingCalendarStatus === 'rest' ? 'ring-2 ring-slate-300 ring-offset-2' : ''}`}
+                    onClick={() => setPendingCalendarStatus('rest')}
+                  >
+                    {copy.labels.markAsRest}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isUpdatingCalendarDay}
+                    className={pendingCalendarStatus === '' ? 'border-[#1463ff] text-[#1463ff]' : ''}
+                    onClick={() => setPendingCalendarStatus('')}
+                  >
+                    {copy.labels.clearManualCorrection}
+                  </Button>
+                </div>
+                <div className="border-t border-gray-200 pt-3 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                  {copy.labels.currentStatus}: {' '}
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {copy.statuses[resolvedDayStatus(selectedCalendarDay)]}
+                  </span>
+                </div>
+                <DialogFooter className="pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isUpdatingCalendarDay}
+                    onClick={() => setSelectedCalendarDay(null)}
+                  >
+                    {copy.labels.cancel}
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={isUpdatingCalendarDay}
+                    className="bg-[#143675] text-white hover:bg-[#0f2855]"
+                    onClick={async () => {
+                      const didSave = await handleCalendarStatusUpdate(selectedCalendarDay.date, pendingCalendarStatus);
+                      if (didSave) {
+                        setSelectedCalendarDay(null);
+                      }
+                    }}
+                  >
+                    {copy.labels.save}
+                  </Button>
+                </DialogFooter>
+              </div>
+            </div>
+          </DialogContent>
+        ) : null}
+      </Dialog>
 
       <ControlLocationDialog
         copy={copy}
@@ -1790,6 +1754,202 @@ export default function Control() {
   );
 }
 
+function ControlAttendanceRow({
+  assignment,
+  copy,
+  locale,
+  selected,
+  onSelect,
+}: {
+  assignment: AttendanceControlOverviewResponse['assignments'][number];
+  copy: typeof controlCopy.en | typeof controlCopy.es;
+  locale: string;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const displayStatus = assignment.corrected_status ?? assignment.today_status;
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`w-full border-b border-gray-200 px-4 py-4 text-left transition-colors dark:border-gray-700 ${
+        selected
+          ? 'border-l-4 border-l-[#1463ff] bg-[#1463ff]/5'
+          : 'hover:bg-gray-50 dark:hover:bg-gray-900/40'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-lg font-semibold text-gray-900 dark:text-white">{assignment.employee_name}</p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {assignment.position_title || assignment.department || copy.labels.noDepartment}
+          </p>
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusClasses[displayStatus]}`}>
+          {copy.statuses[displayStatus]}
+        </span>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <AttendanceMomentPanel
+          label={copy.labels.checkIn}
+          time={formatTimeOnly(assignment.first_check_in_at, locale, copy.labels.noRegistration)}
+          location={assignment.latest_event?.location_name ?? null}
+          copy={copy}
+        />
+        <AttendanceMomentPanel
+          label={copy.labels.checkOut}
+          time={formatTimeOnly(assignment.last_check_out_at, locale, copy.labels.noRegistration)}
+          location={assignment.latest_event?.location_name ?? null}
+          copy={copy}
+        />
+      </div>
+    </button>
+  );
+}
+
+function AttendanceMomentPanel({
+  label,
+  time,
+  location,
+  copy,
+}: {
+  label: string;
+  time: string;
+  location: string | null;
+  copy: typeof controlCopy.en | typeof controlCopy.es;
+}) {
+  return (
+    <div className="rounded-2xl bg-gray-50 p-3 dark:bg-gray-900/40">
+      <p className="text-xs font-medium uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">{label}</p>
+      <p className="mt-2 text-lg font-semibold text-[#1f9d55] dark:text-emerald-300">{time}</p>
+      <div className="mt-3 flex items-center gap-1.5 text-xs text-[#1463ff] dark:text-[#8bb3ff]">
+        <MapPin className="h-3.5 w-3.5" />
+        <span className="truncate">{location || copy.labels.openLocation}</span>
+      </div>
+    </div>
+  );
+}
+
+function CompactInfoChip({
+  children,
+  tone = 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+}: {
+  children: ReactNode;
+  tone?: string;
+}) {
+  return (
+    <span className={`rounded-full px-3 py-1 text-xs font-medium ${tone}`}>
+      {children}
+    </span>
+  );
+}
+
+function ControlCalendarDayCell({
+  copy,
+  day,
+  dayNumber,
+  isSelected,
+  onSelect,
+}: {
+  copy: typeof controlCopy.en | typeof controlCopy.es;
+  day: AttendanceCalendarDay | null;
+  dayNumber: number;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  const statusTone = day ? dayTone(day) : null;
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`min-h-[92px] rounded-2xl border p-3 text-left transition-colors ${
+        isSelected
+          ? 'border-[#1463ff] bg-[#1463ff]/5 shadow-[inset_0_0_0_1px_rgba(20,99,255,0.15)]'
+          : 'border-gray-200 bg-white hover:border-[#1463ff]/35 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-[#8bb3ff]/40'
+      }`}
+    >
+      <div className="text-base font-semibold text-gray-900 dark:text-white">{dayNumber}</div>
+      {day ? (
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center gap-1.5">
+            {day.entry_registered ? <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> : null}
+            {day.exit_registered ? <span className="h-2.5 w-2.5 rounded-full bg-sky-500" /> : null}
+          </div>
+          {statusTone ? (
+            <div className={`inline-flex h-6 min-w-6 items-center justify-center rounded-md px-1.5 text-[11px] font-semibold ${statusTone}`}>
+              {dayBadge(copy, day)}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </button>
+  );
+}
+
+function LegendPill({ color, label }: { color: string; label: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className={`h-3 w-3 rounded-full ${color}`} />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function LegendOutline({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="h-3 w-12 rounded-full border border-[#1463ff]" />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function DayInfoStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
+      <p className="text-xs font-medium uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">{label}</p>
+      <p className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">{value}</p>
+    </div>
+  );
+}
+
+function DayEvidenceCard({
+  label,
+  photoUrl,
+  location,
+  copy,
+}: {
+  label: string;
+  photoUrl: string | null;
+  location: string | null;
+  copy: typeof controlCopy.en | typeof controlCopy.es;
+}) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
+      <p className="text-xs font-medium uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">{label}</p>
+      {photoUrl ? (
+        <img
+          src={photoUrl}
+          alt={label}
+          className="mt-3 h-32 w-full rounded-lg object-cover"
+        />
+      ) : (
+        <div className="mt-3 flex h-32 items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-400 dark:border-gray-700 dark:bg-gray-900/40">
+          {copy.labels.noEvidence}
+        </div>
+      )}
+
+      <div className="mt-3 flex items-center gap-2 text-sm text-[#1463ff] dark:text-[#8bb3ff]">
+        <MapPin className="h-4 w-4" />
+        <span className="truncate">{location || copy.labels.noLocationHistory}</span>
+      </div>
+    </div>
+  );
+}
+
 function DetailCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-900/40">
@@ -1797,6 +1957,104 @@ function DetailCard({ label, value }: { label: string; value: string }) {
       <p className="mt-2 text-sm font-medium text-gray-900 dark:text-white">{value}</p>
     </div>
   );
+}
+
+function formatTimeOnly(value: string | null | undefined, locale: string, fallback: string) {
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(locale, {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(parsed);
+}
+
+function formatWorkDuration(start: string | null | undefined, end: string | null | undefined, fallback: string) {
+  if (!start || !end) {
+    return fallback;
+  }
+
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    return fallback;
+  }
+
+  const diffMs = endDate.getTime() - startDate.getTime();
+  if (diffMs <= 0) {
+    return fallback;
+  }
+
+  const totalMinutes = Math.round(diffMs / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}h ${minutes}m`;
+}
+
+function applyCalendarDayUpdate(
+  day: AttendanceCalendarDay,
+  result: {
+    effective_status: AttendanceCalendarDay['effective_status'];
+    system_status: AttendanceCalendarDay['system_status'];
+    corrected_status?: AttendanceCalendarDay['corrected_status'];
+    notes?: string | null;
+  },
+): AttendanceCalendarDay {
+  return {
+    ...day,
+    effective_status: result.effective_status,
+    system_status: result.system_status,
+    corrected_status: result.corrected_status ?? null,
+    notes: result.notes ?? null,
+  };
+}
+
+function resolvedDayStatus(day: AttendanceCalendarDay) {
+  return day.corrected_status ?? day.effective_status;
+}
+
+function dayStatusPillTone(day: AttendanceCalendarDay) {
+  return statusClasses[resolvedDayStatus(day)];
+}
+
+function dayTone(day: AttendanceCalendarDay) {
+  switch (resolvedDayStatus(day)) {
+    case 'on_time':
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300';
+    case 'late':
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300';
+    case 'absence':
+      return 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300';
+    case 'rest':
+      return 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    case 'leave':
+      return 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300';
+    default:
+      return null;
+  }
+}
+
+function dayBadge(copy: typeof controlCopy.en | typeof controlCopy.es, day: AttendanceCalendarDay) {
+  switch (resolvedDayStatus(day)) {
+    case 'on_time':
+      return '✓';
+    case 'absence':
+      return '✕';
+    case 'late':
+      return '!';
+    case 'rest':
+      return '–';
+    case 'leave':
+      return copy.statuses.leave.slice(0, 1);
+    default:
+      return null;
+  }
 }
 
 function DetailStat({ label, value }: { label: string; value: string }) {

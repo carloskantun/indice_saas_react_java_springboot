@@ -549,6 +549,15 @@ export interface AttendanceCorrectionPayload {
   notes?: string;
 }
 
+export interface AttendanceDailyRecordUpdateResponse {
+  employee_id: number;
+  date: string;
+  system_status: 'on_time' | 'late' | 'leave' | 'rest' | 'absence';
+  corrected_status?: 'on_time' | 'late' | 'leave' | 'rest' | 'absence' | null;
+  effective_status: 'on_time' | 'late' | 'leave' | 'rest' | 'absence';
+  notes?: string | null;
+}
+
 export interface FaceEnrollmentSessionResponse {
   id: number;
   employee_id: number;
@@ -883,7 +892,7 @@ export const humanResourcesApi = {
   },
 
   updateAttendanceDailyRecord(employeeId: string | number, date: string, payload: AttendanceCorrectionPayload) {
-    return apiClient<{ effective_status: string }>(
+    return apiClient<AttendanceDailyRecordUpdateResponse>(
       `${endpoints.humanResources.attendanceDailyRecords}/${employeeId}/${date}`,
       {
         method: 'PUT',

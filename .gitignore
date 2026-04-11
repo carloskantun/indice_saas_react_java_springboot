@@ -44,3 +44,7 @@ handoff/
 deployment/env/.env
 deployment/env/*.local
 deployment/env/*.secret
+
+
+### Figma prototype exports ###
+figma_prototype/*
