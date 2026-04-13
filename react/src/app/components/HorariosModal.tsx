@@ -1,288 +1,447 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from './ui/button';
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from './ui/dropdown-menu';
 import { Checkbox } from './ui/checkbox';
-import { X, Search, Clock, ChevronDown, AlertCircle, MapPin } from 'lucide-react';
-import { useHRLanguage } from '../BasicModules/HumanResources/HRLanguage';
+import { X, Search, Clock, AlertCircle, MapPin } from 'lucide-react';
+import {
+  humanResourcesApi,
+  type AttendanceControlAssignment,
+  type AttendanceControlLocation,
+  type AttendanceControlTemplate,
+  type AttendanceControlTemplatePayload,
+} from '../api/humanResources';
 
-interface Colaborador {
-  id: number;
-  nombre: string;
-  puesto: string;
-  codigo?: string;
-  departamento?: string;
-}
-
-interface HorarioDia {
-  dia: 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+interface HorarioDiaDraft {
+  dayOfWeek: number;
+  dia: string;
   entrada: string;
   salida: string;
   comida: number;
   descanso: number;
+  isRestDay: boolean;
 }
 
 interface HorariosModalProps {
   isOpen: boolean;
   onClose: () => void;
-  colaboradores: Colaborador[];
+  assignments: AttendanceControlAssignment[];
+  templates: AttendanceControlTemplate[];
+  locations: AttendanceControlLocation[];
+  selectedTemplateId?: number | null;
+  onApplied?: () => Promise<void> | void;
 }
 
-export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalProps) {
-  const t = useHRLanguage().attendanceSchedules;
+const weekdayConfig = [
+  { dayOfWeek: 1, dia: 'Mon' },
+  { dayOfWeek: 2, dia: 'Tue' },
+  { dayOfWeek: 3, dia: 'Wed' },
+  { dayOfWeek: 4, dia: 'Thu' },
+  { dayOfWeek: 5, dia: 'Fri' },
+  { dayOfWeek: 6, dia: 'Sat' },
+  { dayOfWeek: 7, dia: 'Sun' },
+] as const;
+
+const emptyScheduleDays = (): HorarioDiaDraft[] =>
+  weekdayConfig.map((day) => ({
+    dayOfWeek: day.dayOfWeek,
+    dia: day.dia,
+    entrada: '',
+    salida: '',
+    comida: 0,
+    descanso: 0,
+    isRestDay: day.dayOfWeek >= 6,
+  }));
+
+const timeToInput = (value?: string | null) => (value ?? '').slice(0, 5);
+
+const draftFromTemplate = (template: AttendanceControlTemplate | null) => {
+  const modoHorario: 'Horario estricto' | 'Horario abierto' =
+    template?.schedule_mode === 'open' ? 'Horario abierto' : 'Horario estricto';
+  const toleranciaIngreso = template?.days.find((day) => !day.is_rest_day)?.late_after_minutes ?? 10;
+  const horarios = weekdayConfig.map((config) => {
+    const day = template?.days.find((item) => item.day_of_week === config.dayOfWeek);
+    return {
+      dayOfWeek: config.dayOfWeek,
+      dia: config.dia,
+      entrada: timeToInput(day?.start_time),
+      salida: timeToInput(day?.end_time),
+      comida: day?.meal_minutes ?? 0,
+      descanso: day?.rest_minutes ?? 0,
+      isRestDay: day?.is_rest_day ?? (config.dayOfWeek >= 6),
+    };
+  });
+
+  return {
+    modoHorario,
+    toleranciaIngreso,
+    noPermitirDespuesTolerancia: Boolean(template?.block_after_grace_period),
+    noPermitirFueraUbicacion: Boolean(template?.enforce_location),
+    ubicacionSeleccionada: template?.location_id ? String(template.location_id) : '',
+    horarios,
+  };
+};
+
+const normalizeTemplatePayload = (payload: AttendanceControlTemplatePayload) =>
+  JSON.stringify({
+    schedule_mode: payload.schedule_mode,
+    block_after_grace_period: payload.block_after_grace_period,
+    enforce_location: payload.enforce_location,
+    location_id: payload.location_id ?? null,
+    days: payload.days.map((day) => ({
+      day_of_week: day.day_of_week,
+      start_time: day.start_time ?? null,
+      end_time: day.end_time ?? null,
+      meal_minutes: day.meal_minutes,
+      rest_minutes: day.rest_minutes,
+      late_after_minutes: day.late_after_minutes,
+      is_rest_day: day.is_rest_day,
+    })),
+  });
+
+export function HorariosModal({
+  isOpen,
+  onClose,
+  assignments,
+  templates,
+  locations,
+  selectedTemplateId,
+  onApplied,
+}: HorariosModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [unidadFilter, setUnidadFilter] = useState<'all' | '7' | '8' | '9' | '10'>('all');
-  const [negocioFilter, setNegocioFilter] = useState<'all'>('all');
-  const [selectedColaboradores, setSelectedColaboradores] = useState<number[]>([]);
-  const [modoHorario, setModoHorario] = useState<'strict' | 'open'>('strict');
+  const [unidadFilter, setUnidadFilter] = useState('');
+  const [negocioFilter, setNegocioFilter] = useState('');
+  const [appliedSearchQuery, setAppliedSearchQuery] = useState('');
+  const [appliedUnidadFilter, setAppliedUnidadFilter] = useState('');
+  const [appliedNegocioFilter, setAppliedNegocioFilter] = useState('');
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
+  const [selectedTemplateName, setSelectedTemplateName] = useState('');
+  const [modoHorario, setModoHorario] = useState<'Horario estricto' | 'Horario abierto'>('Horario estricto');
   const [toleranciaIngreso, setToleranciaIngreso] = useState(10);
   const [noPermitirDespuesTolerancia, setNoPermitirDespuesTolerancia] = useState(false);
   const [noPermitirFueraUbicacion, setNoPermitirFueraUbicacion] = useState(false);
-  const [ubicacionSeleccionada, setUbicacionSeleccionada] = useState<
-    'none' | 'hq' | 'north' | 'south' | 'warehouse' | 'distribution'
-  >('none');
-  
-  const [horarios, setHorarios] = useState<HorarioDia[]>([
-    { dia: 'mon', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-    { dia: 'tue', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-    { dia: 'wed', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-    { dia: 'thu', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-    { dia: 'fri', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-    { dia: 'sat', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-    { dia: 'sun', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-  ]);
+  const [ubicacionSeleccionada, setUbicacionSeleccionada] = useState('');
+  const [horarios, setHorarios] = useState<HorarioDiaDraft[]>(emptyScheduleDays());
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  // Lista de ubicaciones disponibles
-  const ubicacionesDisponibles: Array<'none' | 'hq' | 'north' | 'south' | 'warehouse' | 'distribution'> = [
-    'none',
-    'hq',
-    'north',
-    'south',
-    'warehouse',
-    'distribution',
-  ];
+  const selectedTemplate = useMemo(
+    () => templates.find((template) => template.id === selectedTemplateId) ?? templates[0] ?? null,
+    [selectedTemplateId, templates],
+  );
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const templateDraft = draftFromTemplate(selectedTemplate);
+    setSearchQuery('');
+    setUnidadFilter('');
+    setNegocioFilter('');
+    setAppliedSearchQuery('');
+    setAppliedUnidadFilter('');
+    setAppliedNegocioFilter('');
+    setSelectedEmployeeIds([]);
+    setSelectedTemplateName(selectedTemplate?.name ?? 'Custom schedule');
+    setModoHorario(templateDraft.modoHorario);
+    setToleranciaIngreso(templateDraft.toleranciaIngreso);
+    setNoPermitirDespuesTolerancia(templateDraft.noPermitirDespuesTolerancia);
+    setNoPermitirFueraUbicacion(templateDraft.noPermitirFueraUbicacion);
+    setUbicacionSeleccionada(templateDraft.ubicacionSeleccionada);
+    setHorarios(templateDraft.horarios);
+    setErrorMessage('');
+  }, [isOpen, selectedTemplate]);
+
+  const unitOptions = useMemo(
+    () => Array.from(new Map(
+      assignments
+        .filter((assignment) => assignment.unit_id)
+        .map((assignment) => [String(assignment.unit_id), assignment.unit_name || 'Unit']),
+    ).entries()),
+    [assignments],
+  );
+
+  const businessOptions = useMemo(
+    () => Array.from(new Map(
+      assignments
+        .filter((assignment) => assignment.business_id)
+        .map((assignment) => [String(assignment.business_id), assignment.business_name || 'Business']),
+    ).entries()),
+    [assignments],
+  );
+
+  const filteredAssignments = useMemo(() => assignments.filter((assignment) => {
+    const normalizedSearch = appliedSearchQuery.trim().toLowerCase();
+    const matchesSearch =
+      !normalizedSearch ||
+      assignment.employee_name.toLowerCase().includes(normalizedSearch) ||
+      (assignment.employee_number ?? '').toLowerCase().includes(normalizedSearch);
+    const matchesUnit = !appliedUnidadFilter || String(assignment.unit_id ?? '') === appliedUnidadFilter;
+    const matchesBusiness = !appliedNegocioFilter || String(assignment.business_id ?? '') === appliedNegocioFilter;
+    return matchesSearch && matchesUnit && matchesBusiness;
+  }), [appliedNegocioFilter, appliedSearchQuery, appliedUnidadFilter, assignments]);
+
+  const allVisibleSelected = filteredAssignments.length > 0
+    && filteredAssignments.every((assignment) => selectedEmployeeIds.includes(assignment.employee_id));
 
   if (!isOpen) return null;
 
-  const filteredColaboradores = colaboradores.filter(c => {
-    const matchesSearch = c.nombre.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (c.codigo && c.codigo.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesSearch;
-  });
+  const isHorarioAbierto = modoHorario === 'Horario abierto';
 
-  const toggleColaborador = (id: number) => {
-    setSelectedColaboradores(prev =>
-      prev.includes(id) ? prev.filter(cId => cId !== id) : [...prev, id]
+  const toggleEmployee = (employeeId: number) => {
+    setSelectedEmployeeIds((current) =>
+      current.includes(employeeId)
+        ? current.filter((id) => id !== employeeId)
+        : [...current, employeeId],
     );
   };
 
   const toggleAll = () => {
-    if (selectedColaboradores.length === filteredColaboradores.length) {
-      setSelectedColaboradores([]);
-    } else {
-      setSelectedColaboradores(filteredColaboradores.map(c => c.id));
+    if (allVisibleSelected) {
+      setSelectedEmployeeIds((current) => current.filter((id) => !filteredAssignments.some((assignment) => assignment.employee_id === id)));
+      return;
     }
+    setSelectedEmployeeIds((current) => Array.from(new Set([...current, ...filteredAssignments.map((assignment) => assignment.employee_id)])));
   };
 
-  const updateHorario = (index: number, field: keyof HorarioDia, value: string | number) => {
-    setHorarios(prev => {
-      const newHorarios = [...prev];
-      newHorarios[index] = { ...newHorarios[index], [field]: value };
-      return newHorarios;
-    });
+  const updateHorario = (index: number, field: keyof HorarioDiaDraft, value: string | number | boolean) => {
+    setHorarios((current) => current.map((item, currentIndex) => currentIndex === index ? { ...item, [field]: value } : item));
   };
 
-  const copiarSemana = () => {
-    // Copia el horario de lunes a toda la semana
-    const lunesHorario = horarios[0];
-    setHorarios(prev => prev.map((h, index) => 
-      index === 0 ? h : { ...h, entrada: lunesHorario.entrada, salida: lunesHorario.salida, comida: lunesHorario.comida, descanso: lunesHorario.descanso }
-    ));
+  const applySearchFilters = () => {
+    setAppliedSearchQuery(searchQuery);
+    setAppliedUnidadFilter(unidadFilter);
+    setAppliedNegocioFilter(negocioFilter);
   };
 
   const limpiarHorarios = () => {
-    setHorarios([
-      { dia: 'mon', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-      { dia: 'tue', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-      { dia: 'wed', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-      { dia: 'thu', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-      { dia: 'fri', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-      { dia: 'sat', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-      { dia: 'sun', entrada: '--:--', salida: '--:--', comida: 0, descanso: 0 },
-    ]);
+    setHorarios(emptyScheduleDays());
+    setToleranciaIngreso(10);
+    setNoPermitirDespuesTolerancia(false);
+    setNoPermitirFueraUbicacion(false);
+    setUbicacionSeleccionada('');
   };
 
-  const aplicarHorarios = () => {
-    if (selectedColaboradores.length === 0) {
-      alert(t.alerts.selectAtLeastOne);
-      return;
+  const buildTemplatePayload = (): AttendanceControlTemplatePayload | null => {
+    if (selectedEmployeeIds.length === 0) {
+      setErrorMessage('Select at least one collaborator.');
+      return null;
     }
-    
-    const modeLabel = modoHorario === 'strict' ? t.schedule.strict : t.schedule.open;
-    const toleranciaMsg =
-      modoHorario === 'strict' ? `\n${t.schedule.tolerance}: ${toleranciaIngreso} ${t.schedule.minutes}` : '';
-    alert(t.alerts.success(selectedColaboradores.length, modeLabel, toleranciaMsg));
-    onClose();
+
+    if (noPermitirFueraUbicacion && !ubicacionSeleccionada) {
+      setErrorMessage('Select the allowed location for this schedule.');
+      return null;
+    }
+
+    const days = horarios.map((horario) => {
+      const startTime = horario.entrada ? `${horario.entrada}:00` : null;
+      const endTime = horario.salida ? `${horario.salida}:00` : null;
+
+      if (!isHorarioAbierto && !horario.isRestDay) {
+        if (!startTime || !endTime) {
+          throw new Error(`Provide entry and exit times for ${horario.dia}.`);
+        }
+        if (endTime <= startTime) {
+          throw new Error(`Exit time must be after entry time for ${horario.dia}.`);
+        }
+      }
+
+      return {
+        day_of_week: horario.dayOfWeek,
+        start_time: isHorarioAbierto || horario.isRestDay ? null : startTime,
+        end_time: isHorarioAbierto || horario.isRestDay ? null : endTime,
+        meal_minutes: horario.comida,
+        rest_minutes: horario.descanso,
+        late_after_minutes: isHorarioAbierto ? 0 : toleranciaIngreso,
+        is_rest_day: horario.isRestDay,
+      };
+    });
+
+    return {
+      name: selectedTemplateName.trim() || selectedTemplate?.name || 'Custom schedule',
+      status: 'active',
+      schedule_mode: isHorarioAbierto ? 'open' : 'strict',
+      block_after_grace_period: !isHorarioAbierto && noPermitirDespuesTolerancia,
+      enforce_location: !isHorarioAbierto && noPermitirFueraUbicacion,
+      location_id: !isHorarioAbierto && noPermitirFueraUbicacion && ubicacionSeleccionada ? Number(ubicacionSeleccionada) : null,
+      days,
+    };
   };
 
-  // Variable para deshabilitar campos cuando es Horario abierto
-  const isHorarioAbierto = modoHorario === 'open';
-  const isMultipleSelected = selectedColaboradores.length > 1;
+  const aplicarHorarios = async () => {
+    setIsSubmitting(true);
+    setErrorMessage('');
+
+    try {
+      const payload = buildTemplatePayload();
+      if (!payload) {
+        return;
+      }
+
+      const sameAsSelectedTemplate = selectedTemplate
+        ? normalizeTemplatePayload(payload) === normalizeTemplatePayload({
+            name: selectedTemplate.name,
+            status: selectedTemplate.status === 'inactive' ? 'inactive' : 'active',
+            schedule_mode: selectedTemplate.schedule_mode === 'open' ? 'open' : 'strict',
+            block_after_grace_period: Boolean(selectedTemplate.block_after_grace_period),
+            enforce_location: Boolean(selectedTemplate.enforce_location),
+            location_id: selectedTemplate.location_id ?? null,
+            days: selectedTemplate.days.map((day) => ({
+              day_of_week: day.day_of_week,
+              start_time: day.start_time ?? null,
+              end_time: day.end_time ?? null,
+              meal_minutes: day.meal_minutes ?? 0,
+              rest_minutes: day.rest_minutes ?? 0,
+              late_after_minutes: day.late_after_minutes,
+              is_rest_day: day.is_rest_day,
+            })),
+          })
+        : false;
+
+      let templateId = selectedTemplate?.id ?? null;
+      if (!templateId || !sameAsSelectedTemplate) {
+        const templateName = sameAsSelectedTemplate
+          ? payload.name
+          : `${payload.name} ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
+        const response = await humanResourcesApi.createAttendanceControlTemplate({
+          ...payload,
+          name: templateName,
+        });
+        templateId = response.template.id;
+      }
+
+      await humanResourcesApi.bulkAssignAttendanceSchedule({
+        employee_ids: selectedEmployeeIds,
+        template_id: templateId,
+        effective_start_date: new Date().toISOString().slice(0, 10),
+      });
+
+      await Promise.resolve(onApplied?.());
+      onClose();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'The schedule could not be applied.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col my-8">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-[#143675] bg-[#143675]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="my-8 flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg bg-white shadow-xl dark:bg-gray-800">
+        <div className="flex items-center justify-between border-b border-[#143675] bg-[#143675] p-6">
           <div className="flex items-center gap-2">
             <Clock className="h-6 w-6 text-white" />
-            <h2 className="text-xl font-semibold text-white">
-              {t.title}
-            </h2>
+            <h2 className="text-xl font-semibold text-white">Set schedules</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="text-white hover:text-blue-100 transition-colors"
-          >
+          <button onClick={onClose} className="text-white transition-colors hover:text-blue-100">
             <X className="h-6 w-6" />
           </button>
         </div>
 
-        {/* Search Section */}
-        <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-            {/* Buscar */}
+        <div className="border-b border-gray-200 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-700/50">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
             <div className="md:col-span-5">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  {t.filters.search}
-                </label>
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Look for</label>
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={t.filters.searchPlaceholder}
-                className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Name or code"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
             </div>
-
-            {/* Unidad */}
             <div className="md:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  {t.filters.unit}
-                </label>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between bg-white dark:bg-gray-800">
-                    {unidadFilter === 'all' ? t.filters.allUnits : unidadFilter}
-                    <ChevronDown className="h-4 w-4 opacity-50" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-full">
-                  <DropdownMenuItem onClick={() => setUnidadFilter('all')}>{t.filters.allUnits}</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setUnidadFilter('7')}>7</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setUnidadFilter('8')}>8</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setUnidadFilter('9')}>9</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setUnidadFilter('10')}>10</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Unit</label>
+              <select
+                value={unidadFilter}
+                onChange={(event) => setUnidadFilter(event.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              >
+                <option value="">All</option>
+                {unitOptions.map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
             </div>
-
-            {/* Negocio */}
             <div className="md:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  {t.filters.business}
-                </label>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full justify-between bg-white dark:bg-gray-800">
-                    {negocioFilter === 'all' ? t.filters.allBusinesses : negocioFilter}
-                    <ChevronDown className="h-4 w-4 opacity-50" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-full">
-                  <DropdownMenuItem onClick={() => setNegocioFilter('all')}>{t.filters.allBusinesses}</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Business</label>
+              <select
+                value={negocioFilter}
+                onChange={(event) => setNegocioFilter(event.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              >
+                <option value="">All</option>
+                {businessOptions.map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
             </div>
-
-            {/* Botón Buscar */}
-            <div className="md:col-span-1 flex items-end">
-              <Button className="w-full bg-[#143675] hover:bg-[#0f2855] text-white gap-2">
+            <div className="md:col-span-1 flex items-end md:justify-end">
+              <Button
+                className="w-full gap-2 whitespace-nowrap bg-[#143675] px-4 text-white hover:bg-[#0f2855] md:w-auto"
+                type="button"
+                onClick={applySearchFilters}
+              >
                 <Search className="h-4 w-4" />
-                {t.filters.searchButton}
+                Look for
               </Button>
             </div>
           </div>
         </div>
 
-        {/* Content */}
         <div className="flex-1 overflow-y-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 divide-x divide-gray-200 dark:divide-gray-700">
-            {/* Panel Izquierdo - Colaboradores */}
+          {errorMessage ? (
+            <div className="px-6 pt-6">
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-700/30 dark:bg-red-900/20 dark:text-red-300">
+                {errorMessage}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-1 divide-x divide-gray-200 dark:divide-gray-700 lg:grid-cols-2">
             <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-gray-900 dark:text-white">
-                  {t.employees.title}
-                </h3>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="font-semibold text-gray-900 dark:text-white">Collaborators</h3>
                 <span className="text-sm text-gray-500 dark:text-gray-400">
-                  {t.employees.selected}:{' '}
-                  <span className="font-medium text-blue-600 dark:text-blue-400">{selectedColaboradores.length}</span>
+                  Selected: <span className="font-medium text-blue-600 dark:text-blue-400">{selectedEmployeeIds.length}</span>
                 </span>
               </div>
 
-              {/* Tabla de colaboradores */}
-              <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
                 <table className="w-full">
-                  <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+                  <thead className="border-b border-gray-200 bg-gray-50 dark:border-gray-600 dark:bg-gray-700">
                     <tr>
-                      <th className="px-3 py-2 text-left w-10">
-                        <Checkbox 
-                          checked={selectedColaboradores.length === filteredColaboradores.length && filteredColaboradores.length > 0}
-                          onCheckedChange={toggleAll}
-                        />
+                      <th className="w-10 px-3 py-2 text-left">
+                        <Checkbox checked={allVisibleSelected} onCheckedChange={toggleAll} />
                       </th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        {t.employees.code}
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        {t.employees.employee}
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        {t.employees.department}
-                      </th>
+                      <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Code</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Contributor</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Dept</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
-                    {filteredColaboradores.length === 0 ? (
+                  <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
+                    {filteredAssignments.length === 0 ? (
                       <tr>
                         <td colSpan={4} className="px-3 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                          {t.employees.loadError}
+                          No collaborators available.
                         </td>
                       </tr>
                     ) : (
-                      filteredColaboradores.map((colaborador) => (
-                        <tr 
-                          key={colaborador.id}
-                          className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                        >
+                      filteredAssignments.map((assignment) => (
+                        <tr key={assignment.employee_id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                           <td className="px-3 py-3">
                             <Checkbox
-                              checked={selectedColaboradores.includes(colaborador.id)}
-                              onCheckedChange={() => toggleColaborador(colaborador.id)}
+                              checked={selectedEmployeeIds.includes(assignment.employee_id)}
+                              onCheckedChange={() => toggleEmployee(assignment.employee_id)}
                             />
                           </td>
                           <td className="px-3 py-3 text-sm text-gray-600 dark:text-gray-400">
-                            {colaborador.codigo || colaborador.id}
+                            {assignment.employee_number || assignment.employee_id}
                           </td>
                           <td className="px-3 py-3 text-sm text-gray-900 dark:text-white">
-                            {colaborador.nombre}
+                            {assignment.employee_name}
                           </td>
                           <td className="px-3 py-3 text-sm text-gray-600 dark:text-gray-400">
-                            {colaborador.departamento || colaborador.puesto}
+                            {assignment.department || assignment.position_title || '—'}
                           </td>
                         </tr>
                       ))
@@ -292,280 +451,182 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
               </div>
             </div>
 
-            {/* Panel Derecho - Horario a aplicar */}
             <div className="p-6">
               <div className="mb-4">
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
-                  {t.schedule.title}
-                </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {t.schedule.subtitle}
-                </p>
+                <h3 className="font-semibold text-gray-900 dark:text-white">Schedule to be applied</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">It will be applied equally to all those selected</p>
               </div>
 
-              {/* Acciones rápidas */}
-              <div className="flex items-center gap-2 mb-4">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={limpiarHorarios}
-                  className="gap-2"
-                  disabled={isHorarioAbierto}
-                >
-                  ✕ {t.schedule.clear}
+              <div className="mb-4 flex items-center gap-2">
+                <span className="rounded-full border border-gray-300 bg-gray-50 px-3 py-1 text-sm text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200">
+                  {selectedTemplateName}
+                </span>
+                <Button variant="outline" size="sm" onClick={limpiarHorarios} disabled={isSubmitting}>
+                  × Clean
                 </Button>
               </div>
 
-              {/* Alerta múltiples colaboradores */}
-              {isMultipleSelected && (
-                <div className="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                        {t.multiSelection.title}
-                      </p>
-                      <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                        {t.multiSelection.body(selectedColaboradores.length)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Modo */}
               <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  {t.schedule.mode}
-                  </label>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="w-full justify-between bg-white dark:bg-gray-800">
-                      {modoHorario === 'strict' ? t.schedule.strict : t.schedule.open}
-                      <ChevronDown className="h-4 w-4 opacity-50" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-full">
-                    <DropdownMenuItem onClick={() => setModoHorario('strict')}>
-                      {t.schedule.strict}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setModoHorario('open')}>
-                      {t.schedule.open}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                  {t.schedule.modeHelp}
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Way</label>
+                <select
+                  value={modoHorario}
+                  onChange={(event) => setModoHorario(event.target.value as 'Horario estricto' | 'Horario abierto')}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                >
+                  <option value="Horario estricto">Strict schedule</option>
+                  <option value="Horario abierto">Open schedule</option>
+                </select>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  Open: mark anytime. Strict: only during business hours.
                 </p>
               </div>
 
-              {/* Alerta Horario Abierto */}
-              {isHorarioAbierto && (
-                <div className="mb-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                  <div className="flex items-start gap-3">
-                    <Clock className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium text-green-900 dark:text-green-100">
-                        {t.schedule.openEnabledTitle}
-                      </p>
-                      <p className="text-xs text-green-700 dark:text-green-300 mt-1">
-                        {t.schedule.openEnabledBody}
-                      </p>
+              {modoHorario === 'Horario estricto' ? (
+                <>
+                  <div className="mb-4 rounded-lg border border-orange-200 bg-orange-50 p-4 dark:border-orange-800 dark:bg-orange-900/20">
+                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">⏱ Entry tolerance</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number"
+                        min="0"
+                        max="60"
+                        value={toleranciaIngreso}
+                        onChange={(event) => setToleranciaIngreso(Number(event.target.value) || 0)}
+                        className="w-24 rounded-lg border border-gray-300 bg-white px-3 py-2 text-center text-sm text-gray-900 focus:border-orange-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                      />
+                      <span className="text-sm text-gray-600 dark:text-gray-400">minutes</span>
                     </div>
+                    <p className="mt-2 text-xs text-orange-700 dark:text-orange-300">
+                      Employees can clock in up to {toleranciaIngreso} minutes late without penalty.
+                    </p>
                   </div>
-                </div>
-              )}
 
-              {/* Tolerancia en ingreso - Solo para Horario estricto */}
-              {modoHorario === 'strict' && (
-                <div className="mb-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    ⏱️ {t.schedule.tolerance}
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="number"
-                      value={toleranciaIngreso}
-                      onChange={(e) => setToleranciaIngreso(parseInt(e.target.value) || 0)}
-                      min="0"
-                      max="60"
-                      className="w-24 px-3 py-2 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-center focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    />
-                    <span className="text-sm text-gray-600 dark:text-gray-400">{t.schedule.minutes}</span>
-                  </div>
-                  <p className="text-xs text-orange-700 dark:text-orange-300 mt-2">
-                    {t.schedule.toleranceHelp(toleranciaIngreso)}
-                  </p>
-                </div>
-              )}
-
-              {/* Opciones adicionales para Horario estricto */}
-              {modoHorario === 'strict' && (
-                <div className="mb-4 space-y-3">
-                  {/* Checkbox: No permitir después de tolerancia */}
-                  <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                  <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/20">
                     <div className="flex items-start gap-3">
                       <Checkbox
                         checked={noPermitirDespuesTolerancia}
                         onCheckedChange={(checked) => setNoPermitirDespuesTolerancia(checked === true)}
-                        id="no-permitir-tolerancia"
+                        id="grace-period-block"
                       />
-                      <div className="flex-1">
-                        <label 
-                          htmlFor="no-permitir-tolerancia"
-                          className="text-sm font-medium text-gray-900 dark:text-gray-100 cursor-pointer"
-                        >
-                          {t.schedule.blockAfterToleranceTitle}
+                      <div>
+                        <label htmlFor="grace-period-block" className="cursor-pointer text-sm font-medium text-gray-900 dark:text-gray-100">
+                          Do not allow registration after the grace period has expired
                         </label>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                          {t.schedule.blockAfterToleranceBody}
+                        <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                          The record will be blocked if the configured tolerance time expires.
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Checkbox: No permitir fuera de ubicación */}
-                  <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                  <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/20">
                     <div className="flex items-start gap-3">
                       <Checkbox
                         checked={noPermitirFueraUbicacion}
                         onCheckedChange={(checked) => setNoPermitirFueraUbicacion(checked === true)}
-                        id="no-permitir-ubicacion"
+                        id="location-restriction"
                       />
                       <div className="flex-1">
-                        <label 
-                          htmlFor="no-permitir-ubicacion"
-                          className="text-sm font-medium text-gray-900 dark:text-gray-100 cursor-pointer"
-                        >
-                          {t.schedule.blockOutsideLocationTitle}
+                        <label htmlFor="location-restriction" className="cursor-pointer text-sm font-medium text-gray-900 dark:text-gray-100">
+                          Do not allow registration outside of the selected location
                         </label>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                          {t.schedule.blockOutsideLocationBody}
+                        <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                          Registration will only be possible from the configured location.
                         </p>
-                        
-                        {/* Selector de ubicación */}
-                        {noPermitirFueraUbicacion && (
+                        {noPermitirFueraUbicacion ? (
                           <div className="mt-3">
-                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                              <MapPin className="inline h-3 w-3 mr-1" />
-                              {t.schedule.allowedLocation}
+                            <label className="mb-2 block text-xs font-medium text-gray-700 dark:text-gray-300">
+                              <MapPin className="mr-1 inline h-3 w-3" />
+                              Allowed location
                             </label>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button 
-                                  variant="outline" 
-                                  className="w-full justify-between bg-white dark:bg-gray-800 text-sm h-9"
-                                >
-                                  {t.schedule.availableLocations[ubicacionSeleccionada]}
-                                  <ChevronDown className="h-4 w-4 opacity-50" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent className="w-full">
-                                {ubicacionesDisponibles.map((ubicacion) => (
-                                  <DropdownMenuItem 
-                                    key={ubicacion} 
-                                    onClick={() => setUbicacionSeleccionada(ubicacion)}
-                                  >
-                                    {t.schedule.availableLocations[ubicacion]}
-                                  </DropdownMenuItem>
-                                ))}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            <select
+                              value={ubicacionSeleccionada}
+                              onChange={(event) => setUbicacionSeleccionada(event.target.value)}
+                              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                            >
+                              <option value="">Select location</option>
+                              {locations.filter((location) => location.status !== 'inactive').map((location) => (
+                                <option key={location.id} value={location.id}>{location.name}</option>
+                              ))}
+                            </select>
                           </div>
-                        )}
+                        ) : null}
                       </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
+                  <div className="flex items-start gap-3">
+                    <Clock className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-600 dark:text-green-400" />
+                    <div>
+                      <p className="text-sm font-medium text-green-900 dark:text-green-100">Open schedule enabled</p>
+                      <p className="mt-1 text-xs text-green-700 dark:text-green-300">
+                        Collaborators will be able to clock in at any time. Specific entry and exit windows are optional.
+                      </p>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Tabla de horarios */}
-              <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-gray-50 dark:bg-gray-700">
                       <tr>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                          {t.schedule.columns.day}
-                        </th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                          {t.schedule.columns.entry}
-                        </th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                          {t.schedule.columns.exit}
-                        </th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                          {t.schedule.columns.meal}
-                        </th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                          {t.schedule.columns.break}
-                        </th>
+                        <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Day</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Entry</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Exit</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Meal (min)</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Rest</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
+                    <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
                       {horarios.map((horario, index) => (
-                        <tr key={horario.dia}>
+                        <tr key={horario.dayOfWeek}>
                           <td className="px-3 py-3 text-sm font-medium text-gray-900 dark:text-white">
-                            {t.schedule.days[horario.dia]}
-                          </td>
-                          <td className="px-3 py-3">
                             <div className="flex items-center gap-2">
-                              <Clock className="h-4 w-4 text-gray-400" />
-                              <input
-                                type="time"
-                                value={horario.entrada === '--:--' ? '' : horario.entrada}
-                                onChange={(e) => updateHorario(index, 'entrada', e.target.value || '--:--')}
-                                className={`w-24 px-2 py-1 text-sm border rounded focus:ring-2 focus:border-transparent ${
-                                  isHorarioAbierto 
-                                    ? 'bg-gray-100 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed' 
-                                    : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-blue-500'
-                                }`}
-                                disabled={isHorarioAbierto}
+                              <Checkbox
+                                checked={horario.isRestDay}
+                                onCheckedChange={(checked) => updateHorario(index, 'isRestDay', checked === true)}
                               />
-                            </div>
-                          </td>
-                          <td className="px-3 py-3">
-                            <div className="flex items-center gap-2">
-                              <Clock className="h-4 w-4 text-gray-400" />
-                              <input
-                                type="time"
-                                value={horario.salida === '--:--' ? '' : horario.salida}
-                                onChange={(e) => updateHorario(index, 'salida', e.target.value || '--:--')}
-                                className={`w-24 px-2 py-1 text-sm border rounded focus:ring-2 focus:border-transparent ${
-                                  isHorarioAbierto 
-                                    ? 'bg-gray-100 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed' 
-                                    : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-blue-500'
-                                }`}
-                                disabled={isHorarioAbierto}
-                              />
+                              {horario.dia}
                             </div>
                           </td>
                           <td className="px-3 py-3">
                             <input
-                              type="number"
-                              value={horario.comida}
-                              onChange={(e) => updateHorario(index, 'comida', parseInt(e.target.value) || 0)}
-                              min="0"
-                              className={`w-16 px-2 py-1 text-sm border rounded text-center focus:ring-2 focus:border-transparent ${
-                                isHorarioAbierto 
-                                  ? 'bg-gray-100 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed' 
-                                  : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-blue-500'
-                              }`}
-                              disabled={isHorarioAbierto}
+                              type="time"
+                              value={horario.entrada}
+                              onChange={(event) => updateHorario(index, 'entrada', event.target.value)}
+                              disabled={isHorarioAbierto || horario.isRestDay}
+                              className="w-24 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            />
+                          </td>
+                          <td className="px-3 py-3">
+                            <input
+                              type="time"
+                              value={horario.salida}
+                              onChange={(event) => updateHorario(index, 'salida', event.target.value)}
+                              disabled={isHorarioAbierto || horario.isRestDay}
+                              className="w-24 rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                             />
                           </td>
                           <td className="px-3 py-3">
                             <input
                               type="number"
-                              value={horario.descanso}
-                              onChange={(e) => updateHorario(index, 'descanso', parseInt(e.target.value) || 0)}
                               min="0"
-                              className={`w-16 px-2 py-1 text-sm border rounded text-center focus:ring-2 focus:border-transparent ${
-                                isHorarioAbierto 
-                                  ? 'bg-gray-100 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed' 
-                                  : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:ring-blue-500'
-                              }`}
-                              disabled={isHorarioAbierto}
+                              value={horario.comida}
+                              onChange={(event) => updateHorario(index, 'comida', Number(event.target.value) || 0)}
+                              className="w-16 rounded border border-gray-300 bg-white px-2 py-1 text-center text-sm text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            />
+                          </td>
+                          <td className="px-3 py-3">
+                            <input
+                              type="number"
+                              min="0"
+                              value={horario.descanso}
+                              onChange={(event) => updateHorario(index, 'descanso', Number(event.target.value) || 0)}
+                              className="w-16 rounded border border-gray-300 bg-white px-2 py-1 text-center text-sm text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                             />
                           </td>
                         </tr>
@@ -578,20 +639,16 @@ export function HorariosModal({ isOpen, onClose, colaboradores }: HorariosModalP
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-3 bg-gray-50 dark:bg-gray-700/50">
-          <Button 
-            variant="outline" 
-            onClick={onClose}
-          >
-            {t.buttons.cancel}
+        <div className="flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-700/50">
+          <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
+            Cancel
           </Button>
-          <Button 
-            onClick={aplicarHorarios}
-            className="bg-[#143675] hover:bg-[#0f2855] text-white gap-2"
-            disabled={selectedColaboradores.length === 0}
+          <Button
+            onClick={() => void aplicarHorarios()}
+            className="gap-2 bg-[#143675] text-white hover:bg-[#0f2855]"
+            disabled={selectedEmployeeIds.length === 0 || isSubmitting}
           >
-            📋 {t.buttons.apply}
+            Apply to selected positions
           </Button>
         </div>
       </div>

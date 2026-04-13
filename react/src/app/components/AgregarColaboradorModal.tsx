@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   X,
-  AlertCircle,
   Phone,
   Briefcase,
   FileText,
@@ -21,7 +20,7 @@ interface AgregarColaboradorModalProps {
   businessOptions?: Array<{ value: string; label: string }>;
 }
 
-interface ColaboradorData {
+export interface ColaboradorData {
   nombre: string;
   apellidos: string;
   correo: string;
@@ -59,6 +58,22 @@ interface ColaboradorData {
   accesos: string[];
 }
 
+type ValidatedField =
+  | 'nombre'
+  | 'apellidos'
+  | 'correo'
+  | 'telefonoMovil'
+  | 'telefonoAlterno'
+  | 'departamento'
+  | 'puesto'
+  | 'unidadNegocio'
+  | 'negocio'
+  | 'horasJornada'
+  | 'salario'
+  | 'sueldoPorHora'
+  | 'fechaInicioContrato'
+  | 'fechaFinContrato';
+
 const initialFormState: ColaboradorData = {
   nombre: '',
   apellidos: '',
@@ -75,8 +90,8 @@ const initialFormState: ColaboradorData = {
   telefonoEmergencia: '',
   departamento: '',
   puesto: '',
-  unidadNegocio: 'all-units',
-  negocio: 'all-businesses',
+  unidadNegocio: '',
+  negocio: '',
   paisRegistro: 'Mexico',
   provinciaEstado: 'Mexico City',
   fechaIngreso: '',
@@ -84,7 +99,7 @@ const initialFormState: ColaboradorData = {
   horasJornada: 8,
   salario: '',
   sueldoPorHora: '',
-  periodoPago: '',
+  periodoPago: 'weekly',
   tipoContrato: 'permanent',
   fechaInicioContrato: '',
   fechaFinContrato: '',
@@ -102,7 +117,7 @@ const modalTranslations = {
     titleCreate: 'Add employee',
     titleEdit: 'Edit employee',
     infoBanner:
-      'Only Name, Last name, and Email are required. You can complete the rest of the information later from Edit employee.',
+      'First name, last name, and email are required. This first release persists the core HR profile, assignment, salary, and contract data.',
     stepOf: (current: number, total: number) => `Step ${current} of ${total}`,
     buttons: {
       cancel: 'Cancel',
@@ -167,6 +182,18 @@ const modalTranslations = {
       rol: 'Employee role',
       permisos: 'Modules and permissions',
       permisosHint: 'Permissions are assigned automatically based on the selected role.',
+    },
+    validation: {
+      required: 'This field is required.',
+      invalidEmail: 'Enter a valid email address.',
+      invalidPhone: 'Enter a valid phone number with 7 to 15 digits.',
+      invalidNumber: 'Enter a valid numeric value.',
+      positiveHours: 'Workday hours must be between 1 and 24.',
+      positiveAmount: 'Enter an amount greater than zero.',
+      hourlyRateRequired: 'Hourly wage is required when salary type is hourly.',
+      contractStartRequired: 'Contract start date is required for temporary contracts.',
+      contractEndRequired: 'Contract end date is required for temporary contracts.',
+      contractEndAfterStart: 'Contract end date must be the same as or after the start date.',
     },
     placeholders: {
       nombre: 'e.g. John',
@@ -245,7 +272,7 @@ const modalTranslations = {
     titleCreate: 'Agregar colaborador',
     titleEdit: 'Editar colaborador',
     infoBanner:
-      'Solo Nombre, Apellidos y Correo son obligatorios. Puedes completar el resto de la información más tarde desde Editar colaborador.',
+      'Nombre, apellidos y correo son obligatorios. Esta primera entrega guarda el perfil base de RH, la asignación, el salario y el contrato.',
     stepOf: (current: number, total: number) => `Paso ${current} de ${total}`,
     buttons: {
       cancel: 'Cancelar',
@@ -310,6 +337,18 @@ const modalTranslations = {
       rol: 'Rol del colaborador',
       permisos: 'Módulos y permisos',
       permisosHint: 'Los permisos se asignarán automáticamente según el rol seleccionado.',
+    },
+    validation: {
+      required: 'Este campo es obligatorio.',
+      invalidEmail: 'Ingresa un correo electrónico válido.',
+      invalidPhone: 'Ingresa un teléfono válido con 7 a 15 dígitos.',
+      invalidNumber: 'Ingresa un valor numérico válido.',
+      positiveHours: 'Las horas de jornada deben estar entre 1 y 24.',
+      positiveAmount: 'Ingresa un monto mayor a cero.',
+      hourlyRateRequired: 'El sueldo por hora es obligatorio cuando el salario es por hora.',
+      contractStartRequired: 'La fecha de inicio es obligatoria para contratos temporales.',
+      contractEndRequired: 'La fecha de fin es obligatoria para contratos temporales.',
+      contractEndAfterStart: 'La fecha de fin debe ser igual o posterior a la de inicio.',
     },
     placeholders: {
       nombre: 'Ej. Juan',
@@ -401,6 +440,8 @@ function InputField({
   placeholder,
   type = 'text',
   required = false,
+  error,
+  helperText,
 }: {
   label: string;
   value: string;
@@ -408,6 +449,8 @@ function InputField({
   placeholder?: string;
   type?: string;
   required?: boolean;
+  error?: string;
+  helperText?: string;
 }) {
   return (
     <div>
@@ -419,8 +462,14 @@ function InputField({
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
-        className={requiredFieldClassName}
+        aria-invalid={Boolean(error)}
+        className={`${requiredFieldClassName} ${error ? 'border-red-400 focus:ring-red-500 dark:border-red-500' : ''}`}
       />
+      {error ? (
+        <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>
+      ) : helperText ? (
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{helperText}</p>
+      ) : null}
     </div>
   );
 }
@@ -431,20 +480,29 @@ function SelectField({
   onChange,
   options,
   placeholder,
+  required = false,
+  error,
+  helperText,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: ReadonlyArray<{ value: string; label: string }>;
   placeholder?: string;
+  required?: boolean;
+  error?: string;
+  helperText?: string;
 }) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+      <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className={requiredFieldClassName}
+        aria-invalid={Boolean(error)}
+        className={`${requiredFieldClassName} ${error ? 'border-red-400 focus:ring-red-500 dark:border-red-500' : ''}`}
       >
         {placeholder ? <option value="">{placeholder}</option> : null}
         {options.map((option) => (
@@ -453,6 +511,11 @@ function SelectField({
           </option>
         ))}
       </select>
+      {error ? (
+        <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>
+      ) : helperText ? (
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{helperText}</p>
+      ) : null}
     </div>
   );
 }
@@ -502,6 +565,7 @@ export function AgregarColaboradorModal({
     : modalTranslations.en;
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<ColaboradorData>(initialFormState);
+  const [touchedFields, setTouchedFields] = useState<Partial<Record<ValidatedField, boolean>>>({});
 
   useEffect(() => {
     if (!isOpen) {
@@ -510,10 +574,10 @@ export function AgregarColaboradorModal({
 
     setCurrentStep(1);
     setFormData(colaboradorData ? { ...initialFormState, ...colaboradorData } : initialFormState);
+    setTouchedFields({});
   }, [colaboradorData, isOpen]);
 
-  const steps = copy.steps;
-  const isStepOneValid = Boolean(formData.nombre && formData.apellidos && formData.correo);
+  const steps = copy.steps.filter((step) => step.id <= 3);
   const departmentOptions = useMemo(
     () => copy.options.departamentos.map((label) => ({ value: label, label })),
     [copy.options.departamentos],
@@ -522,9 +586,13 @@ export function AgregarColaboradorModal({
     () => copy.options.puestos.map((label) => ({ value: label, label })),
     [copy.options.puestos],
   );
-  const countryOptions = useMemo(
-    () => copy.options.paises.map((label) => ({ value: label, label })),
-    [copy.options.paises],
+  const modalUnitOptions = useMemo(
+    () => (unitOptions ?? copy.options.unidades).filter((option) => option.value !== 'all' && option.value !== 'all-units'),
+    [copy.options.unidades, unitOptions],
+  );
+  const modalBusinessOptions = useMemo(
+    () => (businessOptions ?? copy.options.negocios).filter((option) => option.value !== 'all' && option.value !== 'all-businesses'),
+    [businessOptions, copy.options.negocios],
   );
 
   const handleInputChange = <T extends keyof ColaboradorData>(field: T, value: ColaboradorData[T]) => {
@@ -532,15 +600,188 @@ export function AgregarColaboradorModal({
       ...previousState,
       [field]: field === 'horasJornada' ? Number(value) || 0 : value,
     }));
+
+    if (field in touchedFields) {
+      setTouchedFields((previous) => ({
+        ...previous,
+        [field as ValidatedField]: true,
+      }));
+    }
   };
 
   const handleClose = () => {
     setCurrentStep(1);
     setFormData(initialFormState);
+    setTouchedFields({});
     onClose();
   };
 
+  const markFieldsTouched = (fields: ValidatedField[]) => {
+    setTouchedFields((previous) => {
+      const next = { ...previous };
+      fields.forEach((field) => {
+        next[field] = true;
+      });
+      return next;
+    });
+  };
+
+  const selectedSalaryType = formData.tipoSalario || 'daily';
+  const selectedContractType = formData.tipoContrato || 'permanent';
+
+  const validationErrors = useMemo(() => {
+    const errors: Partial<Record<ValidatedField, string>> = {};
+    const normalizedEmail = formData.correo.trim();
+    const normalizedMobile = formData.telefonoMovil.trim();
+    const normalizedAlternate = formData.telefonoAlterno.trim();
+
+    if (!formData.nombre.trim()) {
+      errors.nombre = copy.validation.required;
+    }
+
+    if (!formData.apellidos.trim()) {
+      errors.apellidos = copy.validation.required;
+    }
+
+    if (!normalizedEmail) {
+      errors.correo = copy.validation.required;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      errors.correo = copy.validation.invalidEmail;
+    }
+
+    const phoneIsValid = (value: string) => {
+      if (!value) {
+        return true;
+      }
+
+      if (!/^[\d\s()+-]+$/.test(value)) {
+        return false;
+      }
+
+      const digits = value.replace(/\D/g, '');
+      return digits.length >= 7 && digits.length <= 15;
+    };
+
+    if (!phoneIsValid(normalizedMobile)) {
+      errors.telefonoMovil = copy.validation.invalidPhone;
+    }
+
+    if (!phoneIsValid(normalizedAlternate)) {
+      errors.telefonoAlterno = copy.validation.invalidPhone;
+    }
+
+    if (!formData.departamento.trim()) {
+      errors.departamento = copy.validation.required;
+    }
+
+    if (!formData.puesto.trim()) {
+      errors.puesto = copy.validation.required;
+    }
+
+    if (!formData.unidadNegocio.trim()) {
+      errors.unidadNegocio = copy.validation.required;
+    }
+
+    if (!formData.negocio.trim()) {
+      errors.negocio = copy.validation.required;
+    }
+
+    if (selectedSalaryType === 'daily') {
+      if (!formData.salario.trim()) {
+        errors.salario = copy.validation.required;
+      }
+
+      if (Number.isNaN(Number(formData.horasJornada)) || formData.horasJornada < 1 || formData.horasJornada > 24) {
+        errors.horasJornada = copy.validation.positiveHours;
+      }
+
+      if (formData.salario.trim()) {
+        const parsedSalary = Number(formData.salario);
+        if (Number.isNaN(parsedSalary)) {
+          errors.salario = copy.validation.invalidNumber;
+        } else if (parsedSalary <= 0) {
+          errors.salario = copy.validation.positiveAmount;
+        }
+      }
+    }
+
+    if (selectedSalaryType === 'hourly') {
+      if (!formData.sueldoPorHora.trim()) {
+        errors.sueldoPorHora = copy.validation.hourlyRateRequired;
+      } else {
+        const parsedHourlyRate = Number(formData.sueldoPorHora);
+        if (Number.isNaN(parsedHourlyRate)) {
+          errors.sueldoPorHora = copy.validation.invalidNumber;
+        } else if (parsedHourlyRate <= 0) {
+          errors.sueldoPorHora = copy.validation.positiveAmount;
+        }
+      }
+    }
+
+    if (selectedContractType === 'temporary') {
+      if (!formData.fechaInicioContrato) {
+        errors.fechaInicioContrato = copy.validation.contractStartRequired;
+      }
+
+      if (!formData.fechaFinContrato) {
+        errors.fechaFinContrato = copy.validation.contractEndRequired;
+      } else if (
+        formData.fechaInicioContrato &&
+        new Date(formData.fechaFinContrato).getTime() < new Date(formData.fechaInicioContrato).getTime()
+      ) {
+        errors.fechaFinContrato = copy.validation.contractEndAfterStart;
+      }
+    }
+
+    return errors;
+  }, [
+    copy.validation.contractEndAfterStart,
+    copy.validation.contractEndRequired,
+    copy.validation.contractStartRequired,
+    copy.validation.hourlyRateRequired,
+    copy.validation.invalidEmail,
+    copy.validation.invalidNumber,
+    copy.validation.invalidPhone,
+    copy.validation.positiveAmount,
+    copy.validation.positiveHours,
+    copy.validation.required,
+    formData.apellidos,
+    formData.correo,
+    formData.fechaFinContrato,
+    formData.fechaInicioContrato,
+    formData.horasJornada,
+    formData.nombre,
+    formData.salario,
+    formData.sueldoPorHora,
+    formData.telefonoAlterno,
+    formData.telefonoMovil,
+    selectedContractType,
+    selectedSalaryType,
+  ]);
+
+  const contractValidationFields: ValidatedField[] =
+    selectedContractType === 'temporary' ? ['fechaInicioContrato', 'fechaFinContrato'] : [];
+
+  const compensationValidationFields: ValidatedField[] =
+    selectedSalaryType === 'hourly'
+      ? ['sueldoPorHora']
+      : ['horasJornada', 'salario'];
+
+  const stepFields: Record<number, ValidatedField[]> = {
+    1: ['nombre', 'apellidos', 'correo'],
+    2: ['telefonoMovil', 'telefonoAlterno'],
+    3: ['departamento', 'puesto', 'unidadNegocio', 'negocio', ...compensationValidationFields, ...contractValidationFields],
+  };
+
+  const currentStepFields = stepFields[currentStep] ?? [];
+  const isCurrentStepValid = currentStepFields.every((field) => !validationErrors[field]);
+
   const handleNext = async () => {
+    if (!isCurrentStepValid) {
+      markFieldsTouched(currentStepFields);
+      return;
+    }
+
     if (currentStep < steps.length) {
       setCurrentStep((previousStep) => previousStep + 1);
       return;
@@ -557,9 +798,6 @@ export function AgregarColaboradorModal({
   if (!isOpen) {
     return null;
   }
-
-  const selectedSalaryType = formData.tipoSalario || 'daily';
-  const selectedContractType = formData.tipoContrato || 'permanent';
   const documentsMap = {
     actaNacimiento: copy.documents.actaNacimiento,
     identificacion: copy.documents.identificacion,
@@ -594,7 +832,14 @@ export function AgregarColaboradorModal({
               return (
                 <button
                   key={step.id}
-                  onClick={() => setCurrentStep(step.id)}
+                  onClick={() => {
+                    if (step.id > currentStep && !isCurrentStepValid) {
+                      markFieldsTouched(currentStepFields);
+                      return;
+                    }
+
+                    setCurrentStep(step.id);
+                  }}
                   className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
                     isActive
                       ? 'border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
@@ -641,6 +886,7 @@ export function AgregarColaboradorModal({
                     onChange={(value) => handleInputChange('nombre', value)}
                     placeholder={copy.placeholders.nombre}
                     required
+                    error={touchedFields.nombre ? validationErrors.nombre : undefined}
                   />
                   <InputField
                     label={copy.fields.apellidos}
@@ -648,6 +894,7 @@ export function AgregarColaboradorModal({
                     onChange={(value) => handleInputChange('apellidos', value)}
                     placeholder={copy.placeholders.apellidos}
                     required
+                    error={touchedFields.apellidos ? validationErrors.apellidos : undefined}
                   />
                   <div>
                     <InputField
@@ -657,45 +904,10 @@ export function AgregarColaboradorModal({
                       placeholder={copy.placeholders.correo}
                       type="email"
                       required
-                    />
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{copy.fields.correoHint}</p>
-                  </div>
-                  <InputField
-                    label={copy.fields.fechaNacimiento}
-                    value={formData.fechaNacimiento}
-                    onChange={(value) => handleInputChange('fechaNacimiento', value)}
-                    type="date"
-                  />
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {copy.fields.direccion}
-                    </label>
-                    <textarea
-                      value={formData.direccion}
-                      onChange={(event) => handleInputChange('direccion', event.target.value)}
-                      placeholder={copy.placeholders.direccion}
-                      rows={3}
-                      className={`${requiredFieldClassName} resize-none`}
+                      error={touchedFields.correo ? validationErrors.correo : undefined}
+                      helperText={copy.fields.correoHint}
                     />
                   </div>
-                  <InputField
-                    label={copy.fields.curp}
-                    value={formData.curp}
-                    onChange={(value) => handleInputChange('curp', value)}
-                    placeholder={copy.placeholders.curp}
-                  />
-                  <InputField
-                    label={copy.fields.rfc}
-                    value={formData.rfc}
-                    onChange={(value) => handleInputChange('rfc', value)}
-                    placeholder={copy.placeholders.rfc}
-                  />
-                  <InputField
-                    label={copy.fields.nss}
-                    value={formData.nss}
-                    onChange={(value) => handleInputChange('nss', value)}
-                    placeholder={copy.placeholders.nss}
-                  />
                 </div>
               </div>
             </div>
@@ -715,6 +927,7 @@ export function AgregarColaboradorModal({
                     onChange={(value) => handleInputChange('telefonoMovil', value)}
                     placeholder={copy.placeholders.telefono}
                     type="tel"
+                    error={touchedFields.telefonoMovil ? validationErrors.telefonoMovil : undefined}
                   />
                   <div>
                     <InputField
@@ -723,41 +936,13 @@ export function AgregarColaboradorModal({
                       onChange={(value) => handleInputChange('telefonoAlterno', value)}
                       placeholder={copy.placeholders.telefono}
                       type="tel"
+                      error={touchedFields.telefonoAlterno ? validationErrors.telefonoAlterno : undefined}
+                      helperText={copy.fields.telefonoAlternoHint}
                     />
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {copy.fields.telefonoAlternoHint}
-                    </p>
                   </div>
                 </div>
               </div>
 
-              <div>
-                <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-white">
-                  <AlertCircle className="h-4 w-4" />
-                  {copy.sections.emergencyContact}
-                </h3>
-                <div className="space-y-4">
-                  <InputField
-                    label={copy.fields.nombreContactoEmergencia}
-                    value={formData.nombreContactoEmergencia}
-                    onChange={(value) => handleInputChange('nombreContactoEmergencia', value)}
-                    placeholder={copy.placeholders.nombreContacto}
-                  />
-                  <InputField
-                    label={copy.fields.relacionContacto}
-                    value={formData.relacionContacto}
-                    onChange={(value) => handleInputChange('relacionContacto', value)}
-                    placeholder={copy.placeholders.relacion}
-                  />
-                  <InputField
-                    label={copy.fields.telefonoEmergencia}
-                    value={formData.telefonoEmergencia}
-                    onChange={(value) => handleInputChange('telefonoEmergencia', value)}
-                    placeholder={copy.placeholders.telefono}
-                    type="tel"
-                  />
-                </div>
-              </div>
             </div>
           ) : null}
 
@@ -770,79 +955,49 @@ export function AgregarColaboradorModal({
                 </h3>
                 <div className="space-y-4">
                   <div>
-                    <div className="mb-1 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                      <span>{copy.fields.departamento}</span>
-                      <button className="flex items-center gap-1 text-xs text-blue-600 hover:underline dark:text-blue-400">
-                        <AlertCircle className="h-3 w-3" />
-                        {copy.buttons.addInline}
-                      </button>
-                    </div>
                     <SelectField
-                      label=""
+                      label={copy.fields.departamento}
                       value={formData.departamento}
                       onChange={(value) => handleInputChange('departamento', value)}
                       options={departmentOptions}
                       placeholder={copy.placeholders.select}
+                      required
+                      error={touchedFields.departamento ? validationErrors.departamento : undefined}
                     />
                   </div>
                   <div>
-                    <div className="mb-1 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                      <span>{copy.fields.puesto}</span>
-                      <button className="flex items-center gap-1 text-xs text-blue-600 hover:underline dark:text-blue-400">
-                        <AlertCircle className="h-3 w-3" />
-                        {copy.buttons.addInline}
-                      </button>
-                    </div>
                     <SelectField
-                      label=""
+                      label={copy.fields.puesto}
                       value={formData.puesto}
                       onChange={(value) => handleInputChange('puesto', value)}
                       options={positionOptions}
                       placeholder={copy.placeholders.select}
+                      required
+                      error={touchedFields.puesto ? validationErrors.puesto : undefined}
                     />
                   </div>
                   <div>
-                    <div className="mb-1 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                      <span>{copy.fields.unidadNegocio}</span>
-                      <button className="flex items-center gap-1 text-xs text-blue-600 hover:underline dark:text-blue-400">
-                        <AlertCircle className="h-3 w-3" />
-                        {copy.buttons.createInline}
-                      </button>
-                    </div>
                     <SelectField
-                      label=""
+                      label={copy.fields.unidadNegocio}
                       value={formData.unidadNegocio}
                       onChange={(value) => handleInputChange('unidadNegocio', value)}
-                      options={unitOptions ?? copy.options.unidades}
+                      options={modalUnitOptions}
+                      placeholder={copy.placeholders.select}
+                      required
+                      error={touchedFields.unidadNegocio ? validationErrors.unidadNegocio : undefined}
                     />
                   </div>
                   <div>
-                    <div className="mb-1 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                      <span>{copy.fields.negocio}</span>
-                      <button className="flex items-center gap-1 text-xs text-blue-600 hover:underline dark:text-blue-400">
-                        <AlertCircle className="h-3 w-3" />
-                        {copy.buttons.createInline}
-                      </button>
-                    </div>
                     <SelectField
-                      label=""
+                      label={copy.fields.negocio}
                       value={formData.negocio}
                       onChange={(value) => handleInputChange('negocio', value)}
-                      options={businessOptions ?? copy.options.negocios}
+                      options={modalBusinessOptions}
+                      placeholder={copy.placeholders.select}
+                      required
+                      error={touchedFields.negocio ? validationErrors.negocio : undefined}
                     />
                   </div>
-                  <SelectField
-                    label={copy.fields.paisRegistro}
-                    value={formData.paisRegistro}
-                    onChange={(value) => handleInputChange('paisRegistro', value)}
-                    options={countryOptions}
-                  />
-                  <InputField
-                    label={copy.fields.provinciaEstado}
-                    value={formData.provinciaEstado}
-                    onChange={(value) => handleInputChange('provinciaEstado', value)}
-                    placeholder={copy.placeholders.provinciaEstado}
-                  />
                   <InputField
                     label={copy.fields.fechaIngreso}
                     value={formData.fechaIngreso}
@@ -873,6 +1028,7 @@ export function AgregarColaboradorModal({
                         onChange={(value) => handleInputChange('horasJornada', Number(value))}
                         placeholder={copy.placeholders.horasJornada}
                         type="number"
+                        error={touchedFields.horasJornada ? validationErrors.horasJornada : undefined}
                       />
                       <InputField
                         label={copy.fields.salario}
@@ -880,6 +1036,7 @@ export function AgregarColaboradorModal({
                         onChange={(value) => handleInputChange('salario', value)}
                         placeholder={copy.placeholders.salario}
                         type="number"
+                        error={touchedFields.salario ? validationErrors.salario : undefined}
                       />
                     </>
                   ) : (
@@ -889,6 +1046,7 @@ export function AgregarColaboradorModal({
                       onChange={(value) => handleInputChange('sueldoPorHora', value)}
                       placeholder={copy.placeholders.sueldoPorHora}
                       type="number"
+                      error={touchedFields.sueldoPorHora ? validationErrors.sueldoPorHora : undefined}
                     />
                   )}
 
@@ -926,12 +1084,14 @@ export function AgregarColaboradorModal({
                         value={formData.fechaInicioContrato}
                         onChange={(value) => handleInputChange('fechaInicioContrato', value)}
                         type="date"
+                        error={touchedFields.fechaInicioContrato ? validationErrors.fechaInicioContrato : undefined}
                       />
                       <InputField
                         label={copy.fields.fechaFinContrato}
                         value={formData.fechaFinContrato}
                         onChange={(value) => handleInputChange('fechaFinContrato', value)}
                         type="date"
+                        error={touchedFields.fechaFinContrato ? validationErrors.fechaFinContrato : undefined}
                       />
                     </>
                   ) : null}
@@ -1052,7 +1212,6 @@ export function AgregarColaboradorModal({
             </Button>
             <Button
               onClick={handleNext}
-              disabled={currentStep === 1 && !isStepOneValid}
               className="bg-blue-600 text-white hover:bg-blue-700"
             >
               {currentStep === steps.length ? copy.buttons.save : copy.buttons.next}

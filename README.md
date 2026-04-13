@@ -27,6 +27,23 @@ Default URL:
 
 - `http://127.0.0.1:8082`
 
+## Clean DB Run
+
+Reset the local MySQL database that this backend uses before starting Spring:
+
+```bash
+cd ~/Desktop/indice_saas_spring
+./scripts/reset-local-db.sh
+./mvnw spring-boot:run
+```
+
+The reset script:
+
+- creates `indice-mysql-fresh` on port `3307` if it does not exist
+- starts the container if it is stopped
+- drops and recreates `indice_db`
+- leaves Flyway to rebuild the schema on the next backend startup from `B1`, `V2`, `V3`, and `V4`
+
 ## Frontend setup
 
 Point the React frontend to this backend:
@@ -97,7 +114,7 @@ Flyway is now enabled in transitional baseline mode for the existing shared sche
 
 - first startup against a non-empty legacy schema creates `flyway_schema_history`
 - the current schema is tagged at baseline version `0`
-- `B1`, `V2`, and `V3` now cover the current Spring-owned subset of the schema
+- `B1`, `V2`, `V3`, and `V4` now cover the current Spring-owned subset of the schema
 
 ## Docs
 

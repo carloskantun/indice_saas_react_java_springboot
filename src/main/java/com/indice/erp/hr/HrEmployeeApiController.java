@@ -82,17 +82,27 @@ public class HrEmployeeApiController {
     }
 
     @PostMapping("/{employeeId}/terminate")
-    public ResponseEntity<?> terminate(HttpSession session, @PathVariable long employeeId) {
+    public ResponseEntity<?> terminate(
+        HttpSession session,
+        @PathVariable long employeeId,
+        @RequestBody(required = false) Map<String, Object> payload
+    ) {
         var user = sessionAuthService.currentUser(session);
         if (user.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Unauthorized"));
         }
 
         try {
-            hrEmployeeService.terminateEmployee(user.get().companyId(), employeeId);
-            return ResponseEntity.ok(Map.of("success", true));
+            var result = hrEmployeeService.terminateEmployee(
+                user.get().companyId(),
+                employeeId,
+                payload == null ? Map.of() : payload
+            );
+            return ResponseEntity.ok(result.get("employee"));
         } catch (NoSuchElementException ex) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", ex.getMessage()));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
         }
     }
 

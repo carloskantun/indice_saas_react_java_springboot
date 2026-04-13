@@ -1,27 +1,66 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  Search,
-  Plus,
+  Calendar,
   Columns3,
+  Edit,
   Mail,
   Phone,
-  Calendar,
-  Edit,
+  Plus,
+  Search,
   Trash2,
+  Wallet,
 } from 'lucide-react';
-import { useLanguage } from '../../../shared/context';
-import { Button } from '../../../components/ui/button';
 import { AgregarColaboradorModal } from '../../../components/AgregarColaboradorModal';
-import { TerminarContratoModal } from '../../../components/TerminarContratoModal';
+import type { ColaboradorData } from '../../../components/AgregarColaboradorModal';
+import { LoadingBarOverlay, runWithMinimumDuration } from '../../../components/LoadingBarOverlay';
+import { SuccessToast } from '../../../components/SuccessToast';
+import { TerminarContratoModal, type ContractTerminationFormData } from '../../../components/TerminarContratoModal';
 import {
   ColumnasConfigModal,
   type ColumnConfig,
 } from '../../../components/rh/ColumnasConfigModal';
+import { Button } from '../../../components/ui/button';
 import { Checkbox } from '../../../components/ui/checkbox';
-import { RHColaborador, rhColaboradores } from '../mockData';
-import { humanResourcesApi, type BackendEmployee } from '../../../api/humanResources';
+import { Skeleton } from '../../../components/ui/skeleton';
+import { useLanguage } from '../../../shared/context';
 import { dashboardApi } from '../../../api/dashboard';
-import { useHRLanguage } from '../HRLanguage';
+import { humanResourcesApi, type BackendEmployee } from '../../../api/humanResources';
+
+type EmployeeStatus = 'active' | 'inactive' | 'terminated';
+type EmployeePayPeriod = 'weekly' | 'biweekly' | 'monthly';
+
+interface EmployeeViewModel {
+  id: number;
+  code: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  position: string;
+  department: string;
+  unitId: string;
+  unitLabel: string;
+  businessId: string;
+  businessLabel: string;
+  joinDate: string;
+  salary: number;
+  payPeriod: EmployeePayPeriod;
+  salaryType: 'daily' | 'hourly';
+  hourlyRate: number;
+  contractType: 'permanent' | 'temporary';
+  contractStartDate: string;
+  contractEndDate: string;
+  status: EmployeeStatus;
+}
+
+interface EmployeeSummary {
+  total_count: number;
+  active_count: number;
+  inactive_count: number;
+  terminated_count: number;
+  total_payroll_amount_monthly: number;
+}
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -30,210 +69,151 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
-const formatJoinedDate = (dateValue: string, locale: string) => {
-  const parsedDate = new Date(dateValue);
-
-  if (Number.isNaN(parsedDate.getTime())) {
-    return dateValue;
-  }
-
-  return new Intl.DateTimeFormat(locale, {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(parsedDate);
-};
-
-const getStatusClasses = (estado: RHColaborador['estado']) => {
-  const styles = {
-    Activo: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-    Vacaciones: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-    Capacitacion: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-    Inactivo: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-  };
-
-  return styles[estado];
-};
-
-const translatedValueMap = {
-  departments: {
-    Operaciones: { en: 'Operations', es: 'Operaciones' },
-    Operations: { en: 'Operations', es: 'Operaciones' },
-    Administracion: { en: 'Administration', es: 'Administración' },
-    Administración: { en: 'Administration', es: 'Administración' },
-    Administration: { en: 'Administration', es: 'Administración' },
-    Ventas: { en: 'Sales', es: 'Ventas' },
-    Sales: { en: 'Sales', es: 'Ventas' },
-    'Recursos Humanos': { en: 'Human Resources', es: 'Recursos Humanos' },
-    'Human Resources': { en: 'Human Resources', es: 'Recursos Humanos' },
-    Mantenimiento: { en: 'Maintenance', es: 'Mantenimiento' },
-    Maintenance: { en: 'Maintenance', es: 'Mantenimiento' },
-    Lavanderia: { en: 'Laundry', es: 'Lavandería' },
-    Lavandería: { en: 'Laundry', es: 'Lavandería' },
-    Laundry: { en: 'Laundry', es: 'Lavandería' },
-    Limpieza: { en: 'Housekeeping', es: 'Limpieza' },
-    Housekeeping: { en: 'Housekeeping', es: 'Limpieza' },
+const employeePageCopy = {
+  en: {
+    title: 'Employees',
+    subtitle: 'Persisted employee records, assignments, and contracts',
+    addEmployee: 'Add employee',
+    configureColumns: 'Columns',
+    loadingTitle: 'Saving employee changes',
+    loadingDescription: 'We are updating the HR record and refreshing the employee table.',
+    terminateLoadingTitle: 'Terminating employee',
+    terminateLoadingDescription: 'We are recording the termination details and refreshing attendance access.',
+    deleteLoadingTitle: 'Deleting employee',
+    deleteLoadingDescription: 'We are removing the terminated employee record.',
+    successMessages: {
+      created: 'Employee created successfully.',
+      updated: 'Employee updated successfully.',
+      terminated: 'Employee terminated successfully.',
+      deleted: 'Employee deleted successfully.',
+    },
+    summary: {
+      total: 'Total employees',
+      active: 'Active',
+      inactive: 'Inactive',
+      payroll: 'Monthly payroll',
+    },
+    filters: {
+      title: 'Filters',
+      searchLabel: 'Search employee',
+      searchPlaceholder: 'Name, code, or role',
+      unit: 'Unit',
+      business: 'Business',
+      department: 'Department',
+      status: 'Status',
+      all: 'All',
+    },
+    statusLabels: {
+      active: 'Active',
+      inactive: 'Inactive',
+      terminated: 'Terminated',
+    },
+    columns: {
+      selection: 'Selection',
+      employee: 'Employee',
+      email: 'Email',
+      position: 'Position',
+      department: 'Department',
+      unit: 'Unit',
+      business: 'Business',
+      status: 'Status',
+      salary: 'Salary',
+      payPeriod: 'Pay period',
+      joinDate: 'Join date',
+      actions: 'Actions',
+    },
+    table: {
+      emptyState: 'No employees match the current filters.',
+      selectAllVisible: 'Select all visible employees',
+      selectEmployee: (name: string) => `Select ${name}`,
+      deleteConfirm: 'Delete this terminated employee permanently?',
+    },
+    businessFallback: 'Unassigned',
+    unitFallback: 'Unassigned',
+    dateFallback: 'No date',
   },
-  businesses: {
-    'Negocio A': { en: 'Business A', es: 'Negocio A' },
-    'Business A': { en: 'Business A', es: 'Negocio A' },
-    'Negocio B': { en: 'Business B', es: 'Negocio B' },
-    'Business B': { en: 'Business B', es: 'Negocio B' },
-    'Negocio C': { en: 'Business C', es: 'Negocio C' },
-    'Business C': { en: 'Business C', es: 'Negocio C' },
-  },
-  positions: {
-    'Coordinadora de Operaciones': { en: 'Operations Coordinator', es: 'Coordinadora de Operaciones' },
-    'Operations Coordinator': { en: 'Operations Coordinator', es: 'Coordinadora de Operaciones' },
-    'Supervisor de Turno': { en: 'Shift Supervisor', es: 'Supervisor de Turno' },
-    'Shift Supervisor': { en: 'Shift Supervisor', es: 'Supervisor de Turno' },
-    'Analista de RH': { en: 'HR Analyst', es: 'Analista de RH' },
-    'HR Analyst': { en: 'HR Analyst', es: 'Analista de RH' },
-    'Encargada de Limpieza': { en: 'Housekeeping Lead', es: 'Encargada de Limpieza' },
-    'Housekeeping Lead': { en: 'Housekeeping Lead', es: 'Encargada de Limpieza' },
-    'Tecnico de Mantenimiento': { en: 'Maintenance Technician', es: 'Tecnico de Mantenimiento' },
-    'Maintenance Technician': { en: 'Maintenance Technician', es: 'Tecnico de Mantenimiento' },
-    'Auxiliar Administrativo': { en: 'Administrative Assistant', es: 'Auxiliar Administrativo' },
-    'Administrative Assistant': { en: 'Administrative Assistant', es: 'Auxiliar Administrativo' },
-    'Operador de Kiosco': { en: 'Kiosk Operator', es: 'Operador de Kiosco' },
-    'Kiosk Operator': { en: 'Kiosk Operator', es: 'Operador de Kiosco' },
-    'Auxiliar de Lavanderia': { en: 'Laundry Assistant', es: 'Auxiliar de Lavandería' },
-    'Auxiliar de Lavandería': { en: 'Laundry Assistant', es: 'Auxiliar de Lavandería' },
-    'Laundry Assistant': { en: 'Laundry Assistant', es: 'Auxiliar de Lavandería' },
-    Coordinador: { en: 'Coordinator', es: 'Coordinador' },
-    Coordinator: { en: 'Coordinator', es: 'Coordinador' },
-    Camarista: { en: 'Room attendant', es: 'Camarista' },
-    'Room attendant': { en: 'Room attendant', es: 'Camarista' },
-    Mantenimiento: { en: 'Maintenance', es: 'Mantenimiento' },
-    Maintenance: { en: 'Maintenance', es: 'Mantenimiento' },
-    'Sin asignar': { en: 'Unassigned', es: 'Sin asignar' },
-    Unassigned: { en: 'Unassigned', es: 'Sin asignar' },
+  es: {
+    title: 'Colaboradores',
+    subtitle: 'Expedientes persistidos, asignaciones y contratos del personal',
+    addEmployee: 'Agregar colaborador',
+    configureColumns: 'Columnas',
+    loadingTitle: 'Guardando colaborador',
+    loadingDescription: 'Estamos actualizando el expediente y refrescando la tabla.',
+    terminateLoadingTitle: 'Terminando contrato',
+    terminateLoadingDescription: 'Estamos guardando la baja y actualizando el acceso a asistencia.',
+    deleteLoadingTitle: 'Eliminando colaborador',
+    deleteLoadingDescription: 'Estamos removiendo el expediente terminado.',
+    successMessages: {
+      created: 'Colaborador creado correctamente.',
+      updated: 'Colaborador actualizado correctamente.',
+      terminated: 'Contrato terminado correctamente.',
+      deleted: 'Colaborador eliminado correctamente.',
+    },
+    summary: {
+      total: 'Total de colaboradores',
+      active: 'Activos',
+      inactive: 'Inactivos',
+      payroll: 'Nómina mensual',
+    },
+    filters: {
+      title: 'Filtros',
+      searchLabel: 'Buscar colaborador',
+      searchPlaceholder: 'Nombre, código o puesto',
+      unit: 'Unidad',
+      business: 'Negocio',
+      department: 'Departamento',
+      status: 'Estado',
+      all: 'Todos',
+    },
+    statusLabels: {
+      active: 'Activo',
+      inactive: 'Inactivo',
+      terminated: 'Terminado',
+    },
+    columns: {
+      selection: 'Selección',
+      employee: 'Colaborador',
+      email: 'Correo',
+      position: 'Puesto',
+      department: 'Departamento',
+      unit: 'Unidad',
+      business: 'Negocio',
+      status: 'Estado',
+      salary: 'Salario',
+      payPeriod: 'Periodo de pago',
+      joinDate: 'Ingreso',
+      actions: 'Acciones',
+    },
+    table: {
+      emptyState: 'No hay colaboradores con los filtros actuales.',
+      selectAllVisible: 'Seleccionar todos los colaboradores visibles',
+      selectEmployee: (name: string) => `Seleccionar a ${name}`,
+      deleteConfirm: '¿Eliminar permanentemente este colaborador terminado?',
+    },
+    businessFallback: 'Sin asignar',
+    unitFallback: 'Sin asignar',
+    dateFallback: 'Sin fecha',
   },
 } as const;
 
-const translateDisplayValue = (
-  value: string,
-  languageKey: 'en' | 'es',
-  category: keyof typeof translatedValueMap,
-) => translatedValueMap[category][value as keyof (typeof translatedValueMap)[typeof category]]?.[languageKey] ?? value;
-
-const toModalSeed = (colaborador: RHColaborador) => {
-  const [nombre = '', ...apellidos] = colaborador.nombre.split(' ');
-
-  return {
-    nombre,
-    apellidos: apellidos.join(' '),
-    correo: colaborador.correo,
-    fechaNacimiento: '',
-    direccion: '',
-    curp: '',
-    rfc: '',
-    nss: '',
-    telefonoMovil: colaborador.telefono,
-    telefonoAlterno: '',
-    nombreContactoEmergencia: '',
-    relacionContacto: '',
-    telefonoEmergencia: '',
-    departamento: colaborador.departamento,
-    puesto: colaborador.puesto,
-    unidadNegocio: `Unidad ${colaborador.unidad}`,
-    negocio: colaborador.negocio,
-    paisRegistro: 'Mexico',
-    provinciaEstado: 'Nuevo Leon',
-    fechaIngreso: colaborador.fechaIngreso,
-    tipoSalario: 'daily',
-    horasJornada: 8,
-    salario: String(colaborador.salario),
-    sueldoPorHora: '',
-    periodoPago: colaborador.periodoPago,
-    tipoContrato: 'permanent',
-    fechaInicioContrato: colaborador.fechaIngreso,
-    fechaFinContrato: '',
-    actaNacimiento: null,
-    identificacion: null,
-    comprobanteDomicilio: null,
-    cv: null,
-    fotoPerfil: null,
-    rol: 'employee',
-    accesos: [],
-  };
-};
-
-type EmployeePageCopy = ReturnType<typeof useHRLanguage>['employees'];
-
-const createDefaultColumns = (
-  copy: EmployeePageCopy,
-): ColumnConfig[] => [
-  { id: 'colaborador', label: copy.columns.collaborator, visible: true, locked: true },
-  { id: 'apellidos', label: copy.columns.lastName, visible: false },
-  { id: 'correo', label: copy.columns.email, visible: false },
-  { id: 'puesto', label: copy.columns.position, visible: true },
-  { id: 'departamento', label: copy.columns.department, visible: false },
-  { id: 'unidad', label: copy.columns.unit, visible: true },
-  { id: 'negocio', label: copy.columns.business, visible: false },
-  { id: 'estado', label: copy.columns.status, visible: true },
-  { id: 'salario', label: copy.columns.salary, visible: true },
-  { id: 'periodoPago', label: copy.columns.payPeriod, visible: true },
-  { id: 'contacto', label: copy.columns.contact, visible: false },
-  { id: 'ingreso', label: copy.columns.joinDate, visible: false },
-  { id: 'fechaNacimiento', label: copy.columns.birthDate, visible: false },
-  { id: 'direccion', label: copy.columns.address, visible: false },
-  { id: 'curp', label: copy.columns.curp, visible: false },
-  { id: 'rfc', label: copy.columns.rfc, visible: false },
-  { id: 'nss', label: copy.columns.nss, visible: false },
-  { id: 'acciones', label: copy.columns.actions, visible: true, locked: true },
-];
-
-const columnsStorageKey = 'rh-colaboradores-columns-v2';
-const defaultStatusFilter = 'Activo';
+const columnsStorageKey = 'rh-colaboradores-columns-v3';
 const allFilterValue = 'all';
-const filterControlClassName =
-  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 transition-colors focus:border-[#143675] focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white';
-const searchControlClassName = `${filterControlClassName} pl-10 pr-4`;
-const statusOptions: Array<RHColaborador['estado']> = [
-  'Activo',
-  'Vacaciones',
-  'Capacitacion',
-  'Inactivo',
+
+const createDefaultColumns = (copy: typeof employeePageCopy.en | typeof employeePageCopy.es): ColumnConfig[] => [
+  { id: 'employee', label: copy.columns.employee, visible: true, locked: true },
+  { id: 'email', label: copy.columns.email, visible: true },
+  { id: 'position', label: copy.columns.position, visible: true },
+  { id: 'department', label: copy.columns.department, visible: true },
+  { id: 'unit', label: copy.columns.unit, visible: true },
+  { id: 'business', label: copy.columns.business, visible: false },
+  { id: 'status', label: copy.columns.status, visible: true },
+  { id: 'salary', label: copy.columns.salary, visible: true },
+  { id: 'payPeriod', label: copy.columns.payPeriod, visible: true },
+  { id: 'joinDate', label: copy.columns.joinDate, visible: false },
+  { id: 'actions', label: copy.columns.actions, visible: true, locked: true },
 ];
 
-const parseSalary = (salaryValue: string | number) => {
-  const normalizedValue = String(salaryValue).replace(/[^\d.]/g, '');
-  const parsedValue = Number(normalizedValue);
-
-  return Number.isFinite(parsedValue) ? parsedValue : 0;
-};
-
-const mapBackendEmployeeToColaborador = (employee: BackendEmployee): RHColaborador => ({
-  id: employee.id,
-  codigo: employee.employee_number?.trim() || `RH-${String(employee.id).padStart(3, '0')}`,
-  nombre: employee.full_name || 'Sin nombre',
-  puesto: employee.position_title?.trim() || 'Sin asignar',
-  departamento: employee.department?.trim() || 'General',
-  unidad: 0,
-  negocio: 'Sin asignar',
-  correo: employee.email || '',
-  telefono: employee.phone || '',
-  fechaIngreso: employee.hire_date ? String(employee.hire_date) : '',
-  salario: typeof employee.salary === 'number' ? employee.salary : 0,
-  periodoPago: 'weekly',
-  estado: mapBackendEmployeeStatus(employee.status),
-});
-
-const mapBackendEmployeeStatus = (status: string): RHColaborador['estado'] => {
-  const normalized = status.trim().toLowerCase();
-  if (normalized === 'inactive' || normalized === 'inactivo') {
-    return 'Inactivo';
-  }
-  return 'Activo';
-};
-
-const getLastNames = (fullName: string) => {
-  const [, ...lastNames] = fullName.trim().split(/\s+/);
-  return lastNames.join(' ');
-};
-
-const getInitialColumns = (defaultColumns: ColumnConfig[]): ColumnConfig[] => {
+const getInitialColumns = (defaultColumns: ColumnConfig[]) => {
   if (typeof window === 'undefined') {
     return defaultColumns;
   }
@@ -245,11 +225,8 @@ const getInitialColumns = (defaultColumns: ColumnConfig[]): ColumnConfig[] => {
     }
 
     const parsedColumns = JSON.parse(rawColumns) as Array<Partial<ColumnConfig>>;
-    if (!Array.isArray(parsedColumns)) {
-      return defaultColumns;
-    }
-
     const defaultColumnMap = new Map(defaultColumns.map((column) => [column.id, column]));
+
     const restoredColumns = parsedColumns
       .map((column) => {
         if (!column?.id || !defaultColumnMap.has(column.id)) {
@@ -257,7 +234,6 @@ const getInitialColumns = (defaultColumns: ColumnConfig[]): ColumnConfig[] => {
         }
 
         const baseColumn = defaultColumnMap.get(column.id)!;
-
         return {
           ...baseColumn,
           visible: typeof column.visible === 'boolean' ? column.visible : baseColumn.visible,
@@ -275,54 +251,140 @@ const getInitialColumns = (defaultColumns: ColumnConfig[]): ColumnConfig[] => {
   }
 };
 
-export default function Employees() {
-  const hr = useHRLanguage();
+const formatDate = (value: string, locale: string, fallback: string) => {
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(locale, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(parsed);
+};
+
+const getStatusClasses = (status: EmployeeStatus) => {
+  switch (status) {
+    case 'active':
+      return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300';
+    case 'inactive':
+      return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300';
+    case 'terminated':
+      return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+    default:
+      return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+  }
+};
+
+const mapEmployee = (
+  employee: BackendEmployee,
+  fallbackUnitLabel: string,
+  fallbackBusinessLabel: string,
+): EmployeeViewModel => ({
+  id: employee.id,
+  code: employee.employee_number?.trim() || `RH-${String(employee.id).padStart(3, '0')}`,
+  firstName: employee.first_name || '',
+  lastName: employee.last_name || '',
+  fullName: employee.full_name || `${employee.first_name} ${employee.last_name}`.trim(),
+  email: employee.email || '',
+  phone: employee.phone || '',
+  position: employee.position_title || employee.position || '',
+  department: employee.department || '',
+  unitId: employee.unit_id ? String(employee.unit_id) : allFilterValue,
+  unitLabel: employee.unit_name || fallbackUnitLabel,
+  businessId: employee.business_id ? String(employee.business_id) : allFilterValue,
+  businessLabel: employee.business_name || fallbackBusinessLabel,
+  joinDate: employee.hire_date ? String(employee.hire_date) : '',
+  salary: Number(employee.salary ?? 0),
+  payPeriod: employee.pay_period,
+  salaryType: employee.salary_type,
+  hourlyRate: Number(employee.hourly_rate ?? 0),
+  contractType: employee.contract_type,
+  contractStartDate: employee.contract_start_date ? String(employee.contract_start_date) : '',
+  contractEndDate: employee.contract_end_date ? String(employee.contract_end_date) : '',
+  status: employee.status,
+});
+
+const toModalSeed = (employee: EmployeeViewModel) => ({
+  nombre: employee.firstName,
+  apellidos: employee.lastName,
+  correo: employee.email,
+  telefonoMovil: employee.phone,
+  departamento: employee.department,
+  puesto: employee.position,
+  unidadNegocio: employee.unitId === allFilterValue ? '' : employee.unitId,
+  negocio: employee.businessId === allFilterValue ? '' : employee.businessId,
+  fechaIngreso: employee.joinDate,
+  tipoSalario: employee.salaryType,
+  salario: employee.salary ? String(employee.salary) : '',
+  sueldoPorHora: employee.hourlyRate ? String(employee.hourlyRate) : '',
+  periodoPago: employee.payPeriod,
+  tipoContrato: employee.contractType,
+  fechaInicioContrato: employee.contractStartDate,
+  fechaFinContrato: employee.contractEndDate,
+});
+
+export default function Colaboradores() {
   const { currentLanguage } = useLanguage();
   const languageKey = currentLanguage.code.startsWith('es') ? 'es' : 'en';
-  const copy = hr.employees as EmployeePageCopy;
-  const defaultColumns = createDefaultColumns(copy);
+  const copy = employeePageCopy[languageKey];
+
+  const defaultColumns = useMemo(() => createDefaultColumns(copy), [copy]);
   const fixedColumns: ColumnConfig[] = [
     { id: 'selection', label: copy.columns.selection, visible: true, locked: true },
   ];
-  const [colaboradores, setColaboradores] = useState<RHColaborador[]>(rhColaboradores);
-  const [unitSelectOptions, setUnitSelectOptions] = useState<Array<{ value: string; label: string }>>([
-    { value: 'all-units', label: copy.filters.allUnits },
-  ]);
-  const [businessSelectOptions, setBusinessSelectOptions] = useState<Array<{ value: string; label: string }>>([
-    { value: 'all-businesses', label: copy.filters.allBusinesses },
-  ]);
+
+  const [employees, setEmployees] = useState<EmployeeViewModel[]>([]);
+  const [summary, setSummary] = useState<EmployeeSummary>({
+    total_count: 0,
+    active_count: 0,
+    inactive_count: 0,
+    terminated_count: 0,
+    total_payroll_amount_monthly: 0,
+  });
+  const [unitOptions, setUnitOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [businessOptions, setBusinessOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [unidadFilter, setUnidadFilter] = useState(allFilterValue);
-  const [negocioFilter, setNegocioFilter] = useState(allFilterValue);
+  const [unitFilter, setUnitFilter] = useState(allFilterValue);
+  const [businessFilter, setBusinessFilter] = useState(allFilterValue);
   const [departmentFilter, setDepartmentFilter] = useState(allFilterValue);
-  const [statusFilter, setStatusFilter] = useState(defaultStatusFilter);
+  const [statusFilter, setStatusFilter] = useState(allFilterValue);
   const [columns, setColumns] = useState<ColumnConfig[]>(() => getInitialColumns(defaultColumns));
-  const [selectedColaboradorIds, setSelectedColaboradorIds] = useState<number[]>([]);
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
+  const [editingEmployee, setEditingEmployee] = useState<EmployeeViewModel | null>(null);
+  const [terminatingEmployee, setTerminatingEmployee] = useState<EmployeeViewModel | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isColumnsModalOpen, setIsColumnsModalOpen] = useState(false);
-  const [editingColaborador, setEditingColaborador] = useState<RHColaborador | null>(null);
-  const [terminatingColaborador, setTerminatingColaborador] = useState<RHColaborador | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingOverlayTitle, setLoadingOverlayTitle] = useState<string>(copy.loadingTitle);
+  const [loadingOverlayDescription, setLoadingOverlayDescription] = useState<string>(copy.loadingDescription);
   const [loadError, setLoadError] = useState('');
+  const [successToastMessage, setSuccessToastMessage] = useState('');
 
-  const unidadOptions = [...new Set(colaboradores.map((colaborador) => colaborador.unidad))].sort(
-    (left, right) => left - right,
-  );
-  const negocioOptions = [...new Set(colaboradores.map((colaborador) => colaborador.negocio))].sort();
-  const departmentOptions = [
-    ...new Set(colaboradores.map((colaborador) => colaborador.departamento)),
-  ].sort();
   const visibleColumns = columns.filter((column) => column.visible);
+  const departmentOptions = useMemo(
+    () =>
+      Array.from(new Set(employees.map((employee) => employee.department).filter(Boolean))).sort((left, right) =>
+        left.localeCompare(right),
+      ),
+    [employees],
+  );
 
   useEffect(() => {
     setColumns((currentColumns) => {
-      const translatedColumns = getInitialColumns(defaultColumns);
-      const hasDifferentLabels = translatedColumns.some((translatedColumn) => {
-        const currentColumn = currentColumns.find((column) => column.id === translatedColumn.id);
-        return currentColumn?.label !== translatedColumn.label;
+      const translated = getInitialColumns(defaultColumns);
+      const needsLabelRefresh = translated.some((nextColumn) => {
+        const currentColumn = currentColumns.find((column) => column.id === nextColumn.id);
+        return currentColumn?.label !== nextColumn.label;
       });
 
-      return hasDifferentLabels ? translatedColumns : currentColumns;
+      return needsLabelRefresh ? translated : currentColumns;
     });
   }, [defaultColumns]);
 
@@ -330,316 +392,313 @@ export default function Employees() {
     window.localStorage.setItem(columnsStorageKey, JSON.stringify(columns));
   }, [columns]);
 
-  useEffect(() => {
-    setSelectedColaboradorIds((prevSelectedIds) =>
-      prevSelectedIds.filter((id) => colaboradores.some((colaborador) => colaborador.id === id)),
-    );
-  }, [colaboradores]);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadEmployees = async () => {
-      try {
-        setIsLoading(true);
-        setLoadError('');
-
-        const [employeesResponse, units, businesses] = await Promise.all([
-          humanResourcesApi.listEmployees(),
-          dashboardApi.listUnits().catch(() => []),
-          dashboardApi.listBusinesses().catch(() => []),
-        ]);
-
-        if (!active) {
-          return;
-        }
-
-        setColaboradores(employeesResponse.items.map(mapBackendEmployeeToColaborador));
-        setUnitSelectOptions([
-          { value: 'all-units', label: copy.filters.allUnits },
-          ...units.map((unit) => ({ value: String(unit.id), label: unit.name })),
-        ]);
-        setBusinessSelectOptions([
-          { value: 'all-businesses', label: copy.filters.allBusinesses },
-          ...businesses.map((business) => ({ value: business.name, label: business.name })),
-        ]);
-      } catch (error) {
-        if (!active) {
-          return;
-        }
-        setLoadError(error instanceof Error ? error.message : copy.errors.load);
-      } finally {
-        if (active) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    void loadEmployees();
-
-    return () => {
-      active = false;
-    };
-  }, [copy.errors.load, copy.filters.allBusinesses, copy.filters.allUnits]);
-
-  const filteredColaboradores = colaboradores.filter((colaborador) => {
-    const matchesSearch =
-      colaborador.nombre.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      colaborador.codigo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      colaborador.puesto.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesUnidad =
-      unidadFilter === allFilterValue || String(colaborador.unidad) === unidadFilter;
-    const matchesNegocio = negocioFilter === allFilterValue || colaborador.negocio === negocioFilter;
-    const matchesDepartment =
-      departmentFilter === allFilterValue || colaborador.departamento === departmentFilter;
-    const matchesStatus = statusFilter === allFilterValue || colaborador.estado === statusFilter;
-
-    return (
-      matchesSearch &&
-      matchesUnidad &&
-      matchesNegocio &&
-      matchesDepartment &&
-      matchesStatus
-    );
-  });
-
-  const filteredColaboradorIds = filteredColaboradores.map((colaborador) => colaborador.id);
-  const allFilteredSelected =
-    filteredColaboradorIds.length > 0 &&
-    filteredColaboradorIds.every((id) => selectedColaboradorIds.includes(id));
-  const someFilteredSelected =
-    !allFilteredSelected &&
-    filteredColaboradorIds.some((id) => selectedColaboradorIds.includes(id));
-
-  const refreshEmployees = async () => {
-    const response = await humanResourcesApi.listEmployees();
-    setColaboradores(response.items.map(mapBackendEmployeeToColaborador));
-  };
-
-  const handleSaveColaborador = async (data: any) => {
-    const payload = {
-      first_name: String(data.nombre ?? ''),
-      last_name: String(data.apellidos ?? ''),
-      email: String(data.correo ?? ''),
-      position: String(data.puesto ?? ''),
-      department: String(data.departamento ?? ''),
-      phone: String(data.telefonoMovil ?? ''),
-      salary: String(data.salario ?? data.sueldoPorHora ?? ''),
-      hire_date: String(data.fechaIngreso ?? ''),
-    };
+  const loadEmployees = async () => {
+    setIsLoading(true);
+    setLoadError('');
 
     try {
-      setLoadError('');
+      const [employeesResponse, unitsResponse, businessesResponse] = await Promise.all([
+        humanResourcesApi.listEmployees(),
+        dashboardApi.listUnits().catch(() => []),
+        dashboardApi.listBusinesses().catch(() => []),
+      ]);
 
-      if (editingColaborador) {
-        await humanResourcesApi.updateEmployee(editingColaborador.id, {
-          ...payload,
-        });
-      } else {
-        await humanResourcesApi.createEmployee(payload);
-      }
-
-      await refreshEmployees();
-      setEditingColaborador(null);
-      setIsModalOpen(false);
+      setEmployees(
+        employeesResponse.items.map((employee) =>
+          mapEmployee(employee, copy.unitFallback, copy.businessFallback),
+        ),
+      );
+      setSummary(employeesResponse.summary);
+      setUnitOptions([
+        { value: allFilterValue, label: copy.filters.all },
+        ...unitsResponse.map((unit) => ({ value: String(unit.id), label: unit.name })),
+      ]);
+      setBusinessOptions([
+        { value: allFilterValue, label: copy.filters.all },
+        ...businessesResponse.map((business) => ({ value: String(business.id), label: business.name })),
+      ]);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : copy.errors.save);
-      throw error;
+      setLoadError(error instanceof Error ? error.message : 'Unable to load employees.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const toggleColaboradorSelection = (colaboradorId: number) => {
-    setSelectedColaboradorIds((prevSelectedIds) =>
-      prevSelectedIds.includes(colaboradorId)
-        ? prevSelectedIds.filter((id) => id !== colaboradorId)
-        : [...prevSelectedIds, colaboradorId],
+  useEffect(() => {
+    void loadEmployees();
+  }, [copy.businessFallback, copy.filters.all, copy.unitFallback]);
+
+  useEffect(() => {
+    setSelectedEmployeeIds((currentIds) =>
+      currentIds.filter((id) => employees.some((employee) => employee.id === id)),
+    );
+  }, [employees]);
+
+  const filteredEmployees = employees.filter((employee) => {
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const matchesSearch =
+      normalizedSearch.length === 0 ||
+      employee.fullName.toLowerCase().includes(normalizedSearch) ||
+      employee.code.toLowerCase().includes(normalizedSearch) ||
+      employee.position.toLowerCase().includes(normalizedSearch);
+    const matchesUnit = unitFilter === allFilterValue || employee.unitId === unitFilter;
+    const matchesBusiness = businessFilter === allFilterValue || employee.businessId === businessFilter;
+    const matchesDepartment = departmentFilter === allFilterValue || employee.department === departmentFilter;
+    const matchesStatus = statusFilter === allFilterValue || employee.status === statusFilter;
+
+    return matchesSearch && matchesUnit && matchesBusiness && matchesDepartment && matchesStatus;
+  });
+
+  const filteredEmployeeIds = filteredEmployees.map((employee) => employee.id);
+  const allFilteredSelected =
+    filteredEmployeeIds.length > 0 &&
+    filteredEmployeeIds.every((employeeId) => selectedEmployeeIds.includes(employeeId));
+  const someFilteredSelected =
+    !allFilteredSelected && filteredEmployeeIds.some((employeeId) => selectedEmployeeIds.includes(employeeId));
+
+  const toggleSelection = (employeeId: number) => {
+    setSelectedEmployeeIds((currentIds) =>
+      currentIds.includes(employeeId)
+        ? currentIds.filter((id) => id !== employeeId)
+        : [...currentIds, employeeId],
     );
   };
 
   const toggleAllVisibleSelections = () => {
-    setSelectedColaboradorIds((prevSelectedIds) => {
+    setSelectedEmployeeIds((currentIds) => {
       if (allFilteredSelected) {
-        return prevSelectedIds.filter((id) => !filteredColaboradorIds.includes(id));
+        return currentIds.filter((id) => !filteredEmployeeIds.includes(id));
       }
 
-      return Array.from(new Set([...prevSelectedIds, ...filteredColaboradorIds]));
+      return Array.from(new Set([...currentIds, ...filteredEmployeeIds]));
     });
   };
 
-  const handleDeleteColaborador = (colaboradorId: number) => {
-    const collaboratorToDelete = colaboradores.find((colaborador) => colaborador.id === colaboradorId);
+  const runMutation = async ({
+    title,
+    description,
+    task,
+  }: {
+    title: string;
+    description: string;
+    task: () => Promise<void>;
+  }) => {
+    setLoadingOverlayTitle(title);
+    setLoadingOverlayDescription(description);
+    setIsSubmitting(true);
 
-    if (!collaboratorToDelete) {
-      return;
+    try {
+      await runWithMinimumDuration(task(), 900);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    if (collaboratorToDelete.estado === 'Inactivo') {
-      void humanResourcesApi.deleteEmployee(colaboradorId)
-        .then(() => refreshEmployees())
-        .catch((error) => {
-          setLoadError(error instanceof Error ? error.message : copy.errors.delete);
-        });
-      return;
-    }
-
-    setTerminatingColaborador(collaboratorToDelete);
   };
 
-  const handleConfirmTermination = async () => {
-    if (!terminatingColaborador) {
+  const refreshEmployees = async () => {
+    const response = await humanResourcesApi.listEmployees();
+    setEmployees(
+      response.items.map((employee) => mapEmployee(employee, copy.unitFallback, copy.businessFallback)),
+    );
+    setSummary(response.summary);
+  };
+
+  const handleSaveEmployee = async (data: ColaboradorData) => {
+    const parseForeignKeyValue = (value: string | undefined) => {
+      const normalized = String(value ?? '').trim();
+      return /^\d+$/.test(normalized) ? Number(normalized) : null;
+    };
+
+    const payload = {
+      first_name: String(data.nombre ?? ''),
+      last_name: String(data.apellidos ?? ''),
+      email: String(data.correo ?? ''),
+      phone: String(data.telefonoMovil ?? ''),
+      position: String(data.puesto ?? ''),
+      department: String(data.departamento ?? ''),
+      unit_id: parseForeignKeyValue(data.unidadNegocio),
+      business_id: parseForeignKeyValue(data.negocio),
+      hire_date: String(data.fechaIngreso ?? ''),
+      salary: String(data.salario ?? ''),
+      pay_period: String(data.periodoPago ?? 'weekly'),
+      salary_type: String(data.tipoSalario ?? 'daily'),
+      hourly_rate: String(data.sueldoPorHora ?? ''),
+      contract_type: String(data.tipoContrato ?? 'permanent'),
+      contract_start_date: String(data.fechaInicioContrato ?? ''),
+      contract_end_date: String(data.fechaFinContrato ?? ''),
+      status: editingEmployee?.status ?? 'active',
+    };
+
+    try {
+      await runMutation({
+        title: copy.loadingTitle,
+        description: copy.loadingDescription,
+        task: async () => {
+          if (editingEmployee) {
+            await humanResourcesApi.updateEmployee(editingEmployee.id, payload);
+          } else {
+            await humanResourcesApi.createEmployee(payload);
+          }
+
+          await refreshEmployees();
+        },
+      });
+
+      setSuccessToastMessage(editingEmployee ? copy.successMessages.updated : copy.successMessages.created);
+      setEditingEmployee(null);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Unable to save employee.');
+      throw error;
+    }
+  };
+
+  const handleDeleteEmployee = async (employee: EmployeeViewModel) => {
+    if (employee.status !== 'terminated') {
+      setTerminatingEmployee(employee);
+      return;
+    }
+
+    if (!window.confirm(copy.table.deleteConfirm)) {
       return;
     }
 
     try {
-      await humanResourcesApi.terminateEmployee(terminatingColaborador.id);
-      await refreshEmployees();
-      setTerminatingColaborador(null);
+      await runMutation({
+        title: copy.deleteLoadingTitle,
+        description: copy.deleteLoadingDescription,
+        task: async () => {
+          await humanResourcesApi.deleteEmployee(employee.id);
+          await refreshEmployees();
+        },
+      });
+      setSuccessToastMessage(copy.successMessages.deleted);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : copy.errors.terminate);
+      setLoadError(error instanceof Error ? error.message : 'Unable to delete employee.');
     }
   };
 
-  const renderColumnCell = (colaborador: RHColaborador, columnId: string) => {
+  const handleConfirmTermination = async (data: ContractTerminationFormData) => {
+    if (!terminatingEmployee) {
+      return;
+    }
+
+    try {
+      await runMutation({
+        title: copy.terminateLoadingTitle,
+        description: copy.terminateLoadingDescription,
+        task: async () => {
+          await humanResourcesApi.terminateEmployee(terminatingEmployee.id, {
+            exit_date: data.exitDate,
+            last_working_day: data.lastWorkingDay,
+            reason_type: data.reasonType || 'other',
+            specific_reason: data.specificReason,
+            summary: data.summary,
+          });
+          await refreshEmployees();
+        },
+      });
+
+      setTerminatingEmployee(null);
+      setSuccessToastMessage(copy.successMessages.terminated);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Unable to terminate employee.');
+    }
+  };
+
+  const renderSalaryValue = (employee: EmployeeViewModel) => {
+    if (employee.salaryType === 'hourly') {
+      return `${currencyFormatter.format(employee.hourlyRate)} / hr`;
+    }
+
+    return currencyFormatter.format(employee.salary);
+  };
+
+  const renderColumnCell = (employee: EmployeeViewModel, columnId: string) => {
     switch (columnId) {
-      case 'colaborador':
+      case 'employee':
         return (
           <td key={columnId} className="px-6 py-4 align-top">
-            <p className="min-w-[190px] text-sm font-medium text-gray-700 dark:text-gray-200">
-              {colaborador.nombre}
-            </p>
-          </td>
-        );
-      case 'puesto':
-        return (
-          <td key={columnId} className="px-6 py-4 align-top">
-            <p className="min-w-[180px] text-sm text-gray-600 dark:text-gray-300">
-              {translateDisplayValue(colaborador.puesto, languageKey, 'positions')}
-            </p>
-          </td>
-        );
-      case 'apellidos':
-        return (
-          <td key={columnId} className="px-6 py-4 align-top text-sm text-gray-600 dark:text-gray-300">
-            {getLastNames(colaborador.nombre) || '—'}
-          </td>
-        );
-      case 'correo':
-        return (
-          <td key={columnId} className="px-6 py-4 align-top text-sm text-gray-600 dark:text-gray-300">
-            <span className="inline-flex min-w-[220px] items-center gap-2 break-all">
-              <Mail className="h-4 w-4 text-gray-400" />
-              {colaborador.correo || '—'}
-            </span>
-          </td>
-        );
-      case 'departamento':
-        return (
-          <td key={columnId} className="px-6 py-4 align-top text-sm text-gray-600 dark:text-gray-300">
-            {translateDisplayValue(colaborador.departamento, languageKey, 'departments')}
-          </td>
-        );
-      case 'contacto':
-        return (
-          <td key={columnId} className="px-6 py-4 align-top text-sm text-gray-600 dark:text-gray-400">
-            <div className="space-y-2 min-w-[240px]">
-              <p className="flex items-center gap-2 leading-tight break-all">
-                <Mail className="h-4 w-4 text-gray-400" />
-                {colaborador.correo}
-              </p>
-              <p className="flex items-center gap-2 leading-tight">
-                <Phone className="h-4 w-4 text-gray-400" />
-                {colaborador.telefono}
-              </p>
+            <div className="min-w-[220px]">
+              <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{employee.fullName}</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{employee.code}</p>
             </div>
           </td>
         );
-      case 'unidad':
-        return (
-          <td key={columnId} className="px-6 py-4 align-top text-sm text-gray-600 dark:text-gray-400">
-            {colaborador.unidad}
-          </td>
-        );
-      case 'negocio':
+      case 'email':
         return (
           <td key={columnId} className="px-6 py-4 align-top text-sm text-gray-600 dark:text-gray-300">
-            {translateDisplayValue(colaborador.negocio, languageKey, 'businesses')}
+            <div className="inline-flex min-w-[220px] items-center gap-2 break-all">
+              <Mail className="h-4 w-4 text-gray-400" />
+              {employee.email || '—'}
+            </div>
           </td>
         );
-      case 'ingreso':
+      case 'position':
         return (
-          <td key={columnId} className="px-6 py-4 align-top text-sm text-gray-600 dark:text-gray-400">
-            <span className="inline-flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-gray-400" />
-              {formatJoinedDate(colaborador.fechaIngreso, currentLanguage.code)}
-            </span>
+          <td key={columnId} className="px-6 py-4 align-top text-sm text-gray-600 dark:text-gray-300">
+            {employee.position || '—'}
           </td>
         );
-      case 'estado':
+      case 'department':
+        return (
+          <td key={columnId} className="px-6 py-4 align-top text-sm text-gray-600 dark:text-gray-300">
+            {employee.department || '—'}
+          </td>
+        );
+      case 'unit':
+        return (
+          <td key={columnId} className="px-6 py-4 align-top text-sm text-gray-600 dark:text-gray-300">
+            {employee.unitLabel || copy.unitFallback}
+          </td>
+        );
+      case 'business':
+        return (
+          <td key={columnId} className="px-6 py-4 align-top text-sm text-gray-600 dark:text-gray-300">
+            {employee.businessLabel || copy.businessFallback}
+          </td>
+        );
+      case 'status':
         return (
           <td key={columnId} className="px-6 py-4 align-top">
             <span
-              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium lowercase ${getStatusClasses(
-                colaborador.estado,
+              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getStatusClasses(
+                employee.status,
               )}`}
             >
-              {copy.statusLabels[colaborador.estado].toLowerCase()}
+              {copy.statusLabels[employee.status]}
             </span>
           </td>
         );
-      case 'salario':
+      case 'salary':
         return (
           <td key={columnId} className="px-6 py-4 align-top text-sm font-medium text-gray-800 dark:text-gray-100">
-            {currencyFormatter.format(colaborador.salario)}
+            {renderSalaryValue(employee)}
           </td>
         );
-      case 'periodoPago':
-        return (
-          <td key={columnId} className="px-6 py-4 align-top text-sm text-gray-600 dark:text-gray-400">
-            {copy.paymentPeriods[colaborador.periodoPago]}
-          </td>
-        );
-      case 'fechaNacimiento':
+      case 'payPeriod':
         return (
           <td key={columnId} className="px-6 py-4 align-top text-sm text-gray-600 dark:text-gray-300">
-            {colaborador.fechaNacimiento
-              ? formatJoinedDate(colaborador.fechaNacimiento, currentLanguage.code)
-              : '—'}
+            {employee.payPeriod}
           </td>
         );
-      case 'direccion':
+      case 'joinDate':
         return (
           <td key={columnId} className="px-6 py-4 align-top text-sm text-gray-600 dark:text-gray-300">
-            <span className="inline-block min-w-[220px]">{colaborador.direccion || '—'}</span>
+            <span className="inline-flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-gray-400" />
+              {formatDate(employee.joinDate, currentLanguage.code, copy.dateFallback)}
+            </span>
           </td>
         );
-      case 'curp':
-        return (
-          <td key={columnId} className="px-6 py-4 align-top text-sm text-gray-600 dark:text-gray-300">
-            {colaborador.curp || '—'}
-          </td>
-        );
-      case 'rfc':
-        return (
-          <td key={columnId} className="px-6 py-4 align-top text-sm text-gray-600 dark:text-gray-300">
-            {colaborador.rfc || '—'}
-          </td>
-        );
-      case 'nss':
-        return (
-          <td key={columnId} className="px-6 py-4 align-top text-sm text-gray-600 dark:text-gray-300">
-            {colaborador.nss || '—'}
-          </td>
-        );
-      case 'acciones':
+      case 'actions':
         return (
           <td key={columnId} className="px-6 py-4 align-top">
             <div className="flex items-center gap-3">
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 text-[#4338ca] hover:bg-[#4338ca]/10"
+                className="h-8 w-8 text-[#4338ca] hover:bg-[#4338ca]/10"
                 onClick={() => {
-                  setEditingColaborador(colaborador);
+                  setEditingEmployee(employee);
                   setIsModalOpen(true);
                 }}
               >
@@ -648,8 +707,10 @@ export default function Employees() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-                onClick={() => handleDeleteColaborador(colaborador.id)}
+                className="h-8 w-8 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                onClick={() => {
+                  void handleDeleteEmployee(employee);
+                }}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -663,34 +724,39 @@ export default function Employees() {
 
   return (
     <>
-      <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-700/30 dark:bg-blue-900/20 dark:text-blue-300">
-        {copy.backendConnected}
-      </div>
+      <LoadingBarOverlay
+        isVisible={isSubmitting}
+        title={loadingOverlayTitle}
+        description={loadingOverlayDescription}
+      />
 
-      {isLoading ? (
-        <div className="mb-4 rounded-lg border border-purple-200 bg-purple-50 px-4 py-3 text-sm text-purple-700 dark:border-purple-700/30 dark:bg-purple-900/20 dark:text-purple-300">
-          {copy.loading}
-        </div>
-      ) : null}
+      <SuccessToast
+        isVisible={Boolean(successToastMessage)}
+        message={successToastMessage}
+        onClose={() => setSuccessToastMessage('')}
+      />
 
       {loadError ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-700/30 dark:bg-red-900/20 dark:text-red-300">
-          {loadError}
+          <div className="flex items-center justify-between gap-3">
+            <span>{loadError}</span>
+            <Button variant="outline" size="sm" onClick={() => void loadEmployees()}>
+              Retry
+            </Button>
+          </div>
         </div>
       ) : null}
 
-      <div className="bg-[#143675]/5 dark:bg-[#143675]/10 rounded-lg p-6 mb-6 border border-[#143675]/20 dark:border-[#143675]/30">
-        <div className="flex items-start justify-between">
+      <div className="mb-6 rounded-lg border border-[#143675]/20 bg-[#143675]/5 p-6 dark:border-[#143675]/30 dark:bg-[#143675]/10">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
+            <h2 className="mb-1 flex items-center gap-2 text-2xl font-semibold text-gray-900 dark:text-white">
               <span className="text-2xl">👥</span>
               {copy.title}
             </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {copy.subtitle}
-            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">{copy.subtitle}</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Button
               variant="outline"
               onClick={() => setIsColumnsModalOpen(true)}
@@ -701,114 +767,149 @@ export default function Employees() {
             </Button>
             <Button
               onClick={() => {
-                setEditingColaborador(null);
+                setEditingEmployee(null);
                 setIsModalOpen(true);
               }}
-              className="bg-[#143675] hover:bg-[#0f2855] text-white gap-2"
+              className="bg-[#143675] text-white hover:bg-[#0f2855]"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="mr-2 h-4 w-4" />
               {copy.addEmployee}
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+      {isLoading ? (
+        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={index}
+              className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+            >
+              <Skeleton className="mb-3 h-4 w-24" />
+              <Skeleton className="mb-2 h-8 w-20" />
+              <Skeleton className="h-3 w-28" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <p className="text-sm text-gray-500 dark:text-gray-400">{copy.summary.total}</p>
+            <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">{summary.total_count}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <p className="text-sm text-gray-500 dark:text-gray-400">{copy.summary.active}</p>
+            <p className="mt-2 text-3xl font-bold text-emerald-600 dark:text-emerald-400">{summary.active_count}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <p className="text-sm text-gray-500 dark:text-gray-400">{copy.summary.inactive}</p>
+            <p className="mt-2 text-3xl font-bold text-amber-600 dark:text-amber-400">
+              {summary.inactive_count + summary.terminated_count}
+            </p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <p className="text-sm text-gray-500 dark:text-gray-400">{copy.summary.payroll}</p>
+            <p className="mt-2 inline-flex items-center gap-2 text-2xl font-bold text-[#143675] dark:text-[#6ea3f7]">
+              <Wallet className="h-5 w-5" />
+              {currencyFormatter.format(summary.total_payroll_amount_monthly)}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="mb-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div className="mb-4">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{copy.filters.title}</h3>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
           <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               {copy.filters.searchLabel}
             </label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder={copy.filters.searchPlaceholder}
-                className={searchControlClassName}
+                className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 text-gray-900 focus:border-[#143675] focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               />
             </div>
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               {copy.filters.unit}
             </label>
             <select
-              value={unidadFilter}
-              onChange={(event) => setUnidadFilter(event.target.value)}
-              className={filterControlClassName}
+              value={unitFilter}
+              onChange={(event) => setUnitFilter(event.target.value)}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-[#143675] focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
             >
-              <option value={allFilterValue}>{copy.filters.all}</option>
-              {unidadOptions.map((value) => (
-                <option key={value} value={String(value)}>
-                  {copy.filters.unit} {value}
+              {unitOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               {copy.filters.business}
             </label>
             <select
-              value={negocioFilter}
-              onChange={(event) => setNegocioFilter(event.target.value)}
-              className={filterControlClassName}
+              value={businessFilter}
+              onChange={(event) => setBusinessFilter(event.target.value)}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-[#143675] focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
             >
-              <option value={allFilterValue}>{copy.filters.all}</option>
-              {negocioOptions.map((value) => (
-                <option key={value} value={value}>
-                  {translateDisplayValue(value, languageKey, 'businesses')}
+              {businessOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               {copy.filters.department}
             </label>
             <select
               value={departmentFilter}
               onChange={(event) => setDepartmentFilter(event.target.value)}
-              className={filterControlClassName}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-[#143675] focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
             >
               <option value={allFilterValue}>{copy.filters.all}</option>
-              {departmentOptions.map((value) => (
-                <option key={value} value={value}>
-                  {translateDisplayValue(value, languageKey, 'departments')}
+              {departmentOptions.map((department) => (
+                <option key={department} value={department}>
+                  {department}
                 </option>
               ))}
             </select>
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
               {copy.filters.status}
             </label>
             <select
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value)}
-              className={filterControlClassName}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-[#143675] focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
             >
               <option value={allFilterValue}>{copy.filters.all}</option>
-              {statusOptions.map((value) => (
-                <option key={value} value={value}>
-                  {copy.statusLabels[value]}
-                </option>
-              ))}
+              <option value="active">{copy.statusLabels.active}</option>
+              <option value="inactive">{copy.statusLabels.inactive}</option>
+              <option value="terminated">{copy.statusLabels.terminated}</option>
             </select>
           </div>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px]">
-            <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+            <thead className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-700">
               <tr>
                 <th className="w-12 px-5 py-3.5 text-left">
                   <Checkbox
@@ -820,37 +921,44 @@ export default function Employees() {
                 {visibleColumns.map((column) => (
                   <th
                     key={column.id}
-                    className="px-6 py-3.5 text-left text-[11px] font-semibold text-gray-500 dark:text-gray-300 uppercase tracking-[0.08em]"
+                    className="px-6 py-3.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-gray-300"
                   >
                     {column.label}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {filteredColaboradores.length === 0 ? (
+            <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, rowIndex) => (
+                  <tr key={rowIndex}>
+                    <td className="px-5 py-4">
+                      <Skeleton className="h-4 w-4" />
+                    </td>
+                    {visibleColumns.map((column) => (
+                      <td key={column.id} className="px-6 py-4">
+                        <Skeleton className="h-4 w-full max-w-[180px]" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : filteredEmployees.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={visibleColumns.length + 1}
-                    className="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400"
-                  >
+                  <td colSpan={visibleColumns.length + 1} className="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
                     {copy.table.emptyState}
                   </td>
                 </tr>
               ) : (
-                filteredColaboradores.map((colaborador) => (
-                  <tr
-                    key={colaborador.id}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors"
-                  >
+                filteredEmployees.map((employee) => (
+                  <tr key={employee.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/40">
                     <td className="px-5 py-4 align-top">
                       <Checkbox
-                        checked={selectedColaboradorIds.includes(colaborador.id)}
-                        onCheckedChange={() => toggleColaboradorSelection(colaborador.id)}
-                        aria-label={copy.table.selectEmployee(colaborador.nombre)}
+                        checked={selectedEmployeeIds.includes(employee.id)}
+                        onCheckedChange={() => toggleSelection(employee.id)}
+                        aria-label={copy.table.selectEmployee(employee.fullName)}
                       />
                     </td>
-                    {visibleColumns.map((column) => renderColumnCell(colaborador, column.id))}
+                    {visibleColumns.map((column) => renderColumnCell(employee, column.id))}
                   </tr>
                 ))
               )}
@@ -871,20 +979,22 @@ export default function Employees() {
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
-          setEditingColaborador(null);
+          setEditingEmployee(null);
         }}
-        onSave={handleSaveColaborador}
-        colaboradorData={editingColaborador ? (toModalSeed(editingColaborador) as any) : null}
-        mode={editingColaborador ? 'edit' : 'create'}
-        unitOptions={unitSelectOptions}
-        businessOptions={businessSelectOptions}
+        onSave={handleSaveEmployee}
+        colaboradorData={editingEmployee ? (toModalSeed(editingEmployee) as any) : null}
+        mode={editingEmployee ? 'edit' : 'create'}
+        unitOptions={unitOptions}
+        businessOptions={businessOptions}
       />
 
       <TerminarContratoModal
-        isOpen={terminatingColaborador !== null}
-        onClose={() => setTerminatingColaborador(null)}
-        onConfirm={handleConfirmTermination}
-        employeeName={terminatingColaborador?.nombre ?? ''}
+        isOpen={terminatingEmployee !== null}
+        onClose={() => setTerminatingEmployee(null)}
+        onConfirm={(data) => {
+          void handleConfirmTermination(data);
+        }}
+        employeeName={terminatingEmployee?.fullName ?? ''}
       />
     </>
   );
