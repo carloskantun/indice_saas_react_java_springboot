@@ -22,6 +22,7 @@ import {
   type DashboardModuleCategory,
   type DashboardModuleColor,
 } from '../../../config/moduleCatalog';
+import { validateEmail } from '../../../shared/validation/email';
 
 interface User {
   id: string;
@@ -371,15 +372,24 @@ export default function Users() {
 
   const handleSendInvite = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!inviteForm.name.trim() || !inviteForm.email.trim()) {
+    const trimmedName = inviteForm.name.trim();
+    const trimmedEmail = inviteForm.email.trim();
+
+    if (!trimmedName || !trimmedEmail) {
+      return;
+    }
+
+    const emailValidation = validateEmail(trimmedEmail);
+    if (!emailValidation.ok) {
+      setLoadError(t.loginPage.emailError);
       return;
     }
 
     try {
       setLoadError('');
       const response = await configCenterApi.inviteUser({
-        name: inviteForm.name.trim(),
-        email: inviteForm.email.trim(),
+        name: trimmedName,
+        email: emailValidation.normalized,
         role: toBackendRole(inviteForm.role),
       });
       await refreshUsers();
@@ -394,9 +404,21 @@ export default function Users() {
       return;
     }
 
+    const trimmedEmail = newEmail.trim();
+    const validatedEmail = trimmedEmail ? validateEmail(trimmedEmail) : null;
+    if (trimmedEmail) {
+      if (!validatedEmail?.ok) {
+        setLoadError(t.loginPage.emailError);
+        return;
+      }
+    }
+
     try {
       setLoadError('');
-      const response = await configCenterApi.resendInvitation(resendUser.backendId, newEmail.trim() || undefined);
+      const response = await configCenterApi.resendInvitation(
+        resendUser.backendId,
+        validatedEmail?.ok ? validatedEmail.normalized : undefined,
+      );
       await refreshUsers();
       setInviteLink(response.invite_link);
     } catch (error) {

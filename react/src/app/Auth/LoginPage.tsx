@@ -26,6 +26,7 @@ import {
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { languages, useLanguage } from '../shared/context';
+import { isValidEmail, normalizeEmail } from '../shared/validation/email';
 
 const modulePillTones = [
   'bg-white/80 text-[#143675]',
@@ -34,7 +35,6 @@ const modulePillTones = [
   'bg-amber-50 text-amber-700',
 ] as const;
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const LOGIN_MINIMUM_LOADING_MS = 2500;
 
 export default function LoginPage() {
@@ -48,13 +48,13 @@ export default function LoginPage() {
   const [emailTouched, setEmailTouched] = useState(false);
   const copy = t.loginPage;
 
-  const trimmedEmail = email.trim();
-  const emailIsValid = emailPattern.test(trimmedEmail);
-  const showEmailError = emailTouched && trimmedEmail.length > 0 && !emailIsValid;
+  const normalizedEmail = normalizeEmail(email);
+  const emailIsValid = isValidEmail(normalizedEmail);
+  const showEmailError = emailTouched && normalizedEmail.length > 0 && !emailIsValid;
 
   const canSubmit = useMemo(
-    () => trimmedEmail.length > 0 && emailIsValid && password.trim().length > 0 && !isSubmitting,
-    [emailIsValid, isSubmitting, password, trimmedEmail],
+    () => normalizedEmail.length > 0 && emailIsValid && password.trim().length > 0 && !isSubmitting,
+    [emailIsValid, isSubmitting, normalizedEmail, password],
   );
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -72,7 +72,7 @@ export default function LoginPage() {
     try {
       await runWithMinimumDuration(
         authApi.login({
-          email: trimmedEmail,
+          email: normalizedEmail,
           password,
         }),
         LOGIN_MINIMUM_LOADING_MS,

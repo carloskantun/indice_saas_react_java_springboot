@@ -460,10 +460,6 @@ type TranslationDictionary = {
           password: string;
           preferredLanguage: string;
         };
-        placeholders: {
-          secondName: string;
-          maternalLastName: string;
-        };
         actions: {
           save: string;
           saving: string;
@@ -479,6 +475,7 @@ type TranslationDictionary = {
           savingOverlay: string;
           passwordMismatch: string;
           passwordMinLength: string;
+          invalidPhone: string;
         };
       };
       users: {
@@ -1293,10 +1290,6 @@ const translations: Translations = {
           password: 'Si no quieres cambiarla, déjala vacía.',
           preferredLanguage: 'Usaremos este idioma para la interfaz y plantillas.',
         },
-        placeholders: {
-          secondName: 'Segundo nombre',
-          maternalLastName: 'Segundo apellido',
-        },
         actions: {
           save: 'Guardar cambios',
           saving: 'Guardando...',
@@ -1312,6 +1305,7 @@ const translations: Translations = {
           savingOverlay: 'Guardando perfil...',
           passwordMismatch: 'La nueva contraseña y su confirmación deben coincidir.',
           passwordMinLength: 'La nueva contraseña debe tener al menos 8 caracteres.',
+          invalidPhone: 'Ingresa un número de teléfono válido para el país seleccionado.',
         },
       },
       users: {
@@ -2124,10 +2118,6 @@ const translations: Translations = {
           password: 'Si no quieres cambiarla, déjala vacía.',
           preferredLanguage: 'Usaremos este idioma para la interfaz y plantillas.',
         },
-        placeholders: {
-          secondName: 'Segundo nombre',
-          maternalLastName: 'Segundo apellido',
-        },
         actions: {
           save: 'Guardar cambios',
           saving: 'Guardando...',
@@ -2143,6 +2133,7 @@ const translations: Translations = {
           savingOverlay: 'Guardando perfil...',
           passwordMismatch: 'La nueva contraseña y su confirmación deben coincidir.',
           passwordMinLength: 'La nueva contraseña debe tener al menos 8 caracteres.',
+          invalidPhone: 'Ingresa un número de teléfono válido para el país seleccionado.',
         },
       },
       users: {
@@ -2867,10 +2858,6 @@ const translations: Translations = {
           password: 'Leave it blank if you do not want to change it.',
           preferredLanguage: 'We will use this language for the interface and templates.',
         },
-        placeholders: {
-          secondName: 'Second name',
-          maternalLastName: 'Second surname',
-        },
         actions: {
           save: 'Save changes',
           saving: 'Saving...',
@@ -2886,6 +2873,7 @@ const translations: Translations = {
           savingOverlay: 'Saving profile...',
           passwordMismatch: 'The new password and its confirmation must match.',
           passwordMinLength: 'The new password must be at least 8 characters long.',
+          invalidPhone: 'Enter a valid phone number for the selected country.',
         },
       },
       users: {
@@ -3610,10 +3598,6 @@ const translations: Translations = {
           password: 'Leave it blank if you do not want to change it.',
           preferredLanguage: 'We will use this language for the interface and templates.',
         },
-        placeholders: {
-          secondName: 'Second name',
-          maternalLastName: 'Second surname',
-        },
         actions: {
           save: 'Save changes',
           saving: 'Saving...',
@@ -3629,6 +3613,7 @@ const translations: Translations = {
           savingOverlay: 'Saving profile...',
           passwordMismatch: 'The new password and its confirmation must match.',
           passwordMinLength: 'The new password must be at least 8 characters long.',
+          invalidPhone: 'Enter a valid phone number for the selected country.',
         },
       },
       users: {
@@ -4353,10 +4338,6 @@ const translations: Translations = {
           password: 'Laissez ce champ vide si vous ne voulez pas le modifier.',
           preferredLanguage: 'Nous utiliserons cette langue pour l’interface et les modèles.',
         },
-        placeholders: {
-          secondName: 'Deuxième prénom',
-          maternalLastName: 'Deuxième nom de famille',
-        },
         actions: {
           save: 'Enregistrer les modifications',
           saving: 'Enregistrement...',
@@ -4372,6 +4353,7 @@ const translations: Translations = {
           savingOverlay: 'Enregistrement du profil...',
           passwordMismatch: 'Le nouveau mot de passe et sa confirmation doivent correspondre.',
           passwordMinLength: 'Le nouveau mot de passe doit contenir au moins 8 caractères.',
+          invalidPhone: 'Entrez un numéro de téléphone valide pour le pays sélectionné.',
         },
       },
       users: {
@@ -5096,10 +5078,6 @@ const translations: Translations = {
           password: 'Se não quiser alterá-la, deixe em branco.',
           preferredLanguage: 'Usaremos este idioma para a interface e os modelos.',
         },
-        placeholders: {
-          secondName: 'Segundo nome',
-          maternalLastName: 'Segundo sobrenome',
-        },
         actions: {
           save: 'Salvar alterações',
           saving: 'Salvando...',
@@ -5115,6 +5093,7 @@ const translations: Translations = {
           savingOverlay: 'Salvando perfil...',
           passwordMismatch: 'A nova senha e a confirmação devem ser iguais.',
           passwordMinLength: 'A nova senha deve ter pelo menos 8 caracteres.',
+          invalidPhone: 'Digite um número de telefone válido para o país selecionado.',
         },
       },
       users: {
@@ -5839,10 +5818,6 @@ const translations: Translations = {
           password: '변경하지 않으려면 비워 두세요.',
           preferredLanguage: '이 언어는 인터페이스와 템플릿에 사용됩니다.',
         },
-        placeholders: {
-          secondName: '중간 이름',
-          maternalLastName: '두 번째 성',
-        },
         actions: {
           save: '변경 사항 저장',
           saving: '저장 중...',
@@ -5858,6 +5833,7 @@ const translations: Translations = {
           savingOverlay: '프로필 저장 중...',
           passwordMismatch: '새 비밀번호와 확인 비밀번호가 일치해야 합니다.',
           passwordMinLength: '새 비밀번호는 최소 8자 이상이어야 합니다.',
+          invalidPhone: '선택한 국가에 대해 유효한 전화번호를 입력하세요.',
         },
       },
       users: {
@@ -6582,10 +6558,6 @@ const translations: Translations = {
           password: '如果您不想更改密码，请留空。',
           preferredLanguage: '我们将把此语言用于界面和模板。',
         },
-        placeholders: {
-          secondName: '第二名字',
-          maternalLastName: '第二姓氏',
-        },
         actions: {
           save: '保存更改',
           saving: '保存中...',
@@ -6601,6 +6573,7 @@ const translations: Translations = {
           savingOverlay: '正在保存个人资料...',
           passwordMismatch: '新密码和确认密码必须一致。',
           passwordMinLength: '新密码至少需要 8 个字符。',
+          invalidPhone: '请输入与所选国家匹配的有效电话号码。',
         },
       },
       users: {

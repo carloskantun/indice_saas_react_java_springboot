@@ -8,9 +8,7 @@ export interface ConfigCenterCurrentUser {
   nombres: string;
   apellidos: string;
   primer_nombre?: string;
-  segundo_nombre?: string;
   apellido_paterno?: string;
-  apellido_materno?: string;
   telefono?: string;
   country?: string;
   preferred_language?: string;
@@ -20,9 +18,7 @@ export interface ConfigCenterCurrentUser {
 
 export interface SaveCurrentUserPayload {
   primer_nombre: string;
-  segundo_nombre?: string;
   apellido_paterno: string;
-  apellido_materno?: string;
   telefono?: string;
   country?: string;
   preferred_language?: string;
