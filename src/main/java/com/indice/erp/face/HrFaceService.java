@@ -162,7 +162,7 @@ public class HrFaceService {
             }
             captureReferences.add(new FaceVerificationClient.CaptureReference(
                 step,
-                objectStorageService.presignDownload(
+                objectStorageService.presignServiceDownload(
                     biometricBucket(),
                     capture.objectKey(),
                     objectStorageProperties.getMinio().getPresignExpirySeconds()
@@ -385,7 +385,7 @@ public class HrFaceService {
             }
             captureReferences.add(new FaceVerificationClient.CaptureReference(
                 step,
-                objectStorageService.presignDownload(
+                objectStorageService.presignServiceDownload(
                     biometricBucket(),
                     objectKey,
                     objectStorageProperties.getMinio().getPresignExpirySeconds()

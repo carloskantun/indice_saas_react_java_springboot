@@ -2,22 +2,22 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import {
-  PersonalPerformancePdfDocument,
-  type PersonalPerformancePdfDocumentProps,
-} from './PersonalPerformancePdfDocument';
+  PayrollRunPdfDocument,
+  type PayrollRunPdfDocumentProps,
+} from './PayrollRunPdfDocument';
 
-type PersonalPerformancePrintPortalProps = {
-  job: PersonalPerformancePdfDocumentProps | null;
+type PayrollRunPrintPortalProps = {
+  job: PayrollRunPdfDocumentProps | null;
   onComplete: () => void;
 };
 
 const PRINT_HOST_CLASS = 'bdpdf-print-host';
-const PRINT_HOST_ID = 'bdpdf-print-host-personal-performance';
+const PRINT_HOST_ID = 'bdpdf-print-host-payroll-run';
 
-export function PersonalPerformancePrintPortal({
+export function PayrollRunPrintPortal({
   job,
   onComplete,
-}: PersonalPerformancePrintPortalProps) {
+}: PayrollRunPrintPortalProps) {
   const [host, setHost] = useState<HTMLDivElement | null>(null);
   const hasTriggeredRef = useRef(false);
 
@@ -74,7 +74,7 @@ export function PersonalPerformancePrintPortal({
   return createPortal(
     <div className="bdpdf-print-root" aria-hidden="true">
       <div className="bdpdf-print-document">
-        <PersonalPerformancePdfDocument {...job} />
+        <PayrollRunPdfDocument {...job} />
       </div>
     </div>,
     host,

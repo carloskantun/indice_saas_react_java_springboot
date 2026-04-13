@@ -535,6 +535,7 @@ export interface AttendanceMediaPresignRequest {
   employee_id: number;
   content_type: string;
   event_type?: 'check_in' | 'check_out' | 'break_out' | 'break_in';
+  event_timestamp?: string;
 }
 
 export interface AttendanceMediaPresignResponse {

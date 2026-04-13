@@ -14,10 +14,12 @@ import {
   Users,
 } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
+import { LoadingBarOverlay, runWithMinimumDuration } from '../../../components/LoadingBarOverlay';
 import { Skeleton } from '../../../components/ui/skeleton';
 import { LocationRegistrationModal } from '../../../components/LocationRegistrationModal';
 import { HorariosModal } from '../../../components/HorariosModal';
 import { FaceEnrollmentModal } from '../../../components/FaceEnrollmentModal';
+import { useLocalStorageState } from '../../../hooks/useLocalStorageState';
 import {
   Dialog,
   DialogContent,
@@ -46,7 +48,11 @@ import {
 } from '../../../api/humanResources';
 import { useLanguage } from '../../../shared/context';
 
-const todayIsoDate = () => new Date().toISOString().slice(0, 10);
+const padDatePart = (value: number) => `${value}`.padStart(2, '0');
+const localDateString = (date: Date) =>
+  `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
+const todayIsoDate = () => localDateString(new Date());
+const hrAttendanceSelectedEmployeeStorageKey = 'indice.hr.attendance.selectedEmployeeId';
 const toMonthValue = (value: string | Date) => {
   const date = typeof value === 'string' ? new Date(`${value}T00:00:00`) : value;
   return `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, '0')}`;
@@ -170,6 +176,8 @@ const controlCopy = {
       clearManualCorrection: 'Clear manual correction',
       correctionApplied: 'Correction applied successfully.',
       correctionCleared: 'Correction cleared successfully.',
+      savingDayStatus: 'Saving day status',
+      savingDayStatusDescription: 'We are storing the manual correction and refreshing the attendance view.',
       searchLabel: 'Search employees',
       selectedTemplate: 'Selected template',
       selectedEmployee: 'Selected employee',
@@ -355,6 +363,8 @@ const controlCopy = {
       clearManualCorrection: 'Limpiar correccion manual',
       correctionApplied: 'Correccion aplicada correctamente.',
       correctionCleared: 'Correccion eliminada correctamente.',
+      savingDayStatus: 'Guardando estatus del dia',
+      savingDayStatusDescription: 'Estamos guardando la correccion manual y refrescando la vista de asistencia.',
       searchLabel: 'Buscar colaboradores',
       selectedTemplate: 'Plantilla seleccionada',
       selectedEmployee: 'Colaborador seleccionado',
@@ -607,7 +617,10 @@ export default function Control() {
   const [templates, setTemplates] = useState<AttendanceControlTemplate[]>([]);
   const [kioskDevices, setKioskDevices] = useState<AttendanceKioskDevice[]>([]);
   const [accessProfiles, setAccessProfiles] = useState<AttendanceAccessProfile[]>([]);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useLocalStorageState<number | null>(
+    hrAttendanceSelectedEmployeeStorageKey,
+    null,
+  );
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
   const [selectedKioskDeviceId, setSelectedKioskDeviceId] = useState<number | null>(null);
   const [selectedCalendarDay, setSelectedCalendarDay] = useState<AttendanceCalendarDay | null>(null);
@@ -843,6 +856,11 @@ export default function Control() {
     [attendanceCalendarDays],
   );
 
+  const selectedControlDay = useMemo(
+    () => attendanceCalendarDays.find((day) => day.date === controlDate) ?? null,
+    [attendanceCalendarDays, controlDate],
+  );
+
   const calendarCells = useMemo(() => {
     const [year, month] = calendarMonth.split('-').map(Number);
     const firstDay = new Date(year, month - 1, 1);
@@ -937,7 +955,10 @@ export default function Control() {
 
     try {
       setIsUpdatingCalendarDay(true);
-      const result = await humanResourcesApi.updateAttendanceDailyRecord(selectedEmployeeId, date, { status });
+      const result = await runWithMinimumDuration(
+        humanResourcesApi.updateAttendanceDailyRecord(selectedEmployeeId, date, { status }),
+        850,
+      );
       setControlDate(date);
 
       setAttendanceCalendarDays((current) =>
@@ -1261,6 +1282,12 @@ export default function Control() {
 
   return (
     <>
+      <LoadingBarOverlay
+        isVisible={isUpdatingCalendarDay}
+        title={copy.labels.savingDayStatus}
+        description={copy.labels.savingDayStatusDescription}
+      />
+
       {errorMessage ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-700/30 dark:bg-red-900/20 dark:text-red-300">
           <div className="flex items-center justify-between gap-3">
@@ -1499,6 +1526,51 @@ export default function Control() {
                     <LegendOutline label={copy.labels.currentDay} />
                   </div>
                 </div>
+
+                {selectedControlDay ? (
+                  <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                          {formatDate(selectedControlDay.date, currentLanguage.code, selectedControlDay.date)}
+                        </p>
+                        <div className={`mt-3 inline-flex rounded-full px-3 py-1 text-sm font-medium ${dayStatusPillTone(selectedControlDay)}`}>
+                          {copy.statuses[resolvedDayStatus(selectedControlDay)]}
+                        </div>
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedCalendarDay(selectedControlDay)}
+                      >
+                        {copy.labels.modifyStatusOfDay}
+                      </Button>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <DayInfoStat label={copy.labels.checkIn} value={formatTimeOnly(selectedControlDay.first_check_in_at, currentLanguage.code, copy.labels.noRegistration)} />
+                      <DayInfoStat label={copy.labels.checkOut} value={formatTimeOnly(selectedControlDay.last_check_out_at, currentLanguage.code, copy.labels.noRegistration)} />
+                      <DayInfoStat label={copy.labels.totalTime} value={formatWorkDuration(selectedControlDay.first_check_in_at, selectedControlDay.last_check_out_at, copy.labels.noRegistration)} />
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <DayEvidenceCard
+                        label={copy.labels.checkIn}
+                        photoUrl={selectedControlDay.first_photo_url ?? null}
+                        location={selectedControlDay.first_location?.name ?? null}
+                        copy={copy}
+                      />
+                      <DayEvidenceCard
+                        label={copy.labels.checkOut}
+                        photoUrl={selectedControlDay.last_photo_url ?? null}
+                        location={selectedControlDay.last_location?.name ?? null}
+                        copy={copy}
+                      />
+                    </div>
+                  </div>
+                ) : null}
               </>
             ) : (
               <div className="mt-8 rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-6 py-12 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">

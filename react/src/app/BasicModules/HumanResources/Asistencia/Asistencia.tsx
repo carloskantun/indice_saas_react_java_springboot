@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CalendarDays, Clock, Coffee, MapPin, Search } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CalendarDays, Clock, MapPin, User, View } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 import { AttendancePhotoCaptureCard } from '../../../components/AttendancePhotoCaptureCard';
 import { CalendarioAsistencia } from '../../../components/CalendarioAsistencia';
@@ -7,8 +7,15 @@ import { KioskModal } from '../../../components/KioskModal';
 import { LoadingBarOverlay, runWithMinimumDuration } from '../../../components/LoadingBarOverlay';
 import { SuccessToast } from '../../../components/SuccessToast';
 import { Button } from '../../../components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '../../../components/ui/dialog';
 import { Skeleton } from '../../../components/ui/skeleton';
 import { useAttendancePhotoUpload } from '../../../hooks/useAttendancePhotoUpload';
+import { useLocalStorageState } from '../../../hooks/useLocalStorageState';
 import { useLanguage } from '../../../shared/context';
 import {
   humanResourcesApi,
@@ -17,14 +24,21 @@ import {
   type AttendanceDashboardResponse,
 } from '../../../api/humanResources';
 
-const todayIsoDate = () => new Date().toISOString().slice(0, 10);
+const padDatePart = (value: number) => `${value}`.padStart(2, '0');
+const localDateString = (date: Date) =>
+  `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
+const localDateTimeString = (date: Date) =>
+  `${localDateString(date)}T${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}:${padDatePart(date.getSeconds())}`;
+const todayIsoDate = () => localDateString(new Date());
 const todayMonth = () => todayIsoDate().slice(0, 7);
+const hrAttendanceSelectedEmployeeStorageKey = 'indice.hr.attendance.selectedEmployeeId';
 
 const attendanceCopy = {
   en: {
     title: 'Attendance',
-    subtitle: 'Daily dashboard connected to the backend, with kiosk punches and manual corrections.',
-    openKiosk: 'Open kiosk',
+    subtitle: 'Register your entry/exit with photo and location.',
+    viewRecords: 'View my records',
+    markBlock: 'Mark block',
     loading: {
       refreshTitle: 'Updating attendance',
       refreshDescription: 'We are syncing the HR operation.',
@@ -55,6 +69,7 @@ const attendanceCopy = {
       absence: 'No record',
     },
     labels: {
+      collaborator: 'Contributor',
       employeeBrowser: 'Employee history',
       employeeBrowserHint: 'Choose who you are reviewing before interacting with the calendar or manual recorder.',
       employeePicker: 'Selected employee',
@@ -111,8 +126,9 @@ const attendanceCopy = {
   },
   es: {
     title: 'Asistencia',
-    subtitle: 'Tablero diario conectado al backend, con marcación por kiosco y correcciones manuales.',
-    openKiosk: 'Abrir kiosco',
+    subtitle: 'Registra tu entrada/salida con foto y ubicación.',
+    viewRecords: 'Ver mis registros',
+    markBlock: 'Marcar bloque',
     loading: {
       refreshTitle: 'Actualizando asistencia',
       refreshDescription: 'Estamos sincronizando la operación de RH.',
@@ -143,6 +159,7 @@ const attendanceCopy = {
       absence: 'Sin registro',
     },
     labels: {
+      collaborator: 'Colaborador',
       employeeBrowser: 'Historial por colaborador',
       employeeBrowserHint: 'Elige a quién estás revisando antes de interactuar con el calendario o el registro manual.',
       employeePicker: 'Colaborador seleccionado',
@@ -220,12 +237,16 @@ export default function Asistencia() {
   const [dashboard, setDashboard] = useState<AttendanceDashboardResponse | null>(null);
   const [calendar, setCalendar] = useState<AttendanceCalendarResponse | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(todayMonth());
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useLocalStorageState<number | null>(
+    hrAttendanceSelectedEmployeeStorageKey,
+    null,
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
   const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isKioskOpen, setIsKioskOpen] = useState(false);
+  const [isRecordsOpen, setIsRecordsOpen] = useState(false);
   const [overlayTitle, setOverlayTitle] = useState<string>(copy.loading.refreshTitle);
   const [overlayDescription, setOverlayDescription] = useState<string>(copy.loading.refreshDescription);
   const [errorMessage, setErrorMessage] = useState('');
@@ -235,6 +256,8 @@ export default function Asistencia() {
     latitude: number;
     longitude: number;
   } | null>(null);
+  const registrationRef = useRef<HTMLDivElement | null>(null);
+  const successToastTimeoutRef = useRef<number | null>(null);
   const attendancePhotoUpload = useAttendancePhotoUpload();
 
   const filteredItems = useMemo(() => {
@@ -258,6 +281,11 @@ export default function Asistencia() {
     () => filteredItems.find((item) => item.employee_id === selectedEmployeeId) ?? dashboard?.items.find((item) => item.employee_id === selectedEmployeeId) ?? null,
     [dashboard?.items, filteredItems, selectedEmployeeId],
   );
+
+  const selectedEmployeeOption = useMemo(
+    () => dashboard?.employees.find((employee) => employee.id === selectedEmployeeId) ?? null,
+    [dashboard?.employees, selectedEmployeeId],
+  );
   const employeeOptions = dashboard?.items ?? [];
   const selectedEmployeeIndex = employeeOptions.findIndex((item) => item.employee_id === selectedEmployeeId);
   const canGoToPreviousEmployee = selectedEmployeeIndex > 0;
@@ -271,7 +299,11 @@ export default function Asistencia() {
     try {
       const response = await humanResourcesApi.getAttendanceDashboard(todayIsoDate());
       setDashboard(response);
-      setSelectedEmployeeId((current) => current ?? response.employees[0]?.id ?? null);
+      setSelectedEmployeeId((current) =>
+        current && response.employees.some((employee) => employee.id === current)
+          ? current
+          : response.employees[0]?.id ?? null,
+      );
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : copy.labels.retry);
     } finally {
@@ -329,6 +361,25 @@ export default function Asistencia() {
     attendancePhotoUpload.clearPhoto();
   }, [selectedEmployeeId]);
 
+  useEffect(() => () => {
+    if (successToastTimeoutRef.current !== null) {
+      window.clearTimeout(successToastTimeoutRef.current);
+    }
+  }, []);
+
+  const showSuccessToast = (message: string) => {
+    if (successToastTimeoutRef.current !== null) {
+      window.clearTimeout(successToastTimeoutRef.current);
+      successToastTimeoutRef.current = null;
+    }
+
+    setSuccessToastMessage('');
+    successToastTimeoutRef.current = window.setTimeout(() => {
+      setSuccessToastMessage(message);
+      successToastTimeoutRef.current = null;
+    }, 10);
+  };
+
   const runMutation = async ({
     title,
     description,
@@ -360,6 +411,7 @@ export default function Asistencia() {
     latitude: number;
     longitude: number;
     photoUrl?: string;
+    eventTimestamp?: string;
   }) => {
     await runMutation({
       title: copy.loading.registerTitle,
@@ -377,6 +429,7 @@ export default function Asistencia() {
           latitude: payload.latitude,
           longitude: payload.longitude,
           photo_url: payload.photoUrl,
+          event_timestamp: payload.eventTimestamp,
         });
 
         await loadDashboard();
@@ -384,7 +437,7 @@ export default function Asistencia() {
       },
     });
 
-    setSuccessToastMessage(
+    showSuccessToast(
       payload.eventType === 'check_in'
         ? copy.success.checkIn
         : payload.eventType === 'check_out'
@@ -450,6 +503,8 @@ export default function Asistencia() {
       return;
     }
 
+    const eventTimestamp = localDateTimeString(new Date());
+
     await runMutation({
       title: copy.loading.registerTitle,
       description: copy.loading.registerDescription,
@@ -457,6 +512,7 @@ export default function Asistencia() {
         const photoObjectKey = await attendancePhotoUpload.ensureUploaded({
           employee_id: selectedItem.employee_id,
           event_type: eventType,
+          event_timestamp: eventTimestamp,
           content_type: attendancePhotoUpload.photo?.contentType ?? 'image/jpeg',
         });
 
@@ -469,6 +525,7 @@ export default function Asistencia() {
           latitude: coordinates.latitude,
           longitude: coordinates.longitude,
           photo_url: photoObjectKey,
+          event_timestamp: eventTimestamp,
         });
 
         await loadDashboard();
@@ -477,7 +534,7 @@ export default function Asistencia() {
     });
 
     attendancePhotoUpload.clearPhoto();
-    setSuccessToastMessage(eventType === 'check_in' ? copy.success.checkIn : copy.success.checkOut);
+    showSuccessToast(eventType === 'check_in' ? copy.success.checkIn : copy.success.checkOut);
   };
 
   const inlineRecorderReady = Boolean(selectedItem && attendancePhotoUpload.photo && recorderLocationState);
@@ -500,7 +557,7 @@ export default function Asistencia() {
       },
     });
 
-    setSuccessToastMessage(status ? copy.success.correctionApplied : copy.success.correctionCleared);
+    showSuccessToast(status ? copy.success.correctionApplied : copy.success.correctionCleared);
   };
 
   const handleEmployeeSelection = (employeeId: number) => {
@@ -533,6 +590,8 @@ export default function Asistencia() {
         isVisible={Boolean(successToastMessage)}
         message={successToastMessage}
         onClose={() => setSuccessToastMessage('')}
+        className="left-1/2 right-auto top-5 bottom-auto z-[120] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2"
+        durationMs={3600}
       />
 
       {errorMessage ? (
@@ -558,335 +617,194 @@ export default function Asistencia() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <div className="inline-flex items-center gap-2 rounded-lg border border-[#143675]/20 bg-white px-4 py-2 text-sm font-medium text-[#143675] shadow-sm dark:border-[#143675]/30 dark:bg-gray-800 dark:text-[#8bb3ff]">
-              <CalendarDays className="h-4 w-4" />
-              {monthLabel(calendarMonth, currentLanguage.code)}
-            </div>
-            <Button className="bg-[#143675] text-white hover:bg-[#0f2855]" onClick={() => setIsKioskOpen(true)}>
-              {copy.openKiosk}
+            <Button variant="outline" className="gap-2" onClick={() => setIsRecordsOpen(true)} disabled={!selectedEmployeeId}>
+              <View className="h-4 w-4" />
+              {copy.viewRecords}
+            </Button>
+            <Button
+              className="bg-[#143675] text-white hover:bg-[#0f2855]"
+              onClick={() => {
+                registrationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }}
+            >
+              {copy.markBlock}
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="mb-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <AttendancePhotoCaptureCard
-            title={copy.recorder.photo}
-            requiredText={copy.recorder.photoRequired}
-            takePhotoLabel={copy.recorder.takePhoto}
-            chooseFromGalleryLabel={copy.recorder.chooseFromGallery}
-            retakePhotoLabel={copy.recorder.retakePhoto}
-            captureLabel={copy.recorder.capturePhoto}
-            cancelLabel={copy.recorder.cancelCamera}
-            helperText={copy.recorder.photoHint}
-            photo={attendancePhotoUpload.photo}
-            disabled={recorderDisabled}
-            onPhotoChange={attendancePhotoUpload.setCapturedPhoto}
-            onError={setErrorMessage}
-            errors={{
-              cameraUnsupported: copy.recorder.cameraUnsupported,
-              cameraPermissionDenied: copy.recorder.cameraPermissionDenied,
-              cameraUnavailable: copy.recorder.cameraUnavailable,
-            }}
-          />
-
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <div className="mb-6">
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
-                    <MapPin className="h-5 w-5" />
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          {isLoadingDashboard ? (
+            <div className="space-y-5">
+              <div className="flex items-start gap-3">
+                <Skeleton className="h-12 w-12 rounded-full" />
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-36" />
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-3 w-40" />
+                </div>
+              </div>
+              <Skeleton className="h-px w-full" />
+              <Skeleton className="h-40 rounded-lg" />
+            </div>
+          ) : selectedItem ? (
+            <>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">
+                    <User className="h-5 w-5" />
                   </div>
                   <div>
-                    <h4 className="font-semibold text-gray-900 dark:text-white">{copy.recorder.location}</h4>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">{copy.recorder.locationRequired}</p>
-                  </div>
-                </div>
-              </div>
-
-              <select
-                value={recorderLocationId}
-                onChange={(event) => setRecorderLocationId(event.target.value)}
-                disabled={recorderDisabled}
-                className="mb-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-[#143675] focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-              >
-                {dashboard?.locations.map((location) => (
-                  <option key={location.id} value={location.id}>
-                    {location.name}
-                  </option>
-                ))}
-              </select>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="mb-3 w-full gap-2"
-                disabled={recorderDisabled}
-                onClick={() => void requestRecorderGeolocation()}
-              >
-                <MapPin className="h-4 w-4" />
-                {recorderLocationState ? copy.recorder.refreshLocation : copy.recorder.getLocation}
-              </Button>
-
-              <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300">
-                {recorderLocationState
-                  ? `${copy.recorder.locationReady}: ${recorderLocationState.latitude.toFixed(5)}, ${recorderLocationState.longitude.toFixed(5)}`
-                  : copy.recorder.noLocation}
-              </div>
-            </div>
-
-            <div className="border-t border-gray-200 pt-6 dark:border-gray-700">
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div>
-                  <h4 className="font-semibold text-gray-900 dark:text-white">{copy.recorder.record}</h4>
-                </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {selectedItem ? copy.recorder.recordHint : copy.recorder.selectEmployeeHint}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Button
-                  type="button"
-                    disabled={recorderDisabled || !inlineRecorderReady || isSubmitting}
-                  className="bg-[#143675] text-white hover:bg-[#0f2855] disabled:bg-gray-300 disabled:text-gray-500"
-                  onClick={() => {
-                    void handleInlineAttendanceRecord('check_in');
-                  }}
-                >
-                  {copy.recorder.checkIn}
-                </Button>
-                <Button
-                  type="button"
-                    disabled={recorderDisabled || !inlineRecorderReady || isSubmitting}
-                  className="bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-300 disabled:text-gray-500"
-                  onClick={() => {
-                    void handleInlineAttendanceRecord('check_out');
-                  }}
-                >
-                  {copy.recorder.checkOut}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      {isLoadingDashboard ? (
-        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, index) => (
-            <div key={index} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-              <Skeleton className="mb-2 h-4 w-20" />
-              <Skeleton className="mb-2 h-8 w-16" />
-              <Skeleton className="h-3 w-28" />
-            </div>
-          ))}
-        </div>
-      ) : dashboard ? (
-        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-          {summaryCardKeys.map((cardKey) => {
-            const labelMap = {
-              on_time_count: copy.summary.onTime,
-              late_count: copy.summary.late,
-              leave_count: copy.summary.leave,
-              rest_count: copy.summary.rest,
-              absence_count: copy.summary.absence,
-            } as const;
-            const toneMap = {
-              on_time_count: 'text-emerald-600 dark:text-emerald-400',
-              late_count: 'text-amber-600 dark:text-amber-400',
-              leave_count: 'text-sky-600 dark:text-sky-400',
-              rest_count: 'text-gray-900 dark:text-white',
-              absence_count: 'text-rose-600 dark:text-rose-400',
-            } as const;
-            return (
-            <div key={cardKey} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-              <p className="text-sm text-gray-500 dark:text-gray-400">{labelMap[cardKey]}</p>
-              <p className={`mt-2 text-3xl font-bold ${toneMap[cardKey]}`}>
-                {dashboard.summary[cardKey]}
-              </p>
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                {copy.summary.totalMonitored}: {dashboard.summary.total_employees}
-              </p>
-            </div>
-          );})}
-        </div>
-      ) : null}
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <div className="space-y-6 xl:col-span-1">
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <div className="mb-4">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{copy.labels.employeeBrowser}</h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {copy.labels.employeeBrowserHint}
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {copy.labels.employeePicker}
-                </label>
-                <select
-                  value={selectedEmployeeId ? String(selectedEmployeeId) : ''}
-                  onChange={(event) => handleEmployeeSelection(Number(event.target.value))}
-                  disabled={employeeOptions.length === 0}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-[#143675] focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                >
-                  {employeeOptions.length === 0 ? (
-                    <option value="">{copy.labels.noEmployeesAvailable}</option>
-                  ) : null}
-                  {employeeOptions.map((item) => (
-                    <option key={item.employee_id} value={item.employee_id}>
-                      {item.employee_name} · {item.position_title || copy.labels.unassignedPosition}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!canGoToPreviousEmployee}
-                  onClick={() => handleEmployeeStep(-1)}
-                >
-                  {copy.labels.previousEmployee}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!canGoToNextEmployee}
-                  onClick={() => handleEmployeeStep(1)}
-                >
-                  {copy.labels.nextEmployee}
-                </Button>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {copy.labels.searchEmployee}
-                </label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder={copy.labels.searchPlaceholder}
-                    className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 text-gray-900 focus:border-[#143675] focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{copy.labels.employeeList}</h3>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{copy.labels.employeeListHint}</p>
-            </div>
-            <div className="divide-y divide-gray-200 dark:divide-gray-700">
-              {isLoadingDashboard
-                ? Array.from({ length: 4 }).map((_, index) => (
-                    <div key={index} className="px-6 py-4">
-                      <Skeleton className="mb-2 h-4 w-40" />
-                      <Skeleton className="h-3 w-24" />
-                    </div>
-                  ))
-                : filteredItems.length > 0
-                  ? filteredItems.map((item) => (
-                      <button
-                        key={item.employee_id}
-                        type="button"
-                        onClick={() => handleEmployeeSelection(item.employee_id)}
-                        className={`w-full px-6 py-4 text-left transition-colors ${
-                          selectedEmployeeId === item.employee_id
-                            ? 'bg-[#143675]/5 dark:bg-[#143675]/20'
-                            : 'hover:bg-gray-50 dark:hover:bg-gray-700/40'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-medium text-gray-900 dark:text-white">{item.employee_name}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {item.unit_name || copy.labels.unassignedUnit} · {item.position_title || copy.labels.unassignedPosition}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                              {item.first_check_in_at
-                                ? new Intl.DateTimeFormat(currentLanguage.code, { hour: '2-digit', minute: '2-digit' }).format(
-                                    new Date(item.first_check_in_at),
-                                  )
-                                : '—'}
-                            </p>
-                            <span
-                              className={`mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                                statusClasses[item.status]
-                              }`}
-                            >
-                              {copy.statuses[item.status]}
-                            </span>
-                          </div>
-                        </div>
-                      </button>
-                    ))
-                  : (
-                      <div className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        {copy.labels.noEmployeesFound}
-                      </div>
-                    )}
-            </div>
-          </div>
-
-          {selectedItem ? (
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-              <h3 className="mb-4 text-sm font-semibold text-gray-900 dark:text-white">{copy.labels.employeeSummary}</h3>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-700/40">
-                  <p className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-                    <Clock className="h-4 w-4" />
-                    {copy.labels.position}
-                  </p>
-                  <p className="mt-1 font-medium text-gray-900 dark:text-white">{selectedItem.position_title || copy.labels.unassignedPosition}</p>
-                </div>
-                <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-700/40">
-                  <p className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-                    <CalendarDays className="h-4 w-4" />
-                    {copy.labels.unit}
-                  </p>
-                  <p className="mt-1 font-medium text-gray-900 dark:text-white">{selectedItem.unit_name || copy.labels.unassignedUnit}</p>
-                </div>
-                <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-700/40">
-                  <p className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-                    <AlertCircle className="h-4 w-4" />
-                    {copy.labels.department}
-                  </p>
-                  <p className="mt-1 font-medium text-gray-900 dark:text-white">{selectedItem.department || copy.labels.noDepartment}</p>
-                </div>
-                <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-700/40">
-                  <p className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-                    <Coffee className="h-4 w-4" />
-                    {copy.labels.todayStatus}
-                  </p>
-                  <p className="mt-1 font-medium text-gray-900 dark:text-white">{copy.statuses[selectedItem.status]}</p>
-                </div>
-                {selectedItem.first_location ? (
-                  <div className="col-span-2 rounded-lg bg-gray-50 p-3 dark:bg-gray-700/40">
-                    <p className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-                      <MapPin className="h-4 w-4" />
-                      {copy.labels.latestLocation}
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{copy.labels.collaborator}</p>
+                    <p className="mt-1 text-xl font-semibold text-gray-900 dark:text-white">{selectedItem.employee_name}</p>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      {selectedItem.position_title || selectedItem.department || copy.labels.unassignedPosition}
                     </p>
-                    <p className="mt-1 font-medium text-gray-900 dark:text-white">{selectedItem.first_location.name}</p>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      {selectedEmployeeOption?.employee_number || copy.labels.unassignedUnit}
+                    </p>
                   </div>
+                </div>
+
+                {dashboard?.employees && dashboard.employees.length > 1 ? (
+                  <select
+                    value={selectedEmployeeId ? String(selectedEmployeeId) : ''}
+                    onChange={(event) => handleEmployeeSelection(Number(event.target.value))}
+                    className="min-w-[220px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#143675] focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  >
+                    {dashboard.employees.map((employee) => (
+                      <option key={employee.id} value={employee.id}>
+                        {employee.full_name}
+                      </option>
+                    ))}
+                  </select>
                 ) : null}
               </div>
+
+              <div className="mt-6 border-t border-gray-200 pt-6 dark:border-gray-700">
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div>
+                    <h4 className="font-semibold text-gray-900 dark:text-white">{copy.recorder.photo}</h4>
+                  </div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{copy.recorder.photoRequired}</p>
+                </div>
+
+                <AttendancePhotoCaptureCard
+                  title={copy.recorder.photo}
+                  requiredText={copy.recorder.photoRequired}
+                  takePhotoLabel={copy.recorder.takePhoto}
+                  chooseFromGalleryLabel={copy.recorder.chooseFromGallery}
+                  retakePhotoLabel={copy.recorder.retakePhoto}
+                  captureLabel={copy.recorder.capturePhoto}
+                  cancelLabel={copy.recorder.cancelCamera}
+                  helperText={copy.recorder.photoHint}
+                  photo={attendancePhotoUpload.photo}
+                  disabled={recorderDisabled}
+                  onPhotoChange={attendancePhotoUpload.setCapturedPhoto}
+                  onError={setErrorMessage}
+                  errors={{
+                    cameraUnsupported: copy.recorder.cameraUnsupported,
+                    cameraPermissionDenied: copy.recorder.cameraPermissionDenied,
+                    cameraUnavailable: copy.recorder.cameraUnavailable,
+                  }}
+                />
+              </div>
+            </>
+          ) : (
+            <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-5 py-10 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
+              {copy.labels.noEmployeeSelected}
             </div>
-          ) : null}
+          )}
         </div>
 
-        <div className="xl:col-span-2">
+        <div ref={registrationRef} className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="mb-6">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
+                  <MapPin className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-900 dark:text-white">{copy.recorder.location}</h4>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{copy.recorder.locationRequired}</p>
+                </div>
+              </div>
+            </div>
+
+            <select
+              value={recorderLocationId}
+              onChange={(event) => setRecorderLocationId(event.target.value)}
+              disabled={recorderDisabled}
+              className="mb-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-[#143675] focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            >
+              {dashboard?.locations.map((location) => (
+                <option key={location.id} value={location.id}>
+                  {location.name}
+                </option>
+              ))}
+            </select>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="mb-3 w-full gap-2"
+              disabled={recorderDisabled}
+              onClick={() => void requestRecorderGeolocation()}
+            >
+              <MapPin className="h-4 w-4" />
+              {recorderLocationState ? copy.recorder.refreshLocation : copy.recorder.getLocation}
+            </Button>
+
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300">
+              {recorderLocationState
+                ? `${copy.recorder.locationReady}: ${recorderLocationState.latitude.toFixed(5)}, ${recorderLocationState.longitude.toFixed(5)}`
+                : copy.recorder.noLocation}
+            </div>
+          </div>
+
+          <div className="border-t border-gray-200 pt-6 dark:border-gray-700">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-gray-400" />
+                <h4 className="font-semibold text-gray-900 dark:text-white">{copy.recorder.record}</h4>
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {selectedItem ? copy.recorder.recordHint : copy.recorder.selectEmployeeHint}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                type="button"
+                disabled={recorderDisabled || !inlineRecorderReady || isSubmitting}
+                className="bg-[#143675] text-white hover:bg-[#0f2855] disabled:bg-gray-300 disabled:text-gray-500"
+                onClick={() => {
+                  void handleInlineAttendanceRecord('check_in');
+                }}
+              >
+                {copy.recorder.checkIn}
+              </Button>
+              <Button
+                type="button"
+                disabled={recorderDisabled || !inlineRecorderReady || isSubmitting}
+                className="bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-300 disabled:text-gray-500"
+                onClick={() => {
+                  void handleInlineAttendanceRecord('check_out');
+                }}
+              >
+                {copy.recorder.checkOut}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Dialog open={isRecordsOpen} onOpenChange={setIsRecordsOpen}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>{copy.viewRecords}</DialogTitle>
+          </DialogHeader>
           {selectedEmployeeId && calendar ? (
             <CalendarioAsistencia
               colaboradorNombre={calendar.employee.full_name}
@@ -901,8 +819,8 @@ export default function Asistencia() {
               {copy.labels.noEmployeeSelected}
             </div>
           )}
-        </div>
-      </div>
+        </DialogContent>
+      </Dialog>
 
       {dashboard ? (
         <KioskModal

@@ -31,7 +31,6 @@ The face-service container needs a host-reachable MinIO URL for the presigned bi
 Recommended host-side Spring startup:
 
 ```bash
-APP_STORAGE_MINIO_PUBLIC_ENDPOINT=http://host.docker.internal:9000 \
 mvn spring-boot:run -Pminio
 ```
 
@@ -41,7 +40,21 @@ Then start MinIO and the face service:
 docker compose up -d minio minio-init face-service
 ```
 
-`compose.yaml` now adds the `host.docker.internal` host-gateway alias for the face-service container.
+The split endpoint behavior is now:
+
+- `app.storage.minio.public-endpoint`
+  - browser-facing presigned upload/download URLs
+  - keep this host-reachable for the frontend, typically `http://127.0.0.1:9000`
+- `app.storage.minio.service-public-endpoint`
+  - sidecar/service-facing presigned download URLs used by the face-service
+  - use `http://host.docker.internal:9000` when the face-service runs in Docker and Spring runs on the host
+
+`application-minio.properties` now defaults to:
+
+- browser/public endpoint: `http://127.0.0.1:9000`
+- service endpoint: `http://host.docker.internal:9000`
+
+`compose.yaml` adds the `host.docker.internal` host-gateway alias for the face-service container.
 
 ## Enable storage in Spring Boot
 

@@ -12,6 +12,7 @@ type BusinessDiagnosisPrintPortalProps = {
 };
 
 const PRINT_HOST_CLASS = 'bdpdf-print-host';
+const PRINT_HOST_ID = 'bdpdf-print-host-business-diagnosis';
 
 export function BusinessDiagnosisPrintPortal({
   job,
@@ -22,24 +23,22 @@ export function BusinessDiagnosisPrintPortal({
 
   useEffect(() => {
     if (!job) {
-      setHost((currentHost) => {
-        if (currentHost) {
-          currentHost.remove();
-        }
-        return null;
-      });
+      setHost(null);
       hasTriggeredRef.current = false;
       return undefined;
     }
 
-    const nextHost = document.createElement('div');
-    nextHost.className = PRINT_HOST_CLASS;
-    document.body.appendChild(nextHost);
+    let nextHost = document.getElementById(PRINT_HOST_ID) as HTMLDivElement | null;
+    if (!nextHost) {
+      nextHost = document.createElement('div');
+      nextHost.id = PRINT_HOST_ID;
+      nextHost.className = PRINT_HOST_CLASS;
+      document.body.appendChild(nextHost);
+    }
+
     setHost(nextHost);
 
     return () => {
-      nextHost.remove();
-      setHost(null);
       hasTriggeredRef.current = false;
     };
   }, [job]);

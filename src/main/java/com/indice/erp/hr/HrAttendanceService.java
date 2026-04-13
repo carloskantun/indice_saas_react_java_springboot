@@ -922,7 +922,9 @@ public class HrAttendanceService {
 
         var contentType = normalizeImageContentType(stringValue(payload, "content_type"));
         var eventType = stringValue(payload, "event_type");
-        var objectKey = buildAttendancePhotoObjectKey(companyId, employeeId, contentType, eventType);
+        var eventTimestamp = parseDateTime(payload, "event_timestamp", "recorded_at");
+        var attendanceDate = eventTimestamp != null ? eventTimestamp.toLocalDate() : LocalDate.now();
+        var objectKey = buildAttendancePhotoObjectKey(companyId, employeeId, contentType, eventType, attendanceDate);
         var bucketName = attendanceBucket();
         var upload = objectStorageService.presignUpload(
             bucketName,
@@ -1258,7 +1260,9 @@ public class HrAttendanceService {
                              AND e.employee_id = r.employee_id
                              AND e.attendance_date = r.attendance_date
                              AND e.event_type = 'check_in'
-                           ORDER BY e.event_timestamp ASC, e.id ASC
+                           ORDER BY CASE WHEN COALESCE(TRIM(e.photo_url), '') = '' THEN 1 ELSE 0 END ASC,
+                                    e.event_timestamp ASC,
+                                    e.id ASC
                            LIMIT 1
                        ) AS first_photo_object_key,
                        (
@@ -1268,7 +1272,9 @@ public class HrAttendanceService {
                              AND e.employee_id = r.employee_id
                              AND e.attendance_date = r.attendance_date
                              AND e.event_type = 'check_out'
-                           ORDER BY e.event_timestamp DESC, e.id DESC
+                           ORDER BY CASE WHEN COALESCE(TRIM(e.photo_url), '') = '' THEN 1 ELSE 0 END ASC,
+                                    e.event_timestamp DESC,
+                                    e.id DESC
                            LIMIT 1
                        ) AS last_photo_object_key,
                        fl.id AS first_location_id,
@@ -1317,7 +1323,9 @@ public class HrAttendanceService {
                              AND e.employee_id = r.employee_id
                              AND e.attendance_date = r.attendance_date
                              AND e.event_type = 'check_in'
-                           ORDER BY e.event_timestamp ASC, e.id ASC
+                           ORDER BY CASE WHEN COALESCE(TRIM(e.photo_url), '') = '' THEN 1 ELSE 0 END ASC,
+                                    e.event_timestamp ASC,
+                                    e.id ASC
                            LIMIT 1
                        ) AS first_photo_object_key,
                        (
@@ -1327,7 +1335,9 @@ public class HrAttendanceService {
                              AND e.employee_id = r.employee_id
                              AND e.attendance_date = r.attendance_date
                              AND e.event_type = 'check_out'
-                           ORDER BY e.event_timestamp DESC, e.id DESC
+                           ORDER BY CASE WHEN COALESCE(TRIM(e.photo_url), '') = '' THEN 1 ELSE 0 END ASC,
+                                    e.event_timestamp DESC,
+                                    e.id DESC
                            LIMIT 1
                        ) AS last_photo_object_key,
                        fl.id AS first_location_id,
@@ -3046,14 +3056,14 @@ public class HrAttendanceService {
         };
     }
 
-    private String buildAttendancePhotoObjectKey(long companyId, long employeeId, String contentType, String eventType) {
-        var now = LocalDate.now();
+    private String buildAttendancePhotoObjectKey(long companyId, long employeeId, String contentType, String eventType, LocalDate attendanceDate) {
+        var targetDate = attendanceDate == null ? LocalDate.now() : attendanceDate;
         return "hr/attendance/"
             + companyId + "/"
             + employeeId + "/"
-            + now.getYear() + "/"
-            + String.format("%02d", now.getMonthValue()) + "/"
-            + String.format("%02d", now.getDayOfMonth()) + "/"
+            + targetDate.getYear() + "/"
+            + String.format("%02d", targetDate.getMonthValue()) + "/"
+            + String.format("%02d", targetDate.getDayOfMonth()) + "/"
             + normalizeEventType(eventType.isBlank() ? "check_in" : eventType) + "-"
             + UUID.randomUUID()
             + extensionForContentType(contentType);

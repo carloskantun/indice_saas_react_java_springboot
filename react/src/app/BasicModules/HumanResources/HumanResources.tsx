@@ -3,7 +3,7 @@ import { FavoritesBar } from '../../components/FavoritesBar';
 import { useRoutedModuleTab } from '../../hooks/useRoutedModuleTab';
 import { useHRLanguage } from './HRLanguage';
 import Employees from './Employees';
-import Attendance from './Attendance';
+import Attendance from './Asistencia/Asistencia';
 import Control from './Control';
 import Payroll from './Payroll';
 import Announcements from './Announcements';
@@ -53,8 +53,8 @@ export default function HumanResources({ onNavigate }: HumanResourcesProps) {
 
   const tabs = [
     { id: 'collaborators', label: t.shell.tabs.collaborators, emoji: '👥', component: Employees },
-    { id: 'attendance', label: t.shell.tabs.attendance, emoji: '📅', component: Control },
-    { id: 'control', label: t.shell.tabs.control, emoji: '⏱️', component: Attendance },
+    { id: 'attendance', label: t.shell.tabs.attendance, emoji: '📅', component: Attendance },
+    { id: 'control', label: t.shell.tabs.control, emoji: '⏱️', component: Control },
     { id: 'payroll', label: t.shell.tabs.payroll, emoji: '💰', component: Payroll },
     { id: 'announcements', label: t.shell.tabs.announcements, emoji: '📢', component: Announcements },
     { id: 'assets', label: t.shell.tabs.assets, emoji: '💼', component: Assets },

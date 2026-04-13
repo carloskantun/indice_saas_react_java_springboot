@@ -30,6 +30,7 @@ public class ObjectStorageProperties {
 
         private String endpoint;
         private String publicEndpoint;
+        private String servicePublicEndpoint;
         private String accessKey;
         private String secretKey;
         private String region = "us-east-1";
@@ -51,6 +52,14 @@ public class ObjectStorageProperties {
 
         public void setPublicEndpoint(String publicEndpoint) {
             this.publicEndpoint = publicEndpoint;
+        }
+
+        public String getServicePublicEndpoint() {
+            return servicePublicEndpoint;
+        }
+
+        public void setServicePublicEndpoint(String servicePublicEndpoint) {
+            this.servicePublicEndpoint = servicePublicEndpoint;
         }
 
         public String getAccessKey() {

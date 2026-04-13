@@ -167,10 +167,12 @@ public class HrPayrollService {
             throw new IllegalArgumentException("period_end_date must be on or after period_start_date.");
         }
 
+        periodEndDate = normalizeRunPeriodEndDate(payPeriod, periodStartDate);
+
         var groupingMode = normalizeGroupingMode(stringValue(payload, "grouping_mode"), preferences.groupingMode());
-        var employees = loadEligibleEmployees(companyId, payPeriod);
+        var employees = loadEligibleEmployees(companyId, payPeriod, true);
         if (employees.isEmpty()) {
-            return Map.of("items", List.of());
+            throw new IllegalArgumentException("No active employees are configured for the selected pay frequency.");
         }
 
         var groupedEmployees = groupEmployees(employees, groupingMode);
@@ -212,7 +214,7 @@ public class HrPayrollService {
             }
 
             for (var employee : group.employees()) {
-                createRunLine(companyId, runId, employee, preferences, periodStartDate, periodEndDate);
+                createRunLine(companyId, runId, employee, preferences, payPeriod, periodStartDate, periodEndDate);
             }
 
             recomputeRunTotals(runId);
@@ -634,7 +636,7 @@ public class HrPayrollService {
         return rows.isEmpty() ? null : rows.getFirst();
     }
 
-    private List<PayrollEmployeeRow> loadEligibleEmployees(long companyId, String payPeriod) {
+    private List<PayrollEmployeeRow> loadEligibleEmployees(long companyId, String payPeriod, boolean matchRequestedPayPeriod) {
         return jdbcTemplate.query(
             """
                 SELECT e.id,
@@ -656,7 +658,7 @@ public class HrPayrollService {
                 LEFT JOIN businesses b ON b.id = e.business_id
                 WHERE e.company_id = ?
                   AND COALESCE(LOWER(e.status), 'active') <> 'terminated'
-                  AND COALESCE(LOWER(e.pay_period), 'weekly') = ?
+                  AND (? = 0 OR COALESCE(LOWER(e.pay_period), 'weekly') = ?)
                 ORDER BY full_name ASC, e.id ASC
                 """,
             (rs, rowNum) -> new PayrollEmployeeRow(
@@ -676,6 +678,7 @@ public class HrPayrollService {
                 safe(rs.getString("pay_period"))
             ),
             companyId,
+            matchRequestedPayPeriod ? 1 : 0,
             payPeriod
         );
     }
@@ -716,6 +719,7 @@ public class HrPayrollService {
         long runId,
         PayrollEmployeeRow employee,
         PayrollPreferencesRow preferences,
+        String runPayPeriod,
         LocalDate periodStartDate,
         LocalDate periodEndDate
     ) {
@@ -753,7 +757,7 @@ public class HrPayrollService {
                 statement.setLong(10, employee.businessId());
             }
             statement.setString(11, nullable(employee.businessName()));
-            statement.setString(12, employee.payPeriod());
+            statement.setString(12, runPayPeriod);
             statement.setString(13, employee.salaryType());
             statement.setBigDecimal(14, computation.baseSalaryAmount());
             if (employee.hourlyRate().compareTo(BigDecimal.ZERO) == 0) {
@@ -1552,6 +1556,18 @@ public class HrPayrollService {
 
     private BigDecimal nullableBigDecimal(BigDecimal value) {
         return value == null ? null : value.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private LocalDate normalizeRunPeriodEndDate(String payPeriod, LocalDate periodStartDate) {
+        var monthEnd = periodStartDate.withDayOfMonth(periodStartDate.lengthOfMonth());
+        var configuredEndDate = switch (payPeriod) {
+            case "weekly" -> periodStartDate.plusDays(6);
+            case "biweekly" -> periodStartDate.plusDays(13);
+            case "monthly" -> monthEnd;
+            default -> monthEnd;
+        };
+
+        return configuredEndDate.isAfter(monthEnd) ? monthEnd : configuredEndDate;
     }
 
     private BigDecimal normalizePositiveDecimal(BigDecimal value, BigDecimal fallback, String key) {

@@ -47,6 +47,7 @@ interface KioskModalProps {
     latitude: number;
     longitude: number;
     photoUrl?: string;
+    eventTimestamp?: string;
   }) => Promise<void>;
 }
 
@@ -65,6 +66,10 @@ const normalizeLocation = (location: RegisteredLocation): NormalizedLocation => 
   longitude: Number(location.longitude ?? location.longitud ?? 0),
   radiusMeters: Number(location.radius_meters ?? location.radio ?? 0),
 });
+
+const padDatePart = (value: number) => `${value}`.padStart(2, '0');
+const localDateTimeString = (date: Date) =>
+  `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}T${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}:${padDatePart(date.getSeconds())}`;
 
 const kioskCopy = {
   en: {
@@ -542,12 +547,14 @@ export function KioskModal({
     try {
       setIsSubmitting(true);
       setErrorMessage('');
+      const eventTimestamp = localDateTimeString(new Date());
 
       const photoObjectKey = isFaceAuth
         ? undefined
         : await attendancePhotoUpload.ensureUploaded({
             employee_id: selectedEmployee.id,
             event_type: eventType,
+            event_timestamp: eventTimestamp,
             content_type: attendancePhotoUpload.photo?.contentType ?? 'image/jpeg',
           });
 
@@ -561,6 +568,7 @@ export function KioskModal({
         latitude: coordinates.latitude,
         longitude: coordinates.longitude,
         photoUrl: photoObjectKey,
+        eventTimestamp,
         faceVerificationSessionId: verifiedFaceSessionId ?? undefined,
       });
 

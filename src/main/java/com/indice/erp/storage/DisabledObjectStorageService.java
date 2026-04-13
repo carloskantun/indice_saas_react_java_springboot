@@ -31,6 +31,11 @@ public class DisabledObjectStorageService implements ObjectStorageService {
     }
 
     @Override
+    public String presignServiceDownload(String bucketName, String objectKey, int expirySeconds) {
+        throw new ObjectStorageDisabledException("Object storage is not enabled.");
+    }
+
+    @Override
     public void deleteObject(String bucketName, String objectKey) {
         throw new ObjectStorageDisabledException("Object storage is not enabled.");
     }

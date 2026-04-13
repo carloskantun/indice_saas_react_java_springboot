@@ -14,5 +14,7 @@ public interface ObjectStorageService {
 
     String presignDownload(String bucketName, String objectKey, int expirySeconds);
 
+    String presignServiceDownload(String bucketName, String objectKey, int expirySeconds);
+
     void deleteObject(String bucketName, String objectKey);
 }

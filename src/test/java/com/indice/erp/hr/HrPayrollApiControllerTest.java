@@ -93,4 +93,27 @@ class HrPayrollApiControllerTest {
             .andExpect(jsonPath("$.items[0].status").value("draft"))
             .andExpect(jsonPath("$.items[0].employees_count").value(2));
     }
+
+    @Test
+    void createRunsReturnsBadRequestWhenNoEmployeesMatchSelectedFrequency() throws Exception {
+        var currentUser = new AuthSessionUser(1L, 1L, "Usuario Demo", "admin");
+        given(sessionAuthService.currentUser(any())).willReturn(Optional.of(currentUser));
+        given(hrPayrollService.createRuns(eq(1L), eq(1L), anyMap()))
+            .willThrow(new IllegalArgumentException("No active employees are configured for the selected pay frequency."));
+
+        mockMvc.perform(
+            post("/api/v1/hr/payroll/runs")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "pay_period": "biweekly",
+                      "grouping_mode": "single",
+                      "period_start_date": "2026-04-01",
+                      "period_end_date": "2026-04-14"
+                    }
+                    """)
+        )
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("No active employees are configured for the selected pay frequency."));
+    }
 }

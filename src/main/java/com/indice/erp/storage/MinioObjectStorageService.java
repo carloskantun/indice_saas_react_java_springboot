@@ -103,7 +103,27 @@ public class MinioObjectStorageService implements ObjectStorageService {
                     .object(objectKey)
                     .expiry(expirySeconds)
                     .build()
-            ));
+            ), properties.getMinio().getPublicEndpoint());
+        } catch (Exception ex) {
+            throw new ObjectStorageException("Unable to generate a MinIO download URL.", ex);
+        }
+    }
+
+    @Override
+    public String presignServiceDownload(String bucketName, String objectKey, int expirySeconds) {
+        try {
+            var serviceEndpoint = isBlank(properties.getMinio().getServicePublicEndpoint())
+                ? properties.getMinio().getPublicEndpoint()
+                : properties.getMinio().getServicePublicEndpoint();
+
+            return rewritePublicUrl(minioClient.getPresignedObjectUrl(
+                GetPresignedObjectUrlArgs.builder()
+                    .method(Method.GET)
+                    .bucket(bucketName)
+                    .object(objectKey)
+                    .expiry(expirySeconds)
+                    .build()
+            ), serviceEndpoint);
         } catch (Exception ex) {
             throw new ObjectStorageException("Unable to generate a MinIO download URL.", ex);
         }
@@ -124,7 +144,10 @@ public class MinioObjectStorageService implements ObjectStorageService {
     }
 
     private String rewritePublicUrl(String signedUrl) {
-        var configuredPublicEndpoint = properties.getMinio().getPublicEndpoint();
+        return rewritePublicUrl(signedUrl, properties.getMinio().getPublicEndpoint());
+    }
+
+    private String rewritePublicUrl(String signedUrl, String configuredPublicEndpoint) {
         if (isBlank(configuredPublicEndpoint)) {
             return signedUrl;
         }
