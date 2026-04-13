@@ -7,6 +7,7 @@ import { SaveChangesBar } from '../../../components/SaveChangesBar';
 import { SuccessToast } from '../../../components/SuccessToast';
 import { useLanguage } from '../../../shared/context';
 import { configCenterApi } from '../../../api/configCenter';
+import { validateOptionalEmail } from '../../../shared/validation/email';
 import { inputClassName } from './constants';
 import { BusinessIdentitySection } from './components/BusinessIdentitySection';
 import { OperationTypeSection } from './components/OperationTypeSection';
@@ -540,6 +541,13 @@ export default function BusinessStructure() {
 
   const handleSaveUnidad = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    const emailValidation = validateOptionalEmail(unidadFormValues.email);
+    if (!emailValidation.ok) {
+      setLoadError(t.loginPage.emailError);
+      return;
+    }
+
     const newUnidad: Unidad = {
       id: editingUnidad?.id || String(Date.now()),
       name: unidadFormValues.name.trim(),
@@ -551,7 +559,7 @@ export default function BusinessStructure() {
       pais: unidadFormValues.pais,
       cp: unidadFormValues.cp,
       telefono: unidadFormValues.telefono,
-      email: unidadFormValues.email,
+      email: emailValidation.normalized,
       negocios: editingUnidad?.negocios || [],
     };
 
@@ -580,6 +588,12 @@ export default function BusinessStructure() {
       return;
     }
 
+    const emailValidation = validateOptionalEmail(negocioFormValues.email);
+    if (!emailValidation.ok) {
+      setLoadError(t.loginPage.emailError);
+      return;
+    }
+
     const newNegocio: Negocio = {
       id: editingNegocio.id || String(Date.now()),
       name: negocioFormValues.name.trim(),
@@ -591,7 +605,7 @@ export default function BusinessStructure() {
       pais: negocioFormValues.pais,
       cp: negocioFormValues.cp,
       telefono: negocioFormValues.telefono,
-      email: negocioFormValues.email,
+      email: emailValidation.normalized,
       gerente: negocioFormValues.gerente,
       horario: negocioFormValues.horario,
     };

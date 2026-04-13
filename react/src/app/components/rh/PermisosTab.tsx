@@ -1,11 +1,14 @@
 import { Button } from '../ui/button';
 import { Eye, Download, CalendarX } from 'lucide-react';
+import { useHRLanguage } from '../../BasicModules/HumanResources/HRLanguage';
 
 interface PermisosTabProps {
   onSolicitarPermiso: () => void;
 }
 
 export function PermisosTab({ onSolicitarPermiso }: PermisosTabProps) {
+  const t = useHRLanguage().permissions;
+
   return (
     <>
       {/* Header de la sección con título y botones de acción */}
@@ -14,10 +17,10 @@ export function PermisosTab({ onSolicitarPermiso }: PermisosTabProps) {
           <div>
             <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
               <span className="text-2xl">✋</span>
-              Permisos y ausencias
+              {t.title}
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Gestiona solicitudes de permisos, vacaciones y ausencias de los colaboradores
+              {t.subtitle}
             </p>
           </div>
           <Button 
@@ -25,7 +28,7 @@ export function PermisosTab({ onSolicitarPermiso }: PermisosTabProps) {
             className="bg-[#143675] hover:bg-[#0f2855] text-white gap-2"
             onClick={onSolicitarPermiso}
           >
-            + Solicitar permiso
+            + {t.requestPermission}
           </Button>
         </div>
       </div>
@@ -35,7 +38,7 @@ export function PermisosTab({ onSolicitarPermiso }: PermisosTabProps) {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Pendientes</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t.cards.pending}</p>
               <p className="text-3xl font-bold text-yellow-600 dark:text-yellow-400">8</p>
             </div>
             <div className="h-12 w-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">
@@ -47,7 +50,7 @@ export function PermisosTab({ onSolicitarPermiso }: PermisosTabProps) {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Aprobados</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t.cards.approved}</p>
               <p className="text-3xl font-bold text-green-600 dark:text-green-400">24</p>
             </div>
             <div className="h-12 w-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
@@ -59,7 +62,7 @@ export function PermisosTab({ onSolicitarPermiso }: PermisosTabProps) {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Rechazados</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t.cards.rejected}</p>
               <p className="text-3xl font-bold text-red-600 dark:text-red-400">3</p>
             </div>
             <div className="h-12 w-12 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
@@ -71,7 +74,7 @@ export function PermisosTab({ onSolicitarPermiso }: PermisosTabProps) {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Este mes</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t.cards.thisMonth}</p>
               <p className="text-3xl font-bold text-[#143675] dark:text-[#4a7bc8]">15</p>
             </div>
             <div className="h-12 w-12 bg-[#143675]/10 dark:bg-[#143675]/20 rounded-lg flex items-center justify-center">
@@ -88,28 +91,28 @@ export function PermisosTab({ onSolicitarPermiso }: PermisosTabProps) {
             <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Folio
+                  {t.table.folio}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Colaborador
+                  {t.table.collaborator}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Tipo de permiso
+                  {t.table.permissionType}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Fecha inicio
+                  {t.table.startDate}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Fecha fin
+                  {t.table.endDate}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Días
+                  {t.table.days}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Estado
+                  {t.table.status}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Acciones
+                  {t.table.actions}
                 </th>
               </tr>
             </thead>

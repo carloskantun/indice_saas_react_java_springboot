@@ -12,7 +12,7 @@ import { SuccessToast } from './components/SuccessToast';
 import { Button } from './components/ui/button';
 import { useLanguage } from './shared/context';
 import { useFavorites } from './shared/context';
-import RecursosHumanos from './BasicModules/HumanResources';
+import HumanResources from './BasicModules/HumanResources';
 import ProcesosTareas from './BasicModules/ProcessesTasks';
 import PanelInicial from './BasicModules/Dashboard';
 import Gastos from './BasicModules/Expenses';
@@ -464,7 +464,7 @@ export default function App() {
         onNavigate={(page) => handleModuleNavigation(page)}
       />
     ) : currentPage === 'human-resources' ? (
-      <RecursosHumanos onNavigate={handleModuleNavigation} />
+      <HumanResources onNavigate={handleModuleNavigation} />
     ) : currentPage === 'processes-tasks' ? (
       <ProcesosTareas onNavigate={handleModuleNavigation} />
     ) : currentPage === 'home-panel' ? (

@@ -1,4 +1,5 @@
 import { Button } from '../ui/button';
+import { useHRLanguage } from '../../BasicModules/HumanResources/HRLanguage';
 import { 
   Filter, 
   Download, 
@@ -18,6 +19,8 @@ import {
 import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export function KPIsTab() {
+  const t = useHRLanguage().kpis;
+
   return (
     <>
       {/* Header de la sección con título y botones de acción */}
@@ -26,20 +29,20 @@ export function KPIsTab() {
           <div>
             <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
               <span className="text-2xl">📊</span>
-              KPIs de Recursos Humanos
+              {t.title}
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Indicadores clave de desempeño del equipo y gestión del personal
+              {t.subtitle}
             </p>
           </div>
           <div className="flex items-center gap-3">
             <Button size="sm" variant="outline" className="gap-2">
               <Filter className="h-4 w-4" />
-              Filtrar período
+              {t.filterPeriod}
             </Button>
             <Button size="sm" className="bg-[#143675] hover:bg-[#0f2855] text-white gap-2">
               <Download className="h-4 w-4" />
-              Exportar reporte
+              {t.exportReport}
             </Button>
           </div>
         </div>
@@ -52,18 +55,18 @@ export function KPIsTab() {
             <option>2024</option>
           </select>
           <select className="px-3 py-2 border border-[#143675]/20 dark:border-[#143675]/30 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#143675]">
-            <option>Marzo</option>
-            <option>Febrero</option>
-            <option>Enero</option>
+            <option>{t.filters.march}</option>
+            <option>{t.filters.february}</option>
+            <option>{t.filters.january}</option>
           </select>
           <select className="px-3 py-2 border border-[#143675]/20 dark:border-[#143675]/30 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#143675]">
-            <option>Todas las unidades</option>
+            <option>{t.filters.allUnits}</option>
             <option>Unidad 10</option>
             <option>Unidad 8</option>
             <option>Unidad 9</option>
           </select>
           <select className="px-3 py-2 border border-[#143675]/20 dark:border-[#143675]/30 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#143675]">
-            <option>Todos los departamentos</option>
+            <option>{t.filters.allDepartments}</option>
             <option>Operaciones</option>
             <option>Ventas</option>
             <option>Administración</option>
@@ -73,7 +76,7 @@ export function KPIsTab() {
 
       {/* Primera fila de KPIs - Equipo */}
       <div className="mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">👥 Equipo</h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">👥 {t.sections.team}</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <div className="flex items-center justify-between mb-3">
@@ -81,7 +84,7 @@ export function KPIsTab() {
                 <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Colaboradores activos</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t.cards.activeEmployees}</p>
             <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">42</p>
             <p className="text-xs text-green-600 dark:text-green-400">+3 vs mes anterior</p>
           </div>
@@ -92,7 +95,7 @@ export function KPIsTab() {
                 <Clock className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Puntualidad</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t.cards.punctuality}</p>
             <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">94%</p>
             <p className="text-xs text-gray-500 dark:text-gray-400">Entradas a tiempo</p>
           </div>
@@ -103,7 +106,7 @@ export function KPIsTab() {
                 <Calendar className="h-5 w-5 text-orange-600 dark:text-orange-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Ausentismo</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t.cards.absenteeism}</p>
             <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">3.1%</p>
             <p className="text-xs text-gray-500 dark:text-gray-400">Días perdidos</p>
           </div>
@@ -114,7 +117,7 @@ export function KPIsTab() {
                 <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Retardos</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t.cards.tardiness}</p>
             <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">18</p>
             <p className="text-xs text-gray-500 dark:text-gray-400">Este mes</p>
           </div>
@@ -123,7 +126,7 @@ export function KPIsTab() {
 
       {/* Segunda fila de KPIs - Gestión del personal */}
       <div className="mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">📋 Gestión del personal</h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">📋 {t.sections.workforceManagement}</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <div className="flex items-center justify-between mb-3">
@@ -131,7 +134,7 @@ export function KPIsTab() {
                 <FileText className="h-5 w-5 text-purple-600 dark:text-purple-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Permisos solicitados</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t.cards.permissionsRequested}</p>
             <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">22</p>
             <p className="text-xs text-gray-500 dark:text-gray-400">Este mes</p>
           </div>
@@ -142,7 +145,7 @@ export function KPIsTab() {
                 <CalendarX className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Días de ausencia</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t.cards.absenceDays}</p>
             <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">41</p>
             <p className="text-xs text-gray-500 dark:text-gray-400">Impacto operativo</p>
           </div>
@@ -153,7 +156,7 @@ export function KPIsTab() {
                 <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Costo de nómina</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t.cards.payrollCost}</p>
             <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">$358,250</p>
             <p className="text-xs text-gray-500 dark:text-gray-400">Total mensual</p>
           </div>
@@ -164,7 +167,7 @@ export function KPIsTab() {
                 <Calculator className="h-5 w-5 text-teal-600 dark:text-teal-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Costo promedio por colaborador</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t.cards.avgCostPerEmployee}</p>
             <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">$8,530</p>
             <p className="text-xs text-gray-500 dark:text-gray-400">Costo laboral medio</p>
           </div>
@@ -173,7 +176,7 @@ export function KPIsTab() {
 
       {/* Tercera fila de KPIs - Operación */}
       <div className="mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">⚙️ Operación</h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">⚙️ {t.sections.operation}</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <div className="flex items-center justify-between mb-3">
@@ -181,7 +184,7 @@ export function KPIsTab() {
                 <Laptop className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Activos asignados</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t.cards.assignedAssets}</p>
             <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">39</p>
             <p className="text-xs text-gray-500 dark:text-gray-400">Equipos entregados</p>
           </div>
@@ -192,7 +195,7 @@ export function KPIsTab() {
                 <Wrench className="h-5 w-5 text-orange-600 dark:text-orange-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Activos en mantenimiento</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t.cards.assetsInMaintenance}</p>
             <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">3</p>
             <p className="text-xs text-gray-500 dark:text-gray-400">Equipos fuera de servicio</p>
           </div>
@@ -203,7 +206,7 @@ export function KPIsTab() {
                 <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Incidentes laborales</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t.cards.workIncidents}</p>
             <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">5</p>
             <p className="text-xs text-gray-500 dark:text-gray-400">Actas registradas</p>
           </div>
@@ -214,7 +217,7 @@ export function KPIsTab() {
                 <Heart className="h-6 w-6 text-green-600 dark:text-green-400" />
               </div>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Salud del equipo</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{t.cards.teamHealth}</p>
             <p className="text-4xl font-bold text-green-600 dark:text-green-400 mb-1">87<span className="text-2xl text-gray-500 dark:text-gray-400">/100</span></p>
             <p className="text-xs text-gray-600 dark:text-gray-400">Índice general del clima laboral</p>
           </div>
@@ -225,7 +228,7 @@ export function KPIsTab() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Gráfica de asistencia */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">📈 Asistencia del equipo</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">📈 {t.sections.teamAttendance}</h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart 
               id="asistencia-chart"
@@ -251,14 +254,14 @@ export function KPIsTab() {
                 }} 
               />
               <Legend key="legend-asistencia" wrapperStyle={{ fontSize: '12px' }} />
-              <Line key="line-asistencia" type="monotone" dataKey="asistencia" stroke="#3b82f6" strokeWidth={2} name="% Asistencia" />
+              <Line key="line-asistencia" type="monotone" dataKey="asistencia" stroke="#3b82f6" strokeWidth={2} name={`% ${t.cards.punctuality}`} />
             </LineChart>
           </ResponsiveContainer>
         </div>
 
         {/* Gráfica de distribución de permisos */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">🥧 Distribución de permisos</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">🥧 {t.sections.permissionDistribution}</h3>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart id="permisos-chart">
               <Pie
@@ -293,18 +296,18 @@ export function KPIsTab() {
       {/* Tabla resumen por unidad */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">📊 Resumen por unidad de negocio</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">📊 {t.sections.unitSummary}</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Unidad</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Colaboradores</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Asistencia</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ausentismo</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nómina</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Incidentes</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t.table.unit}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t.table.employees}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t.table.attendance}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t.table.absenteeism}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t.table.payroll}</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t.table.incidents}</th>
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -347,7 +350,7 @@ export function KPIsTab() {
             </tbody>
             <tfoot className="bg-gray-50 dark:bg-gray-700 border-t-2 border-gray-300 dark:border-gray-600">
               <tr>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-white">TOTAL</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-white">{t.table.total}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-white">42</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">94%</span>

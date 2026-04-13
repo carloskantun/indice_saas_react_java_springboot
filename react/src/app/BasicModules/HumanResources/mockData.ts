@@ -35,7 +35,7 @@ export interface RHActivoAsignado {
   categoria: string;
   colaborador: string;
   departamento: string;
-  estado: 'Asignado' | 'Mantenimiento' | 'Resguardo';
+  estado: 'Asignado' | 'Mantenimiento' | 'Resguardo' | 'Disponible';
   condicion: 'Excelente' | 'Bueno' | 'Revision';
   fechaAsignacion: string;
 }
@@ -297,7 +297,7 @@ export const rhActivosSeed: RHActivoAsignado[] = [
     categoria: 'Mantenimiento',
     colaborador: 'Pedro Sanchez Lara',
     departamento: 'Mantenimiento',
-    estado: 'Resguardo',
+    estado: 'Disponible',
     condicion: 'Bueno',
     fechaAsignacion: '11 Mar 2026',
   },
