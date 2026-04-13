@@ -4,6 +4,7 @@ import { cn } from './ui/utils';
 interface SaveChangesBarProps {
   isVisible: boolean;
   isSaving?: boolean;
+  isSaveDisabled?: boolean;
   onSave: () => void | Promise<void>;
   onDiscard: () => void;
   saveLabel?: string;
@@ -16,6 +17,7 @@ interface SaveChangesBarProps {
 export function SaveChangesBar({
   isVisible,
   isSaving = false,
+  isSaveDisabled = false,
   onSave,
   onDiscard,
   saveLabel = 'Save',
@@ -54,7 +56,7 @@ export function SaveChangesBar({
         <Button
           type="button"
           onClick={onSave}
-          disabled={isSaving}
+          disabled={isSaving || isSaveDisabled}
           className="bg-purple-600 text-white hover:bg-purple-700"
         >
           {isSaving ? savingLabel : saveLabel}

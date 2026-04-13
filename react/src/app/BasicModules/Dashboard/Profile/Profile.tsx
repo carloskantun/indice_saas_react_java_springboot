@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { configCenterApi, type ConfigCenterCurrentUser } from '../../../api/configCenter';
 import {
   LoadingBarOverlay,
@@ -15,6 +16,10 @@ import {
   PROFILE_COUNTRY_OPTIONS,
   splitProfilePhone,
 } from '../../../shared/profileCountries';
+import {
+  normalizePhoneInputForCountry,
+  validatePhoneForProfileCountry,
+} from '../../../shared/validation/phone';
 
 const inputClassName =
   'w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all';
@@ -29,9 +34,7 @@ const SUPPORTED_PREFERRED_LANGUAGES = new Set(languages.map((language) => langua
 
 const DEFAULT_PROFILE_FORM_VALUES = {
   firstName: '',
-  secondName: '',
   lastName: '',
-  maternalLastName: '',
   country: DEFAULT_PROFILE_COUNTRY,
   phoneNumber: '',
   preferredLanguage: DEFAULT_PREFERRED_LANGUAGE,
@@ -43,9 +46,7 @@ const PROFILE_SAVE_MINIMUM_LOADING_MS = 2500;
 
 type ProfileFormValues = {
   firstName: string;
-  secondName: string;
   lastName: string;
-  maternalLastName: string;
   country: string;
   phoneNumber: string;
   preferredLanguage: string;
@@ -75,9 +76,7 @@ const createProfileFormValues = (user?: ConfigCenterCurrentUser | null): Profile
 
   return {
     firstName: user.primer_nombre ?? user.nombres ?? '',
-    secondName: user.segundo_nombre ?? '',
     lastName: user.apellido_paterno ?? user.apellidos ?? '',
-    maternalLastName: user.apellido_materno ?? '',
     country: phoneParts.country,
     phoneNumber: phoneParts.number,
     preferredLanguage: normalizePreferredLanguage(user.preferred_language),
@@ -91,9 +90,7 @@ const areProfileFormValuesEqual = (
   baselineValues: ProfileFormValues,
 ) => (
   currentValues.firstName === baselineValues.firstName
-  && currentValues.secondName === baselineValues.secondName
   && currentValues.lastName === baselineValues.lastName
-  && currentValues.maternalLastName === baselineValues.maternalLastName
   && currentValues.country === baselineValues.country
   && currentValues.phoneNumber === baselineValues.phoneNumber
   && currentValues.preferredLanguage === baselineValues.preferredLanguage
@@ -111,6 +108,8 @@ export default function Profile() {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -146,19 +145,13 @@ export default function Profile() {
   }, []);
 
   const firstNames = useMemo(
-    () => [formValues.firstName, formValues.secondName]
-      .filter((value) => value.trim().length > 0)
-      .join(' ')
-      .trim(),
-    [formValues.firstName, formValues.secondName],
+    () => formValues.firstName.trim(),
+    [formValues.firstName],
   );
 
   const lastNames = useMemo(
-    () => [formValues.lastName, formValues.maternalLastName]
-      .filter((value) => value.trim().length > 0)
-      .join(' ')
-      .trim(),
-    [formValues.lastName, formValues.maternalLastName],
+    () => formValues.lastName.trim(),
+    [formValues.lastName],
   );
   const selectedCountry = useMemo(
     () => getProfileCountry(formValues.country),
@@ -174,6 +167,21 @@ export default function Profile() {
 
   const initials = ((firstNames[0] ?? '') + (lastNames[0] ?? '')).trim().toUpperCase() || 'U';
   const hasUnsavedChanges = baselineValues !== null && !areProfileFormValuesEqual(formValues, baselineValues);
+  const trimmedNewPassword = formValues.newPassword.trim();
+  const trimmedPasswordConfirmation = formValues.confirmNewPassword.trim();
+  const hasPasswordChangeInProgress = trimmedNewPassword.length > 0 || trimmedPasswordConfirmation.length > 0;
+  const hasPasswordMismatch = useMemo(() => {
+    return (
+      trimmedPasswordConfirmation.length > 0
+      && trimmedNewPassword !== trimmedPasswordConfirmation
+    );
+  }, [trimmedNewPassword, trimmedPasswordConfirmation]);
+  const isSaveDisabled = hasPasswordChangeInProgress
+    && (
+      trimmedNewPassword.length === 0
+      || trimmedPasswordConfirmation.length === 0
+      || trimmedNewPassword !== trimmedPasswordConfirmation
+    );
 
   const updateFormValue = <Key extends keyof ProfileFormValues>(
     field: Key,
@@ -204,7 +212,23 @@ export default function Profile() {
       return;
     }
 
-    updateFormValue('country', value);
+    setFormValues((currentValues) => ({
+      ...currentValues,
+      country: value,
+      phoneNumber: normalizePhoneInputForCountry(currentValues.phoneNumber, value),
+    }));
+
+    if (errorMessage) {
+      setErrorMessage('');
+    }
+
+    if (saveMessage) {
+      setSaveMessage('');
+    }
+  };
+
+  const handlePhoneNumberChange = (value: string) => {
+    updateFormValue('phoneNumber', normalizePhoneInputForCountry(value, formValues.country));
   };
 
   const handleDiscardChanges = () => {
@@ -222,8 +246,6 @@ export default function Profile() {
       return;
     }
 
-    const trimmedNewPassword = formValues.newPassword.trim();
-    const trimmedPasswordConfirmation = formValues.confirmNewPassword.trim();
     const hasPasswordChange = trimmedNewPassword.length > 0 || trimmedPasswordConfirmation.length > 0;
 
     if (hasPasswordChange && trimmedNewPassword !== trimmedPasswordConfirmation) {
@@ -244,15 +266,32 @@ export default function Profile() {
 
     try {
       const trimmedPhoneNumber = formValues.phoneNumber.trim();
+      let formattedPhone = '';
+      const isPhoneSelectionUnchanged = baselineValues !== null
+        && formValues.phoneNumber === baselineValues.phoneNumber
+        && formValues.country === baselineValues.country;
+
+      if (trimmedPhoneNumber) {
+        if (isPhoneSelectionUnchanged && user.telefono?.trim()) {
+          formattedPhone = user.telefono.trim();
+        } else {
+          const validation = validatePhoneForProfileCountry(trimmedPhoneNumber, formValues.country);
+
+          if (!validation.ok) {
+            setErrorMessage(profileCopy.messages.invalidPhone);
+            setSaveMessage('');
+            return;
+          }
+
+          formattedPhone = validation.international;
+        }
+      }
+
       const response = await runWithMinimumDuration(
         configCenterApi.saveCurrentUser({
           primer_nombre: formValues.firstName,
-          segundo_nombre: formValues.secondName,
           apellido_paterno: formValues.lastName,
-          apellido_materno: formValues.maternalLastName,
-          telefono: trimmedPhoneNumber
-            ? `${selectedCountry.dialCode} ${trimmedPhoneNumber}`
-            : '',
+          telefono: formattedPhone,
           country: formValues.country,
           preferred_language: formValues.preferredLanguage,
           ...(trimmedNewPassword
@@ -352,13 +391,6 @@ export default function Profile() {
                 <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
                   {profileCopy.hints.firstNames}
                 </p>
-                <input
-                  type="text"
-                  value={formValues.secondName}
-                  onChange={(event) => updateFormValue('secondName', event.target.value)}
-                  className={`${inputClassName} mt-2`}
-                  placeholder={profileCopy.placeholders.secondName}
-                />
               </div>
               <div>
                 <label className="mb-1.5 block text-[11px] font-medium text-gray-600 dark:text-gray-400">
@@ -373,13 +405,6 @@ export default function Profile() {
                 <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
                   {profileCopy.hints.lastNames}
                 </p>
-                <input
-                  type="text"
-                  value={formValues.maternalLastName}
-                  onChange={(event) => updateFormValue('maternalLastName', event.target.value)}
-                  className={`${inputClassName} mt-2`}
-                  placeholder={profileCopy.placeholders.maternalLastName}
-                />
               </div>
             </div>
 
@@ -434,8 +459,10 @@ export default function Profile() {
               <input
                 type="tel"
                 value={formValues.phoneNumber}
-                onChange={(event) => updateFormValue('phoneNumber', event.target.value)}
+                onChange={(event) => handlePhoneNumberChange(event.target.value)}
                 className={`${inputClassName} flex-1`}
+                inputMode="numeric"
+                autoComplete="tel-national"
               />
             </div>
             <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
@@ -459,29 +486,56 @@ export default function Profile() {
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 {profileCopy.fields.newPassword}
               </label>
-              <input
-                type="password"
-                value={formValues.newPassword}
-                onChange={(event) => updateFormValue('newPassword', event.target.value)}
-                placeholder="••••••••"
-                autoComplete="new-password"
-                className={inputClassName}
-              />
+              <div className="relative">
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={formValues.newPassword}
+                  onChange={(event) => updateFormValue('newPassword', event.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="new-password"
+                  aria-invalid={hasPasswordMismatch}
+                  className={`${inputClassName} pr-12`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword((current) => !current)}
+                  className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-600 dark:hover:text-gray-200"
+                  aria-label={showNewPassword ? t.loginPage.hidePassword : t.loginPage.showPassword}
+                >
+                  {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 {profileCopy.fields.confirmNewPassword}
               </label>
-              <input
-                type="password"
-                value={formValues.confirmNewPassword}
-                onChange={(event) => updateFormValue('confirmNewPassword', event.target.value)}
-                placeholder="••••••••"
-                autoComplete="new-password"
-                className={inputClassName}
-              />
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={formValues.confirmNewPassword}
+                  onChange={(event) => updateFormValue('confirmNewPassword', event.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="new-password"
+                  aria-invalid={hasPasswordMismatch}
+                  className={`${inputClassName} pr-12`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((current) => !current)}
+                  className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-600 dark:hover:text-gray-200"
+                  aria-label={showConfirmPassword ? t.loginPage.hidePassword : t.loginPage.showPassword}
+                >
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
           </div>
+          {hasPasswordMismatch ? (
+            <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+              {profileCopy.messages.passwordMismatch}
+            </p>
+          ) : null}
           <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
             {profileCopy.hints.password}
           </p>
@@ -522,6 +576,7 @@ export default function Profile() {
       <SaveChangesBar
         isVisible={hasUnsavedChanges}
         isSaving={isSaving}
+        isSaveDisabled={isSaveDisabled}
         onDiscard={handleDiscardChanges}
         onSave={handleSaveProfile}
         saveLabel={profileCopy.actions.save}
