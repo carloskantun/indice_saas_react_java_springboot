@@ -33,7 +33,7 @@ Files:
 
 Flyway migration:
 
-- `src/main/resources/db/migration/V6__user_personal_performance.sql`
+- `src/main/resources/db/migration/V12__user_personal_performance.sql`
 
 Tables added:
 

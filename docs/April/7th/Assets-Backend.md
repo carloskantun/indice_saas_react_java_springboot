@@ -27,7 +27,7 @@ This is the best fit for the current codebase because it stays consistent with t
 
 Flyway migration:
 
-- `src/main/resources/db/migration/V5__hr_assets.sql`
+- `src/main/resources/db/migration/V11__hr_assets.sql`
 
 Tables:
 
@@ -144,7 +144,7 @@ Endpoints:
 
 - `src/main/java/com/indice/erp/hr/assets/HrAssetApiController.java`
 - `src/main/java/com/indice/erp/hr/assets/HrAssetService.java`
-- `src/main/resources/db/migration/V5__hr_assets.sql`
+- `src/main/resources/db/migration/V11__hr_assets.sql`
 - `src/test/java/com/indice/erp/hr/assets/HrAssetApiControllerTest.java`
 - `src/test/java/com/indice/erp/hr/assets/HrAssetServiceTest.java`
 
