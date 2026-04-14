@@ -113,6 +113,8 @@ class HrFirstRunIntegrationTest {
 
         var createdEmployee = readMap(createResponse.getResponse().getContentAsString());
         var employeeId = ((Number) createdEmployee.get("id")).longValue();
+        var generatedEmployeeNumber = String.valueOf(createdEmployee.get("employee_number"));
+        assertThat(generatedEmployeeNumber).matches("^EMP-\\d{4,}$");
         createdEmployeeIds.add(employeeId);
 
         var assignmentCount = jdbcTemplate.queryForObject(
@@ -134,7 +136,7 @@ class HrFirstRunIntegrationTest {
                     Map.entry("position", "Senior HR Analyst"),
                     Map.entry("department", "People Ops"),
                     Map.entry("unit_id", 5),
-                    Map.entry("business_id", 6),
+                    Map.entry("business_id", 5),
                     Map.entry("hire_date", "2026-04-06"),
                     Map.entry("salary", "5600"),
                     Map.entry("pay_period", "monthly"),
@@ -145,7 +147,8 @@ class HrFirstRunIntegrationTest {
         )
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.position_title").value("Senior HR Analyst"))
-            .andExpect(jsonPath("$.business_id").value(6));
+            .andExpect(jsonPath("$.business_id").value(5))
+            .andExpect(jsonPath("$.employee_number").value(generatedEmployeeNumber));
 
         mockMvc.perform(
             post("/api/v1/hr/employees/{employeeId}/terminate", employeeId)
@@ -168,6 +171,100 @@ class HrFirstRunIntegrationTest {
             .andExpect(jsonPath("$.success").value(true));
 
         createdEmployeeIds.remove(employeeId);
+    }
+
+    @Test
+    void employeeDetailsFlowPersistsProfileAndAccessAcrossAllTabs() throws Exception {
+        var session = authenticatedSession();
+        var uniqueSuffix = System.currentTimeMillis();
+
+        var createResponse = mockMvc.perform(
+            post("/api/v1/hr/employees")
+                .session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                    "employee", Map.ofEntries(
+                        Map.entry("employee_number", "EMP-" + uniqueSuffix),
+                        Map.entry("first_name", "Jordan"),
+                        Map.entry("last_name", "Employee" + uniqueSuffix),
+                        Map.entry("email", "jordan.employee." + uniqueSuffix + "@example.com"),
+                        Map.entry("phone", "4165551234"),
+                        Map.entry("position", "HR Analyst"),
+                        Map.entry("department", "People Ops"),
+                        Map.entry("unit_id", 5),
+                        Map.entry("business_id", 5),
+                        Map.entry("hire_date", "2026-04-06"),
+                        Map.entry("salary", "5200"),
+                        Map.entry("pay_period", "monthly"),
+                        Map.entry("salary_type", "daily"),
+                        Map.entry("contract_type", "temporary"),
+                        Map.entry("contract_start_date", "2026-04-06"),
+                        Map.entry("contract_end_date", "2026-12-31")
+                    ),
+                    "profile", Map.ofEntries(
+                        Map.entry("date_of_birth", "1991-02-03"),
+                        Map.entry("address", "123 King Street West"),
+                        Map.entry("national_id", "CA-ABC-1234"),
+                        Map.entry("tax_id", "CA-TAX-9876"),
+                        Map.entry("social_security_number", "123456789"),
+                        Map.entry("registration_country", "CA"),
+                        Map.entry("state_province", "Ontario"),
+                        Map.entry("alternate_phone", "4165559999"),
+                        Map.entry("emergency_contact_name", "Maria Smith"),
+                        Map.entry("emergency_contact_relationship", "Spouse"),
+                        Map.entry("emergency_contact_phone", "4165551111"),
+                        Map.entry("workday_hours", "8")
+                    ),
+                    "access", Map.of(
+                        "access_role", "manager",
+                        "invite_on_save", false
+                    )
+                )))
+        )
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.full_name").value("Jordan Employee" + uniqueSuffix))
+            .andReturn();
+
+        var createdEmployee = readMap(createResponse.getResponse().getContentAsString());
+        var employeeId = ((Number) createdEmployee.get("id")).longValue();
+        assertThat(String.valueOf(createdEmployee.get("employee_number"))).matches("^EMP-\\d{4,}$");
+        createdEmployeeIds.add(employeeId);
+
+        mockMvc.perform(get("/api/v1/hr/employees/{employeeId}", employeeId).session(session))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.employee.id").value(employeeId))
+            .andExpect(jsonPath("$.employee.employee_number").value("EMP-" + uniqueSuffix))
+            .andExpect(jsonPath("$.profile.date_of_birth").value("1991-02-03"))
+            .andExpect(jsonPath("$.profile.address").value("123 King Street West"))
+            .andExpect(jsonPath("$.profile.registration_country").value("CA"))
+            .andExpect(jsonPath("$.profile.alternate_phone").value("4165559999"))
+            .andExpect(jsonPath("$.profile.emergency_contact_name").value("Maria Smith"))
+            .andExpect(jsonPath("$.profile.workday_hours").value(8.00))
+            .andExpect(jsonPath("$.access.access_role").value("manager"))
+            .andExpect(jsonPath("$.access.invitation_status").value("not_invited"))
+            .andExpect(jsonPath("$.documents").isArray())
+            .andExpect(jsonPath("$.documents.length()").value(0));
+    }
+
+    @Test
+    void employeeDocumentUploadReturnsServiceUnavailableWhenObjectStorageIsDisabled() throws Exception {
+        var session = authenticatedSession();
+        var uniqueSuffix = System.currentTimeMillis();
+        var employeeId = createEmployeeForTests(session, uniqueSuffix);
+
+        mockMvc.perform(
+            post("/api/v1/hr/employees/{employeeId}/documents/presign-upload", employeeId)
+                .session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                    "document_type", "resume",
+                    "file_name", "resume.pdf",
+                    "content_type", "application/pdf",
+                    "size_bytes", 1024
+                )))
+        )
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(jsonPath("$.message").value("Object storage is not enabled."));
     }
 
     @Test
@@ -1122,6 +1219,7 @@ class HrFirstRunIntegrationTest {
 
         var employee = readMap(response.getResponse().getContentAsString());
         var employeeId = ((Number) employee.get("id")).longValue();
+        assertThat(String.valueOf(employee.get("employee_number"))).matches("^EMP-\\d{4,}$");
         createdEmployeeIds.add(employeeId);
         return employeeId;
     }
@@ -1152,6 +1250,7 @@ class HrFirstRunIntegrationTest {
 
         var employee = readMap(response.getResponse().getContentAsString());
         var employeeId = ((Number) employee.get("id")).longValue();
+        assertThat(String.valueOf(employee.get("employee_number"))).matches("^EMP-\\d{4,}$");
         createdEmployeeIds.add(employeeId);
         return employeeId;
     }

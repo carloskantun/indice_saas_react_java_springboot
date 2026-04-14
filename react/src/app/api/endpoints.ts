@@ -24,9 +24,11 @@ export const endpoints = {
   humanResources: {
     employeesList: '/api/v1/hr/employees',
     employeeCreate: '/api/v1/hr/employees',
+    employeeDetails: '/api/v1/hr/employees',
     employeeUpdate: '/api/v1/hr/employees',
     employeeDelete: '/api/v1/hr/employees',
     employeeTerminate: '/api/v1/hr/employees',
+    employeeDocuments: '/api/v1/hr/employees',
     attendanceDashboard: '/api/v1/hr/attendance/dashboard',
     attendanceControlOverview: '/api/v1/hr/attendance/control-overview',
     attendanceLocations: '/api/v1/hr/attendance/locations',

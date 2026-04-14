@@ -9,9 +9,15 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.indice.erp.storage.DisabledObjectStorageService;
+import com.indice.erp.storage.ObjectStorageDisabledException;
+import com.indice.erp.storage.ObjectStorageProperties;
+import com.indice.erp.storage.ObjectStorageService;
+import com.indice.erp.storage.PresignedUpload;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +40,7 @@ class HrEmployeeServiceTest {
 
     @Test
     void listEmployeesAllowsNullOptionalColumns() throws Exception {
-        var service = new HrEmployeeService(jdbcTemplate, hrAttendanceService);
+        var service = createService();
 
         when(jdbcTemplate.query(anyString(), any(RowMapper.class), eq(1L)))
             .thenAnswer(invocation -> {
@@ -71,7 +77,7 @@ class HrEmployeeServiceTest {
 
     @Test
     void updateEmployeeThrowsWhenEmployeeDoesNotExist() {
-        var service = new HrEmployeeService(jdbcTemplate, hrAttendanceService);
+        var service = createService();
         var payload = new HashMap<String, Object>();
         payload.put("id", 999L);
         payload.put("first_name", "Missing");
@@ -86,7 +92,7 @@ class HrEmployeeServiceTest {
 
     @Test
     void updateEmployeeRejectsInvalidHireDate() {
-        var service = new HrEmployeeService(jdbcTemplate, hrAttendanceService);
+        var service = createService();
         var payload = new HashMap<String, Object>();
         payload.put("id", 2L);
         payload.put("first_name", "Test");
@@ -103,7 +109,7 @@ class HrEmployeeServiceTest {
 
     @Test
     void updateEmployeeRejectsMissingAssignmentFields() {
-        var service = new HrEmployeeService(jdbcTemplate, hrAttendanceService);
+        var service = createService();
         var payload = new HashMap<String, Object>();
         payload.put("id", 2L);
         payload.put("first_name", "Test");
@@ -120,7 +126,7 @@ class HrEmployeeServiceTest {
 
     @Test
     void updateEmployeeRejectsMissingDailySalary() {
-        var service = new HrEmployeeService(jdbcTemplate, hrAttendanceService);
+        var service = createService();
         var payload = new HashMap<String, Object>();
         payload.put("id", 2L);
         payload.put("first_name", "Test");
@@ -150,6 +156,71 @@ class HrEmployeeServiceTest {
 
         var error = assertThrows(IllegalArgumentException.class, () -> service.updateEmployee(1L, payload));
         assertEquals("salary is required for daily employees.", error.getMessage());
+    }
+
+    @Test
+    void createDocumentUploadRejectsWhenStorageIsDisabled() {
+        var service = createService();
+
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(1L), eq(2L)))
+            .thenReturn(1);
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("document_type", "resume");
+        payload.put("file_name", "employee-resume.pdf");
+        payload.put("content_type", "application/pdf");
+        payload.put("size_bytes", 1024);
+
+        assertThrows(ObjectStorageDisabledException.class, () -> service.createDocumentUpload(1L, 2L, payload));
+    }
+
+    @Test
+    void createDocumentUploadReturnsPresignedPayloadWhenStorageIsEnabled() {
+        ObjectStorageService objectStorageService = mock(ObjectStorageService.class);
+        when(objectStorageService.isEnabled()).thenReturn(true);
+        when(objectStorageService.presignUpload(anyString(), anyString(), anyString(), eq(900)))
+            .thenReturn(new PresignedUpload(
+                "hr/employees/1/2/documents/resume/example-upload.pdf",
+                "https://minio.example.test/upload",
+                Instant.parse("2026-04-13T12:00:00Z"),
+                Map.of("Content-Type", "application/pdf")
+            ));
+
+        var service = createService(objectStorageService, createStorageProperties());
+
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(1L), eq(2L)))
+            .thenReturn(1);
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("document_type", "resume");
+        payload.put("file_name", "Employee Resume.pdf");
+        payload.put("content_type", "application/pdf");
+        payload.put("size_bytes", 2048);
+
+        var result = service.createDocumentUpload(1L, 2L, payload);
+
+        assertEquals("resume", result.get("document_type"));
+        assertEquals("hr/employees/1/2/documents/resume/example-upload.pdf", result.get("object_key"));
+        assertEquals("https://minio.example.test/upload", result.get("upload_url"));
+    }
+
+    private HrEmployeeService createService() {
+        return createService(new DisabledObjectStorageService(), createStorageProperties());
+    }
+
+    private HrEmployeeService createService(
+        ObjectStorageService objectStorageService,
+        ObjectStorageProperties objectStorageProperties
+    ) {
+        return new HrEmployeeService(jdbcTemplate, hrAttendanceService, objectStorageService, objectStorageProperties);
+    }
+
+    private ObjectStorageProperties createStorageProperties() {
+        var properties = new ObjectStorageProperties();
+        properties.setProvider("minio");
+        properties.getMinio().setBucketDocuments("indice-hr-documents");
+        properties.getMinio().setPresignExpirySeconds(900);
+        return properties;
     }
 
     private ResultSet employeeResultSet() throws SQLException {

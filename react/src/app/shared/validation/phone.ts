@@ -39,6 +39,7 @@ const PHONE_DIGIT_LIMITS: Record<ProfileCountry, number> = {
   CO: 10,
   ES: 9,
   MX: 10,
+  PE: 9,
   US: 10,
 };
 

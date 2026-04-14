@@ -32,6 +32,75 @@ export interface BackendEmployee {
   status: 'active' | 'inactive' | 'terminated';
 }
 
+export interface BackendEmployeeProfile {
+  date_of_birth?: string | null;
+  address?: string;
+  national_id?: string;
+  tax_id?: string;
+  social_security_number?: string;
+  registration_country?: string;
+  state_province?: string;
+  alternate_phone?: string;
+  emergency_contact_name?: string;
+  emergency_contact_relationship?: string;
+  emergency_contact_phone?: string;
+  workday_hours?: number | null;
+}
+
+export interface BackendEmployeePortalAccess {
+  access_role: 'employee' | 'coordinator' | 'manager' | 'administrator';
+  linked_user_id?: number | null;
+  linked_user_name?: string;
+  linked_user_email?: string;
+  invitation_id?: number | null;
+  invitation_status: 'not_invited' | 'pending' | 'linked';
+  last_invited_at?: string | null;
+}
+
+export interface BackendEmployeeDocument {
+  id: number;
+  document_type: 'birth_certificate' | 'government_id' | 'proof_of_address' | 'resume' | 'profile_photo';
+  original_filename: string;
+  mime_type: string;
+  size_bytes: number;
+  object_key: string;
+  status: string;
+  download_url?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface EmployeeDetailsResponse {
+  employee_id: number;
+  employee: BackendEmployee;
+  profile: BackendEmployeeProfile;
+  access: BackendEmployeePortalAccess;
+  documents: BackendEmployeeDocument[];
+}
+
+export interface EmployeeDocumentPresignPayload {
+  document_type: BackendEmployeeDocument['document_type'];
+  file_name: string;
+  content_type: string;
+  size_bytes: number;
+}
+
+export interface EmployeeDocumentPresignResponse {
+  document_type: BackendEmployeeDocument['document_type'];
+  object_key: string;
+  upload_url: string;
+  expires_at: string;
+  upload_headers: Record<string, string>;
+}
+
+export interface RegisterEmployeeDocumentPayload {
+  document_type: BackendEmployeeDocument['document_type'];
+  original_filename: string;
+  mime_type: string;
+  size_bytes: number;
+  object_key: string;
+}
+
 export interface EmployeesListResponse {
   items: BackendEmployee[];
   count: number;
@@ -657,6 +726,10 @@ export const humanResourcesApi = {
     return apiClient<EmployeesListResponse>(endpoints.humanResources.employeesList);
   },
 
+  getEmployeeDetails(id: string | number) {
+    return apiClient<EmployeeDetailsResponse>(`${endpoints.humanResources.employeeDetails}/${id}`);
+  },
+
   createEmployee(payload: Record<string, unknown>) {
     return apiClient<BackendEmployee>(endpoints.humanResources.employeeCreate, {
       method: 'POST',
@@ -682,6 +755,64 @@ export const humanResourcesApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  },
+
+  presignEmployeeDocumentUpload(
+    employeeId: string | number,
+    payload: EmployeeDocumentPresignPayload,
+  ) {
+    return apiClient<EmployeeDocumentPresignResponse>(
+      `${endpoints.humanResources.employeeDocuments}/${employeeId}/documents/presign-upload`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
+  async uploadEmployeeDocument(
+    uploadUrl: string,
+    file: Blob,
+    contentType: string,
+    uploadHeaders: Record<string, string> = {},
+  ) {
+    const headers = new Headers(uploadHeaders);
+
+    if (contentType && !headers.has('Content-Type')) {
+      headers.set('Content-Type', contentType);
+    }
+
+    const response = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers,
+      body: file,
+    });
+
+    if (!response.ok) {
+      throw new Error('Employee document upload failed.');
+    }
+  },
+
+  registerEmployeeDocument(
+    employeeId: string | number,
+    payload: RegisterEmployeeDocumentPayload,
+  ) {
+    return apiClient<BackendEmployeeDocument>(
+      `${endpoints.humanResources.employeeDocuments}/${employeeId}/documents`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
+  deleteEmployeeDocument(employeeId: string | number, documentId: string | number) {
+    return apiClient<{ success: boolean }>(
+      `${endpoints.humanResources.employeeDocuments}/${employeeId}/documents/${documentId}`,
+      {
+        method: 'DELETE',
+      },
+    );
   },
 
   getAttendanceDashboard(date: string) {
