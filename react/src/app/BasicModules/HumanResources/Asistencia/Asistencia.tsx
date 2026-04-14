@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, Clock, MapPin, User, View } from 'lucide-react';
+import { Clock, MapPin, User, View } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 import { AttendancePhotoCaptureCard } from '../../../components/AttendancePhotoCaptureCard';
 import { CalendarioAsistencia } from '../../../components/CalendarioAsistencia';
@@ -15,7 +15,6 @@ import {
 } from '../../../components/ui/dialog';
 import { Skeleton } from '../../../components/ui/skeleton';
 import { useAttendancePhotoUpload } from '../../../hooks/useAttendancePhotoUpload';
-import { useLocalStorageState } from '../../../hooks/useLocalStorageState';
 import { useLanguage } from '../../../shared/context';
 import {
   humanResourcesApi,
@@ -31,12 +30,11 @@ const localDateTimeString = (date: Date) =>
   `${localDateString(date)}T${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}:${padDatePart(date.getSeconds())}`;
 const todayIsoDate = () => localDateString(new Date());
 const todayMonth = () => todayIsoDate().slice(0, 7);
-const hrAttendanceSelectedEmployeeStorageKey = 'indice.hr.attendance.selectedEmployeeId';
 
 const attendanceCopy = {
   en: {
     title: 'Attendance',
-    subtitle: 'Register your entry/exit with photo and location.',
+    subtitle: 'Register your own entry/exit with photo and location.',
     viewRecords: 'View my records',
     markBlock: 'Mark block',
     loading: {
@@ -69,7 +67,7 @@ const attendanceCopy = {
       absence: 'No record',
     },
     labels: {
-      collaborator: 'Contributor',
+      collaborator: 'Employee',
       employeeBrowser: 'Employee history',
       employeeBrowserHint: 'Choose who you are reviewing before interacting with the calendar or manual recorder.',
       employeePicker: 'Selected employee',
@@ -90,13 +88,13 @@ const attendanceCopy = {
       todayStatus: "Today's status",
       latestLocation: 'Latest location',
       noDepartment: 'No department',
-      noEmployeeSelected: 'Select an employee to view the calendar.',
+      noEmployeeSelected: 'Your employee profile is not linked yet.',
       retry: 'Retry',
     },
     recorder: {
       employee: 'Employee',
-      noEmployeeSelected: 'No employee selected',
-      selectEmployeeHint: 'Select an employee from the history browser to enable photo and location recording.',
+      noEmployeeSelected: 'No linked employee profile',
+      selectEmployeeHint: 'A linked employee profile is required to enable photo and location recording.',
       photo: 'Photo',
       photoRequired: 'Required to record',
       takePhoto: 'Take photo',
@@ -126,7 +124,7 @@ const attendanceCopy = {
   },
   es: {
     title: 'Asistencia',
-    subtitle: 'Registra tu entrada/salida con foto y ubicación.',
+    subtitle: 'Registra tu propia entrada/salida con foto y ubicación.',
     viewRecords: 'Ver mis registros',
     markBlock: 'Marcar bloque',
     loading: {
@@ -180,13 +178,13 @@ const attendanceCopy = {
       todayStatus: 'Estado de hoy',
       latestLocation: 'Última ubicación',
       noDepartment: 'Sin departamento',
-      noEmployeeSelected: 'Selecciona un colaborador para ver su calendario.',
+      noEmployeeSelected: 'Tu perfil de colaborador aún no está vinculado.',
       retry: 'Reintentar',
     },
     recorder: {
       employee: 'Colaborador',
-      noEmployeeSelected: 'Ningún colaborador seleccionado',
-      selectEmployeeHint: 'Selecciona un colaborador desde el historial para habilitar la foto y la ubicación.',
+      noEmployeeSelected: 'No hay un perfil de colaborador vinculado',
+      selectEmployeeHint: 'Necesitas un perfil de colaborador vinculado para habilitar la foto y la ubicación.',
       photo: 'Foto',
       photoRequired: 'Obligatoria para registrar',
       takePhoto: 'Tomar foto',
@@ -216,19 +214,6 @@ const attendanceCopy = {
   },
 } as const;
 
-const summaryCardKeys = ['on_time_count', 'late_count', 'leave_count', 'rest_count', 'absence_count'] as const;
-
-const statusClasses: Record<string, string> = {
-  on_time: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
-  late: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-  leave: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300',
-  rest: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-  absence: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300',
-};
-
-const monthLabel = (month: string, locale: string) =>
-  new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(new Date(`${month}-01T00:00:00`));
-
 export default function Asistencia() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -237,11 +222,6 @@ export default function Asistencia() {
   const [dashboard, setDashboard] = useState<AttendanceDashboardResponse | null>(null);
   const [calendar, setCalendar] = useState<AttendanceCalendarResponse | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(todayMonth());
-  const [selectedEmployeeId, setSelectedEmployeeId] = useLocalStorageState<number | null>(
-    hrAttendanceSelectedEmployeeStorageKey,
-    null,
-  );
-  const [searchQuery, setSearchQuery] = useState('');
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
   const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -259,65 +239,33 @@ export default function Asistencia() {
   const registrationRef = useRef<HTMLDivElement | null>(null);
   const successToastTimeoutRef = useRef<number | null>(null);
   const attendancePhotoUpload = useAttendancePhotoUpload();
-
-  const filteredItems = useMemo(() => {
-    if (!dashboard) {
-      return [];
-    }
-
-    const normalizedSearch = searchQuery.trim().toLowerCase();
-    if (!normalizedSearch) {
-      return dashboard.items;
-    }
-
-    return dashboard.items.filter((item) =>
-      `${item.employee_name} ${item.employee_number ?? ''} ${item.position_title ?? ''}`
-        .toLowerCase()
-        .includes(normalizedSearch),
-    );
-  }, [dashboard, searchQuery]);
-
-  const selectedItem = useMemo(
-    () => filteredItems.find((item) => item.employee_id === selectedEmployeeId) ?? dashboard?.items.find((item) => item.employee_id === selectedEmployeeId) ?? null,
-    [dashboard?.items, filteredItems, selectedEmployeeId],
-  );
-
-  const selectedEmployeeOption = useMemo(
-    () => dashboard?.employees.find((employee) => employee.id === selectedEmployeeId) ?? null,
-    [dashboard?.employees, selectedEmployeeId],
-  );
-  const employeeOptions = dashboard?.items ?? [];
-  const selectedEmployeeIndex = employeeOptions.findIndex((item) => item.employee_id === selectedEmployeeId);
-  const canGoToPreviousEmployee = selectedEmployeeIndex > 0;
-  const canGoToNextEmployee =
-    selectedEmployeeIndex >= 0 && selectedEmployeeIndex < employeeOptions.length - 1;
+  const selectedItem = useMemo(() => dashboard?.items[0] ?? null, [dashboard?.items]);
+  const selectedEmployeeOption = useMemo(() => dashboard?.employees[0] ?? null, [dashboard?.employees]);
+  const selectedEmployeeId = selectedItem?.employee_id ?? null;
 
   const loadDashboard = async () => {
     setIsLoadingDashboard(true);
     setErrorMessage('');
 
     try {
-      const response = await humanResourcesApi.getAttendanceDashboard(todayIsoDate());
+      const response = await humanResourcesApi.getMyAttendanceDashboard(todayIsoDate());
       setDashboard(response);
-      setSelectedEmployeeId((current) =>
-        current && response.employees.some((employee) => employee.id === current)
-          ? current
-          : response.employees[0]?.id ?? null,
-      );
     } catch (error) {
+      setDashboard(null);
       setErrorMessage(error instanceof Error ? error.message : copy.labels.retry);
     } finally {
       setIsLoadingDashboard(false);
     }
   };
 
-  const loadCalendar = async (employeeId: number, month: string) => {
+  const loadCalendar = async (month: string) => {
     setIsLoadingCalendar(true);
 
     try {
-      const response = await humanResourcesApi.getAttendanceCalendar(employeeId, month);
+      const response = await humanResourcesApi.getMyAttendanceCalendar(month);
       setCalendar(response);
     } catch (error) {
+      setCalendar(null);
       setErrorMessage(error instanceof Error ? error.message : copy.labels.retry);
     } finally {
       setIsLoadingCalendar(false);
@@ -349,13 +297,13 @@ export default function Asistencia() {
   }, [dashboard?.locations, recorderLocationId]);
 
   useEffect(() => {
-    if (!selectedEmployeeId) {
+    if (!selectedItem) {
       setCalendar(null);
       return;
     }
 
-    void loadCalendar(selectedEmployeeId, calendarMonth);
-  }, [calendarMonth, selectedEmployeeId]);
+    void loadCalendar(calendarMonth);
+  }, [calendarMonth, selectedItem]);
 
   useEffect(() => {
     attendancePhotoUpload.clearPhoto();
@@ -417,8 +365,7 @@ export default function Asistencia() {
       title: copy.loading.registerTitle,
       description: copy.loading.registerDescription,
       task: async () => {
-        await humanResourcesApi.recordAttendanceKioskEvent({
-          employee_id: payload.employeeId,
+        await humanResourcesApi.recordMyAttendanceKioskEvent({
           event_type: payload.eventType,
           event_kind: payload.eventType,
           location_id: payload.locationId,
@@ -433,7 +380,7 @@ export default function Asistencia() {
         });
 
         await loadDashboard();
-        await loadCalendar(payload.employeeId, calendarMonth);
+        await loadCalendar(calendarMonth);
       },
     });
 
@@ -509,15 +456,13 @@ export default function Asistencia() {
       title: copy.loading.registerTitle,
       description: copy.loading.registerDescription,
       task: async () => {
-        const photoObjectKey = await attendancePhotoUpload.ensureUploaded({
-          employee_id: selectedItem.employee_id,
+        const photoObjectKey = await attendancePhotoUpload.ensureUploadedForCurrentUser({
           event_type: eventType,
           event_timestamp: eventTimestamp,
           content_type: attendancePhotoUpload.photo?.contentType ?? 'image/jpeg',
         });
 
-        await humanResourcesApi.recordAttendanceKioskEvent({
-          employee_id: selectedItem.employee_id,
+        await humanResourcesApi.recordMyAttendanceKioskEvent({
           event_type: eventType,
           event_kind: eventType,
           location_id: recorderLocationId ? Number(recorderLocationId) : undefined,
@@ -529,7 +474,7 @@ export default function Asistencia() {
         });
 
         await loadDashboard();
-        await loadCalendar(selectedItem.employee_id, calendarMonth);
+        await loadCalendar(calendarMonth);
       },
     });
 
@@ -544,7 +489,7 @@ export default function Asistencia() {
     date: string,
     status: AttendanceCalendarDay['effective_status'] | '',
   ) => {
-    if (!selectedEmployeeId) {
+    if (!selectedItem) {
       return;
     }
 
@@ -552,30 +497,12 @@ export default function Asistencia() {
       title: copy.loading.correctTitle,
       description: copy.loading.correctDescription,
       task: async () => {
-        await humanResourcesApi.updateAttendanceDailyRecord(selectedEmployeeId, date, { status });
-        await Promise.all([loadDashboard(), loadCalendar(selectedEmployeeId, calendarMonth)]);
+        await humanResourcesApi.updateMyAttendanceDailyRecord(date, { status });
+        await Promise.all([loadDashboard(), loadCalendar(calendarMonth)]);
       },
     });
 
     showSuccessToast(status ? copy.success.correctionApplied : copy.success.correctionCleared);
-  };
-
-  const handleEmployeeSelection = (employeeId: number) => {
-    setSelectedEmployeeId(employeeId);
-    setErrorMessage('');
-  };
-
-  const handleEmployeeStep = (direction: -1 | 1) => {
-    if (selectedEmployeeIndex < 0) {
-      return;
-    }
-
-    const nextEmployee = employeeOptions[selectedEmployeeIndex + direction];
-    if (!nextEmployee) {
-      return;
-    }
-
-    handleEmployeeSelection(nextEmployee.employee_id);
   };
 
   return (
@@ -617,7 +544,7 @@ export default function Asistencia() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <Button variant="outline" className="gap-2" onClick={() => setIsRecordsOpen(true)} disabled={!selectedEmployeeId}>
+            <Button variant="outline" className="gap-2" onClick={() => setIsRecordsOpen(true)} disabled={!selectedItem}>
               <View className="h-4 w-4" />
               {copy.viewRecords}
             </Button>
@@ -666,20 +593,6 @@ export default function Asistencia() {
                     </p>
                   </div>
                 </div>
-
-                {dashboard?.employees && dashboard.employees.length > 1 ? (
-                  <select
-                    value={selectedEmployeeId ? String(selectedEmployeeId) : ''}
-                    onChange={(event) => handleEmployeeSelection(Number(event.target.value))}
-                    className="min-w-[220px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#143675] focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                  >
-                    {dashboard.employees.map((employee) => (
-                      <option key={employee.id} value={employee.id}>
-                        {employee.full_name}
-                      </option>
-                    ))}
-                  </select>
-                ) : null}
               </div>
 
               <div className="mt-6 border-t border-gray-200 pt-6 dark:border-gray-700">
@@ -805,7 +718,7 @@ export default function Asistencia() {
           <DialogHeader>
             <DialogTitle>{copy.viewRecords}</DialogTitle>
           </DialogHeader>
-          {selectedEmployeeId && calendar ? (
+          {selectedItem && calendar ? (
             <CalendarioAsistencia
               colaboradorNombre={calendar.employee.full_name}
               month={calendarMonth}
@@ -833,6 +746,7 @@ export default function Asistencia() {
             codigo: employee.employee_number,
           }))}
           registeredLocations={dashboard.locations}
+          selfMode
           onSubmit={handleKioskSubmit}
         />
       ) : null}

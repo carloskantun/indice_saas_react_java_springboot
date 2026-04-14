@@ -585,7 +585,7 @@ export interface PayrollUpdateLinePayload {
 }
 
 export interface AttendanceKioskEventPayload {
-  employee_id: number;
+  employee_id?: number;
   event_type?: 'check_in' | 'check_out' | 'break_out' | 'break_in';
   event_kind?: 'auth_attempt' | 'check_in' | 'break_out' | 'break_in' | 'check_out' | 'manual_override' | 'correction';
   location_id?: number;
@@ -601,7 +601,7 @@ export interface AttendanceKioskEventPayload {
 }
 
 export interface AttendanceMediaPresignRequest {
-  employee_id: number;
+  employee_id?: number;
   content_type: string;
   event_type?: 'check_in' | 'check_out' | 'break_out' | 'break_in';
   event_timestamp?: string;
@@ -821,6 +821,12 @@ export const humanResourcesApi = {
     );
   },
 
+  getMyAttendanceDashboard(date: string) {
+    return apiClient<AttendanceDashboardResponse>(
+      `${endpoints.humanResources.attendanceSelfDashboard}${toQueryString({ date })}`,
+    );
+  },
+
   getAttendanceControlOverview(date: string) {
     return apiClient<AttendanceControlOverviewResponse>(
       `${endpoints.humanResources.attendanceControlOverview}${toQueryString({ date })}`,
@@ -936,8 +942,21 @@ export const humanResourcesApi = {
     );
   },
 
+  getMyAttendanceCalendar(month: string) {
+    return apiClient<AttendanceCalendarResponse>(
+      `${endpoints.humanResources.attendanceSelfCalendar}${toQueryString({ month })}`,
+    );
+  },
+
   presignAttendancePhotoUpload(payload: AttendanceMediaPresignRequest) {
     return apiClient<AttendanceMediaPresignResponse>(endpoints.humanResources.attendanceMediaPresignUpload, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  presignMyAttendancePhotoUpload(payload: Omit<AttendanceMediaPresignRequest, 'employee_id'>) {
+    return apiClient<AttendanceMediaPresignResponse>(endpoints.humanResources.attendanceSelfMediaPresignUpload, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -968,6 +987,13 @@ export const humanResourcesApi = {
 
   recordAttendanceKioskEvent(payload: AttendanceKioskEventPayload) {
     return apiClient<{ status: string }>(endpoints.humanResources.attendanceKioskEvents, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  recordMyAttendanceKioskEvent(payload: Omit<AttendanceKioskEventPayload, 'employee_id'>) {
+    return apiClient<{ status: string }>(endpoints.humanResources.attendanceSelfKioskEvents, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -1010,6 +1036,12 @@ export const humanResourcesApi = {
     });
   },
 
+  createMyFaceVerificationSession() {
+    return apiClient<FaceVerificationSessionResponse>(endpoints.humanResources.attendanceSelfFaceVerificationSessions, {
+      method: 'POST',
+    });
+  },
+
   presignFaceVerificationCapture(sessionId: number, step: string, contentType: string) {
     return apiClient<FaceCapturePresignResponse>(`${endpoints.humanResources.attendanceFaceVerificationSessions}/${sessionId}/captures/presign-upload`, {
       method: 'POST',
@@ -1026,6 +1058,16 @@ export const humanResourcesApi = {
   updateAttendanceDailyRecord(employeeId: string | number, date: string, payload: AttendanceCorrectionPayload) {
     return apiClient<AttendanceDailyRecordUpdateResponse>(
       `${endpoints.humanResources.attendanceDailyRecords}/${employeeId}/${date}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
+  updateMyAttendanceDailyRecord(date: string, payload: AttendanceCorrectionPayload) {
+    return apiClient<AttendanceDailyRecordUpdateResponse>(
+      `${endpoints.humanResources.attendanceSelfDailyRecords}/${date}`,
       {
         method: 'PUT',
         body: JSON.stringify(payload),

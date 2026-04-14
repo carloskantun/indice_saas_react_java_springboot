@@ -76,6 +76,42 @@ export function useAttendancePhotoUpload() {
     }
   };
 
+  const ensureUploadedForCurrentUser = async (request: Omit<AttendanceMediaPresignRequest, 'employee_id'>) => {
+    if (uploadState === 'uploaded' && uploadedObjectKey) {
+      return uploadedObjectKey;
+    }
+
+    if (!photo) {
+      throw new Error('Attendance photo is required.');
+    }
+
+    setUploadState('uploading');
+    setUploadError('');
+
+    try {
+      const presigned = await humanResourcesApi.presignMyAttendancePhotoUpload({
+        ...request,
+        content_type: photo.contentType,
+      });
+
+      await humanResourcesApi.uploadAttendancePhoto(
+        presigned.upload_url,
+        photo.file,
+        photo.contentType,
+        presigned.upload_headers ?? {},
+      );
+
+      setUploadedObjectKey(presigned.object_key);
+      setUploadState('uploaded');
+      return presigned.object_key;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Attendance photo upload failed.';
+      setUploadError(message);
+      setUploadState('error');
+      throw new Error(message);
+    }
+  };
+
   return {
     photo,
     uploadState,
@@ -84,5 +120,6 @@ export function useAttendancePhotoUpload() {
     setCapturedPhoto,
     clearPhoto,
     ensureUploaded,
+    ensureUploadedForCurrentUser,
   };
 }

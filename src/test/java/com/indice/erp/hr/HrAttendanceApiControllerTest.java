@@ -71,6 +71,24 @@ class HrAttendanceApiControllerTest {
     }
 
     @Test
+    void myDashboardReturnsPayloadForAuthenticatedUser() throws Exception {
+        var currentUser = new AuthSessionUser(7L, 1L, "Attendance User", "user");
+        given(sessionAuthService.currentUser(any())).willReturn(Optional.of(currentUser));
+        given(hrAttendanceService.selfDashboard(eq(1L), eq(7L), any())).willReturn(Map.of(
+            "date", "2026-04-07",
+            "summary", Map.of("total_employees", 1, "on_time_count", 1),
+            "items", java.util.List.of(Map.of("employee_id", 12, "status", "on_time")),
+            "employees", java.util.List.of(Map.of("id", 12, "full_name", "Attendance User")),
+            "locations", java.util.List.of()
+        ));
+
+        mockMvc.perform(get("/api/v1/hr/attendance/me/dashboard").param("date", "2026-04-07"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.summary.total_employees").value(1))
+            .andExpect(jsonPath("$.items[0].employee_id").value(12));
+    }
+
+    @Test
     void createLocationReturnsCreatedPayloadForAuthenticatedUser() throws Exception {
         var currentUser = new AuthSessionUser(1L, 1L, "Usuario Demo", "admin");
         given(sessionAuthService.currentUser(any())).willReturn(Optional.of(currentUser));
@@ -277,5 +295,55 @@ class HrAttendanceApiControllerTest {
         )
             .andExpect(status().isServiceUnavailable())
             .andExpect(jsonPath("$.message").value("Object storage is not enabled."));
+    }
+
+    @Test
+    void myKioskEventReturnsPayloadForAuthenticatedUser() throws Exception {
+        var currentUser = new AuthSessionUser(7L, 1L, "Attendance User", "user");
+        given(sessionAuthService.currentUser(any())).willReturn(Optional.of(currentUser));
+        given(hrAttendanceService.recordSelfKioskEvent(eq(1L), eq(7L), anyMap())).willReturn(Map.of(
+            "employee_id", 12,
+            "status", "on_time"
+        ));
+
+        mockMvc.perform(
+            post("/api/v1/hr/attendance/me/kiosk-events")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "event_type": "check_in",
+                      "location_id": 1,
+                      "latitude": 25.7,
+                      "longitude": -100.3
+                    }
+                    """)
+        )
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.employee_id").value(12))
+            .andExpect(jsonPath("$.status").value("on_time"));
+    }
+
+    @Test
+    void myDailyRecordUpdateReturnsPayload() throws Exception {
+        var currentUser = new AuthSessionUser(7L, 1L, "Attendance User", "user");
+        given(sessionAuthService.currentUser(any())).willReturn(Optional.of(currentUser));
+        given(hrAttendanceService.updateSelfDailyRecord(eq(1L), eq(7L), any(), anyMap())).willReturn(Map.of(
+            "employee_id", 12,
+            "date", "2026-04-07",
+            "effective_status", "leave"
+        ));
+
+        mockMvc.perform(
+            put("/api/v1/hr/attendance/me/daily-records/2026-04-07")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "status": "leave"
+                    }
+                    """)
+        )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.employee_id").value(12))
+            .andExpect(jsonPath("$.effective_status").value("leave"));
     }
 }

@@ -36,6 +36,7 @@ interface KioskModalProps {
   onClose: () => void;
   colaboradores: Colaborador[];
   registeredLocations: RegisteredLocation[];
+  selfMode?: boolean;
   onSubmit: (payload: {
     employeeId: number;
     eventType: 'check_in' | 'check_out' | 'break_out' | 'break_in';
@@ -287,6 +288,7 @@ export function KioskModal({
   onClose,
   colaboradores,
   registeredLocations,
+  selfMode = false,
   onSubmit,
 }: KioskModalProps) {
   const { currentLanguage } = useLanguage();
@@ -330,6 +332,9 @@ export function KioskModal({
       if (defaultLocation) {
         setSelectedLocationId(String(defaultLocation.id));
       }
+      if (colaboradores.length === 1) {
+        setSelectedEmployee(colaboradores[0]);
+      }
     } else {
       setSearchQuery('');
       setSelectedEmployee(null);
@@ -345,7 +350,7 @@ export function KioskModal({
       setVerifiedFaceSessionId(null);
       setErrorMessage('');
     }
-  }, [isOpen, registeredLocations]);
+  }, [colaboradores, isOpen, registeredLocations]);
 
   const locations = useMemo(
     () => registeredLocations.map(normalizeLocation).filter((location) => location.id > 0),
@@ -551,12 +556,18 @@ export function KioskModal({
 
       const photoObjectKey = isFaceAuth
         ? undefined
-        : await attendancePhotoUpload.ensureUploaded({
-            employee_id: selectedEmployee.id,
-            event_type: eventType,
-            event_timestamp: eventTimestamp,
-            content_type: attendancePhotoUpload.photo?.contentType ?? 'image/jpeg',
-          });
+        : selfMode
+          ? await attendancePhotoUpload.ensureUploadedForCurrentUser({
+              event_type: eventType,
+              event_timestamp: eventTimestamp,
+              content_type: attendancePhotoUpload.photo?.contentType ?? 'image/jpeg',
+            })
+          : await attendancePhotoUpload.ensureUploaded({
+              employee_id: selectedEmployee.id,
+              event_type: eventType,
+              event_timestamp: eventTimestamp,
+              content_type: attendancePhotoUpload.photo?.contentType ?? 'image/jpeg',
+            });
 
       await onSubmit({
         employeeId: selectedEmployee.id,
@@ -610,7 +621,9 @@ export function KioskModal({
     setErrorMessage('');
 
     try {
-      const session = await humanResourcesApi.createFaceVerificationSession(selectedEmployee.id);
+      const session = selfMode
+        ? await humanResourcesApi.createMyFaceVerificationSession()
+        : await humanResourcesApi.createFaceVerificationSession(selectedEmployee.id);
       for (const capture of captures) {
         const presigned = await humanResourcesApi.presignFaceVerificationCapture(
           session.session_id,

@@ -47,6 +47,7 @@ class HrFirstRunIntegrationTest {
     private final List<Long> createdLocationIds = new ArrayList<>();
     private final List<Long> createdTemplateIds = new ArrayList<>();
     private final List<Long> createdPayrollRunIds = new ArrayList<>();
+    private final List<Long> createdUserIds = new ArrayList<>();
 
     @AfterEach
     void tearDown() {
@@ -64,6 +65,12 @@ class HrFirstRunIntegrationTest {
             jdbcTemplate.update("DELETE FROM hr_employees WHERE id = ?", employeeId);
         }
         createdEmployeeIds.clear();
+
+        for (var userId : createdUserIds) {
+            jdbcTemplate.update("DELETE FROM user_companies WHERE user_id = ?", userId);
+            jdbcTemplate.update("DELETE FROM users WHERE id = ?", userId);
+        }
+        createdUserIds.clear();
 
         for (var templateId : createdTemplateIds) {
             jdbcTemplate.update("DELETE FROM hr_schedule_templates WHERE id = ?", templateId);
@@ -345,6 +352,148 @@ class HrFirstRunIntegrationTest {
 
         assertThat(aprilSix.get("system_status")).isEqualTo("on_time");
         assertThat(aprilSix.get("corrected_status")).isEqualTo("leave");
+    }
+
+    @Test
+    void attendanceSelfEndpointsUseTheLoggedInEmployeeOnly() throws Exception {
+        var adminSession = authenticatedSession();
+        var uniqueSuffix = System.currentTimeMillis();
+        var employeeId = createEmployeeForTests(adminSession, uniqueSuffix);
+        var selfSession = createLinkedAttendanceSession(employeeId, uniqueSuffix);
+
+        var locationId = jdbcTemplate.queryForObject(
+            "SELECT id FROM hr_attendance_locations WHERE company_id = 1 ORDER BY id ASC LIMIT 1",
+            Long.class
+        );
+        assertThat(locationId).isNotNull();
+
+        mockMvc.perform(
+            post("/api/v1/hr/attendance/me/kiosk-events")
+                .session(selfSession)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                    "event_type", "check_in",
+                    "location_id", locationId,
+                    "latitude", 25.6866140,
+                    "longitude", -100.3161130,
+                    "event_timestamp", "2026-04-06T08:35:00"
+                )))
+        )
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.employee_id").value(employeeId))
+            .andExpect(jsonPath("$.status").value("on_time"));
+
+        mockMvc.perform(get("/api/v1/hr/attendance/me/dashboard").session(selfSession).param("date", "2026-04-06"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.summary.total_employees").value(1))
+            .andExpect(jsonPath("$.items[0].employee_id").value(employeeId))
+            .andExpect(jsonPath("$.employees[0].id").value(employeeId));
+
+        mockMvc.perform(
+            put("/api/v1/hr/attendance/me/daily-records/{date}", "2026-04-06")
+                .session(selfSession)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                    "status", "leave",
+                    "notes", "Self-correction request"
+                )))
+        )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.employee_id").value(employeeId))
+            .andExpect(jsonPath("$.effective_status").value("leave"));
+
+        var calendarResponse = mockMvc.perform(
+            get("/api/v1/hr/attendance/me/calendar")
+                .session(selfSession)
+                .param("month", "2026-04")
+        )
+            .andExpect(status().isOk())
+            .andReturn();
+
+        var calendarBody = readMap(calendarResponse.getResponse().getContentAsString());
+        @SuppressWarnings("unchecked")
+        var items = (List<Map<String, Object>>) calendarBody.get("items");
+        var aprilSix = items.stream()
+            .filter(item -> "2026-04-06".equals(item.get("date")))
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(((Number) ((Map<?, ?>) calendarBody.get("employee")).get("id")).longValue()).isEqualTo(employeeId);
+        assertThat(aprilSix.get("corrected_status")).isEqualTo("leave");
+    }
+
+    @Test
+    void attendanceSelfEndpointsProvisionAnEmployeeForUnlinkedPlatformUsers() throws Exception {
+        var uniqueSuffix = System.currentTimeMillis();
+        var userSession = createAttendanceSessionWithoutEmployeeLink(uniqueSuffix);
+
+        var dashboardResponse = mockMvc.perform(
+            get("/api/v1/hr/attendance/me/dashboard")
+                .session(userSession.session())
+                .param("date", "2026-04-06")
+        )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.summary.total_employees").value(1))
+            .andReturn();
+
+        var employeeId = jdbcTemplate.queryForObject(
+            "SELECT employee_id FROM hr_employee_portal_access WHERE company_id = 1 AND linked_user_id = ?",
+            Long.class,
+            userSession.userId()
+        );
+        assertThat(employeeId).isNotNull();
+        createdEmployeeIds.add(employeeId);
+
+        var employeeRow = jdbcTemplate.queryForMap(
+            """
+                SELECT employee_number, first_name, last_name, email, status
+                FROM hr_employees
+                WHERE id = ?
+                """,
+            employeeId
+        );
+        assertThat(String.valueOf(employeeRow.get("employee_number"))).matches("^EMP-\\d{4,}$");
+        assertThat(String.valueOf(employeeRow.get("email"))).isEqualTo(userSession.email());
+        assertThat(String.valueOf(employeeRow.get("status"))).isEqualToIgnoringCase("active");
+
+        var profileCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM hr_employee_profiles WHERE employee_id = ?",
+            Integer.class,
+            employeeId
+        );
+        var accessProfileCount = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM hr_employee_access_profiles WHERE employee_id = ?",
+            Integer.class,
+            employeeId
+        );
+        assertThat(profileCount).isNotNull().isEqualTo(1);
+        assertThat(accessProfileCount).isNotNull().isGreaterThan(0);
+
+        var locationId = jdbcTemplate.queryForObject(
+            "SELECT id FROM hr_attendance_locations WHERE company_id = 1 ORDER BY id ASC LIMIT 1",
+            Long.class
+        );
+        assertThat(locationId).isNotNull();
+
+        mockMvc.perform(
+            post("/api/v1/hr/attendance/me/kiosk-events")
+                .session(userSession.session())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                    "event_type", "check_in",
+                    "location_id", locationId,
+                    "latitude", 25.6866140,
+                    "longitude", -100.3161130,
+                    "event_timestamp", "2026-04-06T08:35:00"
+                )))
+        )
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.employee_id").value(employeeId))
+            .andExpect(jsonPath("$.status").value("on_time"));
+
+        var dashboardBody = readMap(dashboardResponse.getResponse().getContentAsString());
+        assertThat(((Number) ((Map<?, ?>) ((List<?>) dashboardBody.get("employees")).getFirst()).get("id")).longValue())
+            .isEqualTo(employeeId);
     }
 
     @Test
@@ -1264,8 +1413,86 @@ class HrFirstRunIntegrationTest {
         return session;
     }
 
+    private MockHttpSession createLinkedAttendanceSession(long employeeId, long uniqueSuffix) {
+        var email = "attendance.self." + uniqueSuffix + "@example.com";
+        jdbcTemplate.update(
+            "INSERT INTO users (email, password_hash, full_name) VALUES (?, '$2y$12$4s7mj2iDLKOSDtJY9Zz5qukpJvNLtWAF87NhuEEF7kxuEH6G1r3ge', ?)",
+            email,
+            "Attendance Self " + uniqueSuffix
+        );
+        var userId = jdbcTemplate.queryForObject(
+            "SELECT id FROM users WHERE email = ?",
+            Long.class,
+            email
+        );
+        assertThat(userId).isNotNull();
+        createdUserIds.add(userId);
+
+        jdbcTemplate.update(
+            "INSERT INTO user_companies (user_id, company_id, role, status, visibility) VALUES (?, 1, 'user', 'active', 'all')",
+            userId
+        );
+
+        jdbcTemplate.update(
+            """
+                INSERT INTO hr_employee_portal_access
+                (employee_id, company_id, access_role, linked_user_id, invitation_status, created_by)
+                VALUES (?, 1, 'employee', ?, 'linked', 1)
+                ON DUPLICATE KEY UPDATE
+                  linked_user_id = VALUES(linked_user_id),
+                  invitation_status = VALUES(invitation_status)
+                """,
+            employeeId,
+            userId
+        );
+
+        var session = new MockHttpSession();
+        session.setAttribute(SessionAuthService.SESSION_USER_ID, userId);
+        session.setAttribute(SessionAuthService.SESSION_COMPANY_ID, 1L);
+        session.setAttribute(SessionAuthService.SESSION_USER_NAME, "Attendance Self " + uniqueSuffix);
+        session.setAttribute(SessionAuthService.SESSION_ROLE, "user");
+        return session;
+    }
+
+    private UserSessionRef createAttendanceSessionWithoutEmployeeLink(long uniqueSuffix) {
+        var email = "attendance.auto." + uniqueSuffix + "@example.com";
+        var fullName = "Attendance Auto " + uniqueSuffix;
+
+        jdbcTemplate.update(
+            "INSERT INTO users (email, password_hash, full_name) VALUES (?, '$2y$12$4s7mj2iDLKOSDtJY9Zz5qukpJvNLtWAF87NhuEEF7kxuEH6G1r3ge', ?)",
+            email,
+            fullName
+        );
+        var userId = jdbcTemplate.queryForObject(
+            "SELECT id FROM users WHERE email = ?",
+            Long.class,
+            email
+        );
+        assertThat(userId).isNotNull();
+        createdUserIds.add(userId);
+
+        jdbcTemplate.update(
+            "INSERT INTO user_companies (user_id, company_id, role, status, visibility) VALUES (?, 1, 'user', 'active', 'all')",
+            userId
+        );
+
+        var session = new MockHttpSession();
+        session.setAttribute(SessionAuthService.SESSION_USER_ID, userId);
+        session.setAttribute(SessionAuthService.SESSION_COMPANY_ID, 1L);
+        session.setAttribute(SessionAuthService.SESSION_USER_NAME, fullName);
+        session.setAttribute(SessionAuthService.SESSION_ROLE, "user");
+        return new UserSessionRef(userId, email, session);
+    }
+
     private Map<String, Object> readMap(String json) throws Exception {
         return objectMapper.readValue(json, new TypeReference<>() {
         });
+    }
+
+    private record UserSessionRef(
+        long userId,
+        String email,
+        MockHttpSession session
+    ) {
     }
 }
