@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Clock, MapPin, User, View } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router';
 import { AttendanceRecorderPhotoCard } from './AttendanceRecorderPhotoCard';
 import { CalendarioAsistencia } from '../../../components/CalendarioAsistencia';
 import { FailureToast } from '../../../components/FailureToast';
-import { KioskModal } from '../../../components/KioskModal';
 import { LoadingBarOverlay, runWithMinimumDuration } from '../../../components/LoadingBarOverlay';
 import { SuccessToast } from '../../../components/SuccessToast';
 import { Badge } from '../../../components/ui/badge';
@@ -270,8 +268,6 @@ const attendanceCopy = {
 } as const;
 
 export default function Attendance() {
-  const location = useLocation();
-  const navigate = useNavigate();
   const { currentLanguage } = useLanguage();
   const copy = currentLanguage.code.startsWith('es') ? attendanceCopy.es : attendanceCopy.en;
   const [currentAttendanceDate, setCurrentAttendanceDate] = useState(todayIsoDate());
@@ -281,7 +277,6 @@ export default function Attendance() {
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
   const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isKioskOpen, setIsKioskOpen] = useState(false);
   const [isRecordsOpen, setIsRecordsOpen] = useState(false);
   const [overlayTitle, setOverlayTitle] = useState<string>(copy.loading.refreshTitle);
   const [overlayDescription, setOverlayDescription] = useState<string>(copy.loading.refreshDescription);
@@ -371,20 +366,6 @@ export default function Attendance() {
   }, []);
 
   useEffect(() => {
-    if (!location.state || typeof location.state !== 'object' || !('openKiosk' in location.state)) {
-      return;
-    }
-
-    const shouldOpenKiosk = Boolean((location.state as { openKiosk?: unknown }).openKiosk);
-    if (!shouldOpenKiosk) {
-      return;
-    }
-
-    setIsKioskOpen(true);
-    navigate(location.pathname, { replace: true, state: null });
-  }, [location.pathname, location.state, navigate]);
-
-  useEffect(() => {
     if (dashboard?.locations?.length && !recorderLocationId) {
       setRecorderLocationId(String(dashboard.locations[0].id));
     }
@@ -451,53 +432,6 @@ export default function Attendance() {
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleKioskSubmit = async (payload: {
-    employeeId: number;
-    eventType: 'check_in' | 'check_out' | 'break_out' | 'break_in';
-    locationId: number;
-    kioskDeviceId: number;
-    authMethod: 'pin' | 'badge' | 'password' | 'manual_override' | 'facial_recognition';
-    faceVerificationSessionId?: number;
-    credentialPayload?: string;
-    latitude: number;
-    longitude: number;
-    photoUrl?: string;
-    eventTimestamp?: string;
-  }) => {
-    await runMutation({
-      title: copy.loading.registerTitle,
-      description: copy.loading.registerDescription,
-      task: async () => {
-        await humanResourcesApi.recordMyAttendanceKioskEvent({
-          event_type: payload.eventType,
-          event_kind: payload.eventType,
-          location_id: payload.locationId,
-          kiosk_device_id: payload.kioskDeviceId,
-          auth_method: payload.authMethod,
-          face_verification_session_id: payload.faceVerificationSessionId,
-          credential_payload: payload.credentialPayload,
-          latitude: payload.latitude,
-          longitude: payload.longitude,
-          photo_url: payload.photoUrl,
-          event_timestamp: payload.eventTimestamp,
-        });
-
-        await loadDashboard(currentAttendanceDate);
-        await loadCalendar(calendarMonth);
-      },
-    });
-
-    showSuccessToast(
-      payload.eventType === 'check_in'
-        ? copy.success.checkIn
-        : payload.eventType === 'check_out'
-          ? copy.success.checkOut
-          : payload.eventType === 'break_out'
-            ? (currentLanguage.code.startsWith('es') ? 'Salida a descanso registrada correctamente.' : 'Break-out recorded successfully.')
-            : (currentLanguage.code.startsWith('es') ? 'Regreso de descanso registrado correctamente.' : 'Break-in recorded successfully.'),
-    );
   };
 
   const requestRecorderGeolocation = async () => {
@@ -898,22 +832,6 @@ export default function Attendance() {
           )}
         </DialogContent>
       </Dialog>
-
-      {dashboard ? (
-        <KioskModal
-          isOpen={isKioskOpen}
-          onClose={() => setIsKioskOpen(false)}
-          colaboradores={dashboard.employees.map((employee) => ({
-            id: employee.id,
-            nombre: employee.full_name,
-            puesto: employee.position_title || employee.department || copy.labels.unassignedPosition,
-            codigo: employee.employee_number,
-          }))}
-          registeredLocations={dashboard.locations}
-          selfMode
-          onSubmit={handleKioskSubmit}
-        />
-      ) : null}
     </>
   );
 }

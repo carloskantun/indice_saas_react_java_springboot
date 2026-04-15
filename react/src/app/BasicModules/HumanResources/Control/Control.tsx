@@ -1,18 +1,22 @@
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
 import {
   AlertTriangle,
   CalendarDays,
   Clock3,
+  Copy,
+  ExternalLink,
   Link2,
   MapPin,
   Pencil,
   Plus,
+  QrCode,
   RefreshCw,
+  RotateCw,
   Search,
   ShieldCheck,
   Users,
 } from 'lucide-react';
+import QRCode from 'qrcode';
 import { Button } from '../../../components/ui/button';
 import { LoadingBarOverlay, runWithMinimumDuration } from '../../../components/LoadingBarOverlay';
 import { Skeleton } from '../../../components/ui/skeleton';
@@ -218,6 +222,15 @@ const controlCopy = {
       noMethods: 'No access methods configured.',
       metadataHint: 'Manage kiosk methods and the employee biometric enrollment from here.',
       kioskDevice: 'Kiosk device',
+      kioskPublicLink: 'Kiosk public link',
+      copyKioskLink: 'Copy link',
+      showKioskQr: 'Show QR',
+      rotateKioskLink: 'Rotate link',
+      kioskLinkCopied: 'Kiosk link copied.',
+      kioskLinkRotated: 'Kiosk link rotated successfully.',
+      kioskTokenUnavailable: 'This kiosk does not have a public device link yet.',
+      kioskQrTitle: 'Kiosk QR',
+      selectedKioskDevice: 'Selected kiosk device',
       eventTime: 'Event time',
       eventKind: 'Event kind',
       result: 'Result',
@@ -405,6 +418,15 @@ const controlCopy = {
       noMethods: 'No hay métodos de acceso configurados.',
       metadataHint: 'Administra aqui los metodos del kiosco y la inscripcion biometrica del colaborador.',
       kioskDevice: 'Dispositivo de kiosco',
+      kioskPublicLink: 'Enlace público del kiosco',
+      copyKioskLink: 'Copiar enlace',
+      showKioskQr: 'Mostrar QR',
+      rotateKioskLink: 'Rotar enlace',
+      kioskLinkCopied: 'Enlace del kiosco copiado.',
+      kioskLinkRotated: 'Enlace del kiosco rotado correctamente.',
+      kioskTokenUnavailable: 'Este kiosco todavía no tiene un enlace público disponible.',
+      kioskQrTitle: 'QR del kiosco',
+      selectedKioskDevice: 'Dispositivo de kiosco seleccionado',
       eventTime: 'Hora del evento',
       eventKind: 'Tipo de evento',
       result: 'Resultado',
@@ -602,10 +624,10 @@ const toErrorMessage = (error: unknown, copy: typeof controlCopy.en | typeof con
 };
 
 export default function Control() {
-  const navigate = useNavigate();
-  const params = useParams();
   const { currentLanguage } = useLanguage();
   const copy = currentLanguage.code.startsWith('es') ? controlCopy.es : controlCopy.en;
+  const manageKioskLabel = currentLanguage.code.startsWith('es') ? 'Administrar kiosco' : 'Manage Kiosk';
+  const openKioskLabel = currentLanguage.code.startsWith('es') ? 'Abrir kiosco' : 'Open Kiosk';
 
   const [controlDate, setControlDate] = useState(todayIsoDate());
   const [calendarMonth, setCalendarMonth] = useState(toMonthValue(todayIsoDate()));
@@ -632,6 +654,8 @@ export default function Control() {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [isKioskQrDialogOpen, setIsKioskQrDialogOpen] = useState(false);
+  const [kioskQrDataUrl, setKioskQrDataUrl] = useState('');
 
   const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
   const [isLocationRegistrationModalOpen, setIsLocationRegistrationModalOpen] = useState(false);
@@ -845,6 +869,44 @@ export default function Control() {
     () => kioskDevices.find((device) => device.id === selectedKioskDeviceId) ?? null,
     [kioskDevices, selectedKioskDeviceId],
   );
+  const selectedKioskDeviceLink = useMemo(() => {
+    if (!selectedKioskDevice?.public_access_token || typeof window === 'undefined') {
+      return '';
+    }
+
+    return `${window.location.origin}/kiosk/${selectedKioskDevice.public_access_token}`;
+  }, [selectedKioskDevice?.public_access_token]);
+
+  useEffect(() => {
+    if (!isKioskQrDialogOpen || !selectedKioskDeviceLink) {
+      setKioskQrDataUrl('');
+      return;
+    }
+
+    let active = true;
+    QRCode.toDataURL(selectedKioskDeviceLink, {
+      margin: 1,
+      width: 320,
+      color: {
+        dark: '#143675',
+        light: '#ffffff',
+      },
+    })
+      .then((dataUrl) => {
+        if (active) {
+          setKioskQrDataUrl(dataUrl);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setKioskQrDataUrl('');
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isKioskQrDialogOpen, selectedKioskDeviceLink]);
 
   const selectedAccessProfile = useMemo(
     () => accessProfiles.find((profile) => profile.employee_id === selectedEmployeeId) ?? null,
@@ -854,11 +916,6 @@ export default function Control() {
   const attendanceCalendarMap = useMemo(
     () => new Map(attendanceCalendarDays.map((day) => [day.day, day])),
     [attendanceCalendarDays],
-  );
-
-  const selectedControlDay = useMemo(
-    () => attendanceCalendarDays.find((day) => day.date === controlDate) ?? null,
-    [attendanceCalendarDays, controlDate],
   );
 
   const calendarCells = useMemo(() => {
@@ -1280,6 +1337,55 @@ export default function Control() {
     }
   };
 
+  const handleOpenKiosk = () => {
+    if (!selectedKioskDeviceLink) {
+      setErrorMessage(copy.labels.kioskTokenUnavailable);
+      return;
+    }
+
+    const kioskWindow = window.open(selectedKioskDeviceLink, '_blank', 'noopener,noreferrer');
+    if (!kioskWindow) {
+      window.location.assign(selectedKioskDeviceLink);
+    }
+  };
+
+  const handleCopyKioskLink = async () => {
+    if (!selectedKioskDeviceLink) {
+      setErrorMessage(copy.labels.kioskTokenUnavailable);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(selectedKioskDeviceLink);
+      setSuccessMessage(copy.labels.kioskLinkCopied);
+    } catch {
+      setErrorMessage(copy.saveError);
+    }
+  };
+
+  const handleRotateKioskLink = async () => {
+    if (!selectedKioskDevice) {
+      setErrorMessage(copy.labels.kioskTokenUnavailable);
+      return;
+    }
+
+    setIsSaving(true);
+    setErrorMessage('');
+
+    try {
+      const response = await humanResourcesApi.rotateAttendanceKioskDevicePublicToken(selectedKioskDevice.id);
+      setKioskDevices((current) => current.map((device) => (
+        device.id === response.kiosk_device.id ? response.kiosk_device : device
+      )));
+      setSuccessMessage(copy.labels.kioskLinkRotated);
+      setIsKioskQrDialogOpen(false);
+    } catch (error) {
+      setErrorMessage(toErrorMessage(error, copy) || copy.saveError);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <>
       <LoadingBarOverlay
@@ -1338,32 +1444,94 @@ export default function Control() {
               onClick={openNewKioskDialog}
             >
               <ShieldCheck className="h-3.5 w-3.5" />
-              Kiosk
+              {manageKioskLabel}
             </Button>
             <Button
               className="h-8 whitespace-nowrap rounded-md bg-[#143675] px-3 text-xs font-medium text-white shadow-sm hover:bg-[#0f2855]"
-              onClick={async () => {
-                const pageId = params.pageId;
-                if (!pageId) {
-                  return;
-                }
-
-                const targetUrl = `${window.location.origin}/${pageId}/attendance`;
-                try {
-                  await navigator.clipboard.writeText(targetUrl);
-                  setSuccessMessage('Kiosk link copied.');
-                } catch {
-                  setSuccessMessage('Opening kiosk tab.');
-                }
-                navigate(`/${pageId}/attendance`, { state: { openKiosk: true } });
-              }}
+              onClick={handleOpenKiosk}
             >
               <Link2 className="h-3.5 w-3.5" />
-              Kiosk Link
+              {openKioskLabel}
             </Button>
           </div>
         </div>
       </div>
+
+      {!isLoading ? (
+        <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{copy.sections.kiosks}</h3>
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{copy.sections.kiosksHint}</p>
+            </div>
+
+            {kioskDevices.length > 0 ? (
+              <div className="w-full max-w-xs">
+                <label className="mb-2 block text-xs font-medium uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
+                  {copy.labels.selectedKioskDevice}
+                </label>
+                <select
+                  value={selectedKioskDeviceId ?? ''}
+                  onChange={(event) => setSelectedKioskDeviceId(event.target.value ? Number(event.target.value) : null)}
+                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#143675] focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                >
+                  {kioskDevices.map((device) => (
+                    <option key={device.id} value={device.id}>{device.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+          </div>
+
+          {selectedKioskDevice ? (
+            <>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <CompactInfoChip>{copy.labels.kioskDevice}: {selectedKioskDevice.name}</CompactInfoChip>
+                <CompactInfoChip>{copy.labels.linkedLocation}: {selectedKioskDevice.location_name || copy.labels.noLinkedLocation}</CompactInfoChip>
+                <CompactInfoChip>{copy.labels.status}: {copy.statuses[selectedKioskDevice.status]}</CompactInfoChip>
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">
+                  {copy.labels.kioskPublicLink}
+                </p>
+                <p className="mt-2 break-all text-sm text-gray-700 dark:text-gray-200">
+                  {selectedKioskDeviceLink || copy.labels.kioskTokenUnavailable}
+                </p>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => void handleCopyKioskLink()}>
+                    <Copy className="h-4 w-4" />
+                    {copy.labels.copyKioskLink}
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={handleOpenKiosk}>
+                    <ExternalLink className="h-4 w-4" />
+                    {openKioskLabel}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsKioskQrDialogOpen(true)}
+                    disabled={!selectedKioskDeviceLink}
+                  >
+                    <QrCode className="h-4 w-4" />
+                    {copy.labels.showKioskQr}
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => void handleRotateKioskLink()} disabled={isSaving}>
+                    <RotateCw className="h-4 w-4" />
+                    {copy.labels.rotateKioskLink}
+                  </Button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="mt-5 rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
+              {copy.labels.noKiosks}
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {isLoading ? (
         <div className="space-y-6">
@@ -1526,51 +1694,6 @@ export default function Control() {
                     <LegendOutline label={copy.labels.currentDay} />
                   </div>
                 </div>
-
-                {selectedControlDay ? (
-                  <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {formatDate(selectedControlDay.date, currentLanguage.code, selectedControlDay.date)}
-                        </p>
-                        <div className={`mt-3 inline-flex rounded-full px-3 py-1 text-sm font-medium ${dayStatusPillTone(selectedControlDay)}`}>
-                          {copy.statuses[resolvedDayStatus(selectedControlDay)]}
-                        </div>
-                      </div>
-
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedCalendarDay(selectedControlDay)}
-                      >
-                        {copy.labels.modifyStatusOfDay}
-                      </Button>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                      <DayInfoStat label={copy.labels.checkIn} value={formatTimeOnly(selectedControlDay.first_check_in_at, currentLanguage.code, copy.labels.noRegistration)} />
-                      <DayInfoStat label={copy.labels.checkOut} value={formatTimeOnly(selectedControlDay.last_check_out_at, currentLanguage.code, copy.labels.noRegistration)} />
-                      <DayInfoStat label={copy.labels.totalTime} value={formatWorkDuration(selectedControlDay.first_check_in_at, selectedControlDay.last_check_out_at, copy.labels.noRegistration)} />
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <DayEvidenceCard
-                        label={copy.labels.checkIn}
-                        photoUrl={selectedControlDay.first_photo_url ?? null}
-                        location={selectedControlDay.first_location?.name ?? null}
-                        copy={copy}
-                      />
-                      <DayEvidenceCard
-                        label={copy.labels.checkOut}
-                        photoUrl={selectedControlDay.last_photo_url ?? null}
-                        location={selectedControlDay.last_location?.name ?? null}
-                        copy={copy}
-                      />
-                    </div>
-                  </div>
-                ) : null}
               </>
             ) : (
               <div className="mt-8 rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-6 py-12 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-400">
@@ -1720,6 +1843,29 @@ export default function Control() {
         ) : null}
       </Dialog>
 
+      <Dialog open={isKioskQrDialogOpen} onOpenChange={setIsKioskQrDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{copy.labels.kioskQrTitle}</DialogTitle>
+            <DialogDescription>{selectedKioskDeviceLink || copy.labels.kioskTokenUnavailable}</DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col items-center gap-4">
+            {kioskQrDataUrl ? (
+              <img src={kioskQrDataUrl} alt={copy.labels.kioskQrTitle} className="h-72 w-72 rounded-2xl border border-gray-200 bg-white p-3" />
+            ) : (
+              <div className="flex h-72 w-72 items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-gray-50 text-sm text-gray-500">
+                {copy.loading}
+              </div>
+            )}
+            <Button type="button" variant="outline" className="w-full gap-2" onClick={() => void handleCopyKioskLink()}>
+              <Copy className="h-4 w-4" />
+              {copy.labels.copyKioskLink}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <ControlLocationDialog
         copy={copy}
         isOpen={isLocationDialogOpen}
@@ -1820,7 +1966,17 @@ export default function Control() {
         templates={templates}
         locations={locations.filter((location) => location.status !== 'inactive')}
         selectedTemplateId={selectedTemplateId}
-        onApplied={() => loadControl(controlDate)}
+        effectiveStartDate={controlDate}
+        onApplied={async (result) => {
+          setSelectedEmployeeId((current) => (
+            current && result.employeeIds.includes(current)
+              ? current
+              : result.employeeIds[0] ?? current
+          ));
+          setSelectedTemplateId(result.templateId);
+          await loadControl(controlDate);
+          setSuccessMessage(copy.bulkAssignSuccess);
+        }}
       />
     </>
   );
