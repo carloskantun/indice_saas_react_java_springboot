@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -22,7 +22,7 @@ interface RecordDetailModalProps {
   onClose: () => void;
   record: EmployeeRecord | null;
   onEdit: (record: EmployeeRecord) => void;
-  onDelete: (recordId: string) => void;
+  onDelete: (recordId: string) => Promise<void> | void;
 }
 
 const typeConfig: Record<RecordType, { label: string; color: string; bgColor: string; icon: ReactNode }> = {
@@ -104,6 +104,8 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('en-US', {
 }).format(new Date(value));
 
 export function RecordDetailModal({ isOpen, onClose, record, onEdit, onDelete }: RecordDetailModalProps) {
+  const [isDeleting, setIsDeleting] = useState(false);
+
   if (!isOpen || !record) {
     return null;
   }
@@ -139,7 +141,9 @@ export function RecordDetailModal({ isOpen, onClose, record, onEdit, onDelete }:
             </button>
           </div>
           <h2 className="mb-1 text-2xl font-bold text-gray-900 dark:text-white">{record.title}</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Record #{record.id}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {record.recordNumber || `Record #${record.id}`}
+          </p>
         </div>
 
         <div className="space-y-6 p-6">
@@ -233,7 +237,15 @@ export function RecordDetailModal({ isOpen, onClose, record, onEdit, onDelete }:
                         {(attachment.size / 1024).toFixed(0)} KB
                       </p>
                     </div>
-                    <button className="rounded-lg p-2 text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (attachment.url) {
+                          window.open(attachment.url, '_blank', 'noopener,noreferrer');
+                        }
+                      }}
+                      className="rounded-lg p-2 text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30"
+                    >
                       <Download className="h-5 w-5" />
                     </button>
                   </div>
@@ -258,15 +270,21 @@ export function RecordDetailModal({ isOpen, onClose, record, onEdit, onDelete }:
           <Button
             variant="outline"
             className="gap-2 border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/30"
-            onClick={() => {
+            onClick={async () => {
               if (window.confirm('Delete this record?')) {
-                onDelete(record.id);
-                onClose();
+                setIsDeleting(true);
+                try {
+                  await onDelete(record.id);
+                  onClose();
+                } finally {
+                  setIsDeleting(false);
+                }
               }
             }}
+            disabled={isDeleting}
           >
             <Trash2 className="h-4 w-4" />
-            Delete
+            {isDeleting ? 'Deleting...' : 'Delete'}
           </Button>
           <div className="flex gap-3">
             <Button variant="outline" onClick={onClose}>Close</Button>

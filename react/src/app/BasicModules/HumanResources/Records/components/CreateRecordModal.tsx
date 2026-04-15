@@ -1,14 +1,23 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Calendar, ChevronDown, Info, Trash2, Upload, UserPlus, X } from 'lucide-react';
 import { Button } from '../../../../components/ui/button';
-import type { RecordEmployeeOption } from '../data/employees.mock';
-import type { CreateRecordData, EmployeeRecord, RecordSeverity, RecordType } from '../types/records.types';
+import type {
+  CreateRecordData,
+  EmployeeRecord,
+  RecordEmployeeOption,
+  RecordSeverity,
+  RecordStatus,
+  RecordType,
+} from '../types/records.types';
 
 interface CreateRecordModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: CreateRecordData) => void;
+  onSave: (data: CreateRecordData) => Promise<void> | void;
   employees: RecordEmployeeOption[];
+  isEmployeesLoading?: boolean;
+  employeeLoadError?: string;
+  onRetryEmployees?: () => void;
   editingRecord?: EmployeeRecord | null;
 }
 
@@ -33,10 +42,14 @@ export function CreateRecordModal({
   onClose,
   onSave,
   employees,
+  isEmployeesLoading = false,
+  employeeLoadError = '',
+  onRetryEmployees,
   editingRecord = null,
 }: CreateRecordModalProps) {
   const [formData, setFormData] = useState<{
     employeeId: string;
+    status: RecordStatus;
     type: RecordType | '';
     severity: RecordSeverity | '';
     title: string;
@@ -47,6 +60,7 @@ export function CreateRecordModal({
     attachments: File[];
   }>({
     employeeId: '',
+    status: 'pending',
     type: '',
     severity: '',
     title: '',
@@ -59,6 +73,7 @@ export function CreateRecordModal({
   const [showTitleSuggestions, setShowTitleSuggestions] = useState(false);
   const [showWitnessDropdown, setShowWitnessDropdown] = useState(false);
   const [witnessSearch, setWitnessSearch] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const witnessDropdownRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -69,6 +84,7 @@ export function CreateRecordModal({
     if (editingRecord) {
       setFormData({
         employeeId: editingRecord.employee.id,
+        status: editingRecord.status,
         type: editingRecord.type,
         severity: editingRecord.severity ?? '',
         title: editingRecord.title,
@@ -83,6 +99,7 @@ export function CreateRecordModal({
 
     setFormData({
       employeeId: '',
+      status: 'pending',
       type: '',
       severity: '',
       title: '',
@@ -111,12 +128,14 @@ export function CreateRecordModal({
   }
 
   const requiresSeverity = formData.type === 'incident' || formData.type === 'warning';
+  const hasEmployeeOptions = employees.length > 0;
   const isFullyValid = Boolean(
     formData.employeeId
     && formData.type
     && formData.title.trim()
     && formData.description.trim()
-    && (!requiresSeverity || formData.severity),
+    && (!requiresSeverity || formData.severity)
+    && hasEmployeeOptions,
   );
 
   const filteredEmployees = employees.filter((employee) => {
@@ -145,22 +164,28 @@ export function CreateRecordModal({
     setFormData((current) => ({ ...current, attachments: [...current.attachments, ...files] }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!isFullyValid || !formData.type) {
       return;
     }
 
-    onSave({
-      employeeId: formData.employeeId,
-      type: formData.type,
-      severity: formData.severity || undefined,
-      title: formData.title.trim(),
-      description: formData.description.trim(),
-      actionsTaken: formData.actionsTaken.trim() || undefined,
-      witnesses: formData.witnesses.length ? formData.witnesses : undefined,
-      eventDate: formData.eventDate,
-      attachments: formData.attachments.length ? formData.attachments : undefined,
-    });
+    setIsSaving(true);
+    try {
+      await onSave({
+        employeeId: formData.employeeId,
+        status: formData.status,
+        type: formData.type,
+        severity: formData.severity || undefined,
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        actionsTaken: formData.actionsTaken.trim() || undefined,
+        witnesses: formData.witnesses.length ? formData.witnesses : undefined,
+        eventDate: formData.eventDate,
+        attachments: formData.attachments.length ? formData.attachments : undefined,
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -201,15 +226,43 @@ export function CreateRecordModal({
               <select
                 value={formData.employeeId}
                 onChange={(event) => setFormData((current) => ({ ...current, employeeId: event.target.value }))}
+                disabled={isEmployeesLoading || !hasEmployeeOptions}
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               >
-                <option value="">Select an employee</option>
+                <option value="">
+                  {isEmployeesLoading
+                    ? 'Loading employees...'
+                    : hasEmployeeOptions
+                      ? 'Select an employee'
+                      : 'No employees available'}
+                </option>
                 {employees.map((employee) => (
                   <option key={employee.id} value={employee.id}>
                     {employee.name} - {employee.position}
                   </option>
                 ))}
               </select>
+              {employeeLoadError ? (
+                <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300">
+                  <span>{employeeLoadError}</span>
+                  {onRetryEmployees ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={onRetryEmployees}
+                      disabled={isEmployeesLoading}
+                    >
+                      Retry
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+              {!isEmployeesLoading && !employeeLoadError && !hasEmployeeOptions ? (
+                <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+                  No HR employees are available yet. Create or sync employees first before adding a record.
+                </p>
+              ) : null}
             </div>
 
             <div>
@@ -225,6 +278,24 @@ export function CreateRecordModal({
                   className="w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Record Status <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.status}
+                onChange={(event) => setFormData((current) => ({
+                  ...current,
+                  status: event.target.value as RecordStatus,
+                }))}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              >
+                <option value="pending">Pending</option>
+                <option value="reviewed">Reviewed</option>
+                <option value="resolved">Resolved</option>
+              </select>
             </div>
 
             <div>
@@ -496,16 +567,16 @@ export function CreateRecordModal({
         </div>
 
         <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-900">
-          <Button type="button" variant="outline" onClick={onClose}>
+          <Button type="button" variant="outline" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>
           <Button
             type="button"
             onClick={handleSave}
-            disabled={!isFullyValid}
+            disabled={!isFullyValid || isSaving}
             className="bg-blue-600 text-white hover:bg-blue-700"
           >
-            {editingRecord ? 'Save Changes' : 'Create Record'}
+            {isSaving ? 'Saving...' : editingRecord ? 'Save Changes' : 'Create Record'}
           </Button>
         </div>
       </div>

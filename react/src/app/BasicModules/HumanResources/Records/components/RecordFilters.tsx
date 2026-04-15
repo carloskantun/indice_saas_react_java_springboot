@@ -4,9 +4,11 @@ import type { RecordFiltersState } from '../types/records.types';
 interface RecordFiltersProps {
   filters: RecordFiltersState;
   onFiltersChange: (filters: RecordFiltersState) => void;
+  unitOptions: string[];
+  businessOptions: string[];
 }
 
-export function RecordFilters({ filters, onFiltersChange }: RecordFiltersProps) {
+export function RecordFilters({ filters, onFiltersChange, unitOptions, businessOptions }: RecordFiltersProps) {
   const updateFilter = <K extends keyof RecordFiltersState>(key: K, value: RecordFiltersState[K]) => {
     onFiltersChange({ ...filters, [key]: value });
   };
@@ -40,10 +42,9 @@ export function RecordFilters({ filters, onFiltersChange }: RecordFiltersProps) 
             className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
           >
             <option value="all">All units</option>
-            <option value="Unit 7">Unit 7</option>
-            <option value="Unit 8">Unit 8</option>
-            <option value="Unit 9">Unit 9</option>
-            <option value="Unit 10">Unit 10</option>
+            {unitOptions.map((unit) => (
+              <option key={unit} value={unit}>{unit}</option>
+            ))}
           </select>
         </div>
 
@@ -57,14 +58,9 @@ export function RecordFilters({ filters, onFiltersChange }: RecordFiltersProps) 
             className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
           >
             <option value="all">All businesses</option>
-            <option value="Operations">Operations</option>
-            <option value="Sales">Sales</option>
-            <option value="Logistics">Logistics</option>
-            <option value="Customer Service">Customer Service</option>
-            <option value="Technology">Technology</option>
-            <option value="Human Resources">Human Resources</option>
-            <option value="Quality Control">Quality Control</option>
-            <option value="Marketing">Marketing</option>
+            {businessOptions.map((business) => (
+              <option key={business} value={business}>{business}</option>
+            ))}
           </select>
         </div>
 

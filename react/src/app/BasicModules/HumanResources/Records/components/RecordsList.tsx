@@ -218,7 +218,7 @@ export function RecordsList({ records, onRecordClick, onEdit, onDownload }: Reco
                   className="cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50"
                 >
                   <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-gray-900 dark:text-white">
-                    #{record.id}
+                    {record.recordNumber || `#${record.id}`}
                   </td>
                   <td className="whitespace-nowrap px-4 py-4">
                     <div className="text-sm">

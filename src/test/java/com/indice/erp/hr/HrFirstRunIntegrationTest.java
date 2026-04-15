@@ -43,6 +43,7 @@ class HrFirstRunIntegrationTest {
     private HrAnnouncementService hrAnnouncementService;
 
     private final List<Long> createdEmployeeIds = new ArrayList<>();
+    private final List<Long> createdRecordIds = new ArrayList<>();
     private final List<Long> createdAnnouncementIds = new ArrayList<>();
     private final List<Long> createdLocationIds = new ArrayList<>();
     private final List<Long> createdTemplateIds = new ArrayList<>();
@@ -60,6 +61,11 @@ class HrFirstRunIntegrationTest {
             jdbcTemplate.update("DELETE FROM hr_announcements WHERE id = ?", announcementId);
         }
         createdAnnouncementIds.clear();
+
+        for (var recordId : createdRecordIds) {
+            jdbcTemplate.update("DELETE FROM hr_employee_records WHERE id = ?", recordId);
+        }
+        createdRecordIds.clear();
 
         for (var employeeId : createdEmployeeIds) {
             jdbcTemplate.update("DELETE FROM hr_employees WHERE id = ?", employeeId);
@@ -272,6 +278,91 @@ class HrFirstRunIntegrationTest {
         )
             .andExpect(status().isServiceUnavailable())
             .andExpect(jsonPath("$.message").value("Object storage is not enabled."));
+    }
+
+    @Test
+    void recordsCrudAndAttachmentUploadFlowWorks() throws Exception {
+        var session = authenticatedSession();
+        var uniqueSuffix = System.currentTimeMillis();
+        var employeeId = 2L;
+
+        var createResponse = mockMvc.perform(
+            post("/api/v1/hr/records")
+                .session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                    "employee_id", employeeId,
+                    "record_type", "incident",
+                    "severity", "high",
+                    "title", "Warehouse Safety Incident " + uniqueSuffix,
+                    "description", "Detailed incident description for integration testing.",
+                    "actions_taken", "Area secured and supervisor informed.",
+                    "event_date", "2026-04-10",
+                    "witnesses", List.of("Maria Smith")
+                )))
+        )
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.record_number").value(org.hamcrest.Matchers.matchesPattern("^REC-\\d{6}$")))
+            .andExpect(jsonPath("$.status").value("pending"))
+            .andReturn();
+
+        var createdRecord = readMap(createResponse.getResponse().getContentAsString());
+        var recordId = ((Number) createdRecord.get("id")).longValue();
+        createdRecordIds.add(recordId);
+
+        mockMvc.perform(get("/api/v1/hr/records").session(session))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items[?(@.id==" + recordId + ")].title").value("Warehouse Safety Incident " + uniqueSuffix));
+
+        mockMvc.perform(get("/api/v1/hr/records/{recordId}", recordId).session(session))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.record.id").value(recordId))
+            .andExpect(jsonPath("$.record.witnesses[0].name").value("Maria Smith"))
+            .andExpect(jsonPath("$.record.activity[0].activity_type").value("created"));
+
+        mockMvc.perform(
+            put("/api/v1/hr/records/{recordId}", recordId)
+                .session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                    "employee_id", employeeId,
+                    "record_type", "warning",
+                    "severity", "medium",
+                    "status", "reviewed",
+                    "title", "Updated Safety Warning " + uniqueSuffix,
+                    "description", "Updated description.",
+                    "actions_taken", "Updated actions.",
+                    "event_date", "2026-04-10",
+                    "witnesses", List.of("Maria Smith", "Jordan Miles")
+                )))
+        )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("reviewed"))
+            .andExpect(jsonPath("$.type").value("warning"));
+
+        mockMvc.perform(
+            post("/api/v1/hr/records/{recordId}/attachments/presign-upload", recordId)
+                .session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                    "file_name", "incident.pdf",
+                    "content_type", "application/pdf",
+                    "size_bytes", 1024
+                )))
+        )
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(jsonPath("$.message").value("Object storage is not enabled."));
+
+        mockMvc.perform(delete("/api/v1/hr/records/{recordId}", recordId).session(session))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true));
+
+        var deletedAt = jdbcTemplate.queryForObject(
+            "SELECT deleted_at FROM hr_employee_records WHERE id = ?",
+            Timestamp.class,
+            recordId
+        );
+        assertThat(deletedAt).isNotNull();
     }
 
     @Test

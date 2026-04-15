@@ -4,6 +4,7 @@ export type RecordStatus = 'pending' | 'reviewed' | 'resolved';
 
 export interface EmployeeRecord {
   id: string;
+  recordNumber?: string;
   employee: {
     id: string;
     name: string;
@@ -35,8 +36,16 @@ export interface EmployeeRecord {
   }[];
 }
 
+export interface RecordEmployeeOption {
+  id: string;
+  name: string;
+  position: string;
+  department: string;
+}
+
 export interface CreateRecordData {
   employeeId: string;
+  status: RecordStatus;
   type: RecordType;
   severity?: RecordSeverity;
   title: string;
