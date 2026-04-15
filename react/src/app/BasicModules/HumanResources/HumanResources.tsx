@@ -3,7 +3,7 @@ import { FavoritesBar } from '../../components/FavoritesBar';
 import { useRoutedModuleTab } from '../../hooks/useRoutedModuleTab';
 import { useHRLanguage } from './HRLanguage';
 import Employees from './Employees';
-import Attendance from './Asistencia/Asistencia';
+import Attendance from './Attendance/Attendance';
 import Control from './Control';
 import Payroll from './Payroll';
 import Announcements from './Announcements';

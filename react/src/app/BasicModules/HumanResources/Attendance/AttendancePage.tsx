@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Clock, MapPin, User, View } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
-import { AttendancePhotoCaptureCard } from '../../../components/AttendancePhotoCaptureCard';
+import { AttendanceRecorderPhotoCard } from './AttendanceRecorderPhotoCard';
 import { CalendarioAsistencia } from '../../../components/CalendarioAsistencia';
+import { FailureToast } from '../../../components/FailureToast';
 import { KioskModal } from '../../../components/KioskModal';
 import { LoadingBarOverlay, runWithMinimumDuration } from '../../../components/LoadingBarOverlay';
 import { SuccessToast } from '../../../components/SuccessToast';
+import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
 import {
   Dialog,
@@ -16,6 +18,10 @@ import {
 import { Skeleton } from '../../../components/ui/skeleton';
 import { useAttendancePhotoUpload } from '../../../hooks/useAttendancePhotoUpload';
 import { useLanguage } from '../../../shared/context';
+import {
+  deriveAttendancePunchState,
+  getAttendancePunchValidationMessage,
+} from '../../../shared/attendancePunchState';
 import {
   humanResourcesApi,
   type AttendanceCalendarDay,
@@ -30,6 +36,21 @@ const localDateTimeString = (date: Date) =>
   `${localDateString(date)}T${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}:${padDatePart(date.getSeconds())}`;
 const todayIsoDate = () => localDateString(new Date());
 const todayMonth = () => todayIsoDate().slice(0, 7);
+const formatAttendanceTime = (value: string | null | undefined, locale: string) => {
+  if (!value) {
+    return '--';
+  }
+
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return '--';
+  }
+
+  return new Intl.DateTimeFormat(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(parsedDate);
+};
 
 const attendanceCopy = {
   en: {
@@ -41,7 +62,7 @@ const attendanceCopy = {
       refreshTitle: 'Updating attendance',
       refreshDescription: 'We are syncing the HR operation.',
       registerTitle: 'Recording attendance',
-      registerDescription: 'We are validating location and updating the daily record.',
+      registerDescription: 'We are saving the photo, validating the location, and updating the daily record.',
       correctTitle: 'Correcting status',
       correctDescription: 'We are saving the manual correction in the backend.',
     },
@@ -90,6 +111,9 @@ const attendanceCopy = {
       noDepartment: 'No department',
       noEmployeeSelected: 'Your employee profile is not linked yet.',
       retry: 'Retry',
+      statusLoggedIn: 'Logged in',
+      statusCheckedOut: 'Checked out',
+      statusReady: 'Ready to check in',
     },
     recorder: {
       employee: 'Employee',
@@ -100,6 +124,10 @@ const attendanceCopy = {
       takePhoto: 'Take photo',
       chooseFromGallery: 'Choose from gallery',
       retakePhoto: 'Retake photo',
+      capturedPhotoLabel: 'Captured photo preview',
+      savedPhotoLabel: 'Latest recorded photo',
+      photoLockedHint: 'Photo captured. Complete your attendance record before taking another one.',
+      photoAlreadyRecordedHint: 'Today\'s attendance photo is already locked.',
       photoHint: 'Tip: keep your face centered and use good lighting.',
       location: 'Location',
       locationRequired: 'Required to record',
@@ -115,6 +143,16 @@ const attendanceCopy = {
       locationDenied: 'You must allow location access to register attendance.',
       locationUnavailable: 'The device location could not be retrieved.',
       photoRequiredError: 'Take a photo before recording attendance.',
+      checkInAlreadyActive: 'You already have an active check-in.',
+      checkOutRequiresCheckIn: 'Check-out requires an active check-in.',
+      statusActiveTitle: 'You are checked in.',
+      statusActiveDescription: 'Checked in at',
+      statusCheckedOutTitle: 'You are checked out for today.',
+      statusCheckedOutDescription: 'Last check-out recorded at',
+      statusIdleTitle: 'You have not checked in yet.',
+      statusIdleDescription: 'Take a photo and capture your location when you are ready to check in.',
+      submitHint: 'Photo and location will be validated when you submit.',
+      checkoutReadyHint: 'You are checked in. Check-out is ready when you are.',
       cameraUnsupported: 'This browser cannot open the webcam.',
       cameraPermissionDenied: 'You must allow camera access to take a photo.',
       cameraUnavailable: 'The webcam could not be started.',
@@ -131,7 +169,7 @@ const attendanceCopy = {
       refreshTitle: 'Actualizando asistencia',
       refreshDescription: 'Estamos sincronizando la operación de RH.',
       registerTitle: 'Registrando asistencia',
-      registerDescription: 'Estamos validando ubicación y actualizando el expediente diario.',
+      registerDescription: 'Estamos guardando la foto, validando la ubicación y actualizando el expediente diario.',
       correctTitle: 'Corrigiendo estatus',
       correctDescription: 'Estamos guardando la corrección manual en el backend.',
     },
@@ -180,6 +218,9 @@ const attendanceCopy = {
       noDepartment: 'Sin departamento',
       noEmployeeSelected: 'Tu perfil de colaborador aún no está vinculado.',
       retry: 'Reintentar',
+      statusLoggedIn: 'Sesión activa',
+      statusCheckedOut: 'Salida registrada',
+      statusReady: 'Listo para ingresar',
     },
     recorder: {
       employee: 'Colaborador',
@@ -190,6 +231,10 @@ const attendanceCopy = {
       takePhoto: 'Tomar foto',
       chooseFromGallery: 'Elegir de galería',
       retakePhoto: 'Tomar de nuevo',
+      capturedPhotoLabel: 'Vista previa capturada',
+      savedPhotoLabel: 'Última foto registrada',
+      photoLockedHint: 'La foto ya fue capturada. Completa tu registro de asistencia antes de tomar otra.',
+      photoAlreadyRecordedHint: 'La foto de asistencia de hoy ya quedó bloqueada.',
       photoHint: 'Tip: keep your face centered and use good lighting.',
       location: 'Ubicación',
       locationRequired: 'Obligatoria para registrar',
@@ -205,6 +250,16 @@ const attendanceCopy = {
       locationDenied: 'Debes permitir la ubicación para registrar asistencia.',
       locationUnavailable: 'No se pudo obtener la ubicación del dispositivo.',
       photoRequiredError: 'Toma una foto antes de registrar asistencia.',
+      checkInAlreadyActive: 'Ya tienes un ingreso activo.',
+      checkOutRequiresCheckIn: 'Debes registrar un ingreso antes de registrar la salida.',
+      statusActiveTitle: 'Ya registraste tu ingreso.',
+      statusActiveDescription: 'Ingreso registrado a las',
+      statusCheckedOutTitle: 'Tu salida de hoy ya fue registrada.',
+      statusCheckedOutDescription: 'Última salida registrada a las',
+      statusIdleTitle: 'Aún no registras ingreso.',
+      statusIdleDescription: 'Toma una foto y captura tu ubicación cuando estés listo para registrar ingreso.',
+      submitHint: 'La foto y la ubicación se validarán al momento de registrar.',
+      checkoutReadyHint: 'Tu salida ya está lista para registrarse cuando quieras.',
       cameraUnsupported: 'Este navegador no puede abrir la webcam.',
       cameraPermissionDenied: 'Debes permitir el acceso a la cámara para tomar la foto.',
       cameraUnavailable: 'No se pudo iniciar la webcam.',
@@ -214,11 +269,12 @@ const attendanceCopy = {
   },
 } as const;
 
-export default function Asistencia() {
+export default function Attendance() {
   const location = useLocation();
   const navigate = useNavigate();
   const { currentLanguage } = useLanguage();
   const copy = currentLanguage.code.startsWith('es') ? attendanceCopy.es : attendanceCopy.en;
+  const [currentAttendanceDate, setCurrentAttendanceDate] = useState(todayIsoDate());
   const [dashboard, setDashboard] = useState<AttendanceDashboardResponse | null>(null);
   const [calendar, setCalendar] = useState<AttendanceCalendarResponse | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(todayMonth());
@@ -242,13 +298,38 @@ export default function Asistencia() {
   const selectedItem = useMemo(() => dashboard?.items[0] ?? null, [dashboard?.items]);
   const selectedEmployeeOption = useMemo(() => dashboard?.employees[0] ?? null, [dashboard?.employees]);
   const selectedEmployeeId = selectedItem?.employee_id ?? null;
+  const punchState = useMemo(
+    () => deriveAttendancePunchState(selectedItem),
+    [selectedItem],
+  );
+  const latestRecordedPhotoUrl = selectedItem?.last_photo_url || selectedItem?.first_photo_url || null;
+  const statusBadgeLabel = punchState.hasActiveCheckIn
+    ? copy.labels.statusLoggedIn
+    : punchState.hasCheckOut
+      ? copy.labels.statusCheckedOut
+      : copy.labels.statusReady;
+  const statusBadgeClassName = punchState.hasActiveCheckIn
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-300'
+    : punchState.hasCheckOut
+      ? 'border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200'
+      : 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800/50 dark:bg-blue-950/30 dark:text-blue-200';
+  const attendanceStatusTitle = punchState.hasActiveCheckIn
+    ? copy.recorder.statusActiveTitle
+    : punchState.hasCheckOut
+      ? copy.recorder.statusCheckedOutTitle
+      : copy.recorder.statusIdleTitle;
+  const attendanceStatusDescription = punchState.hasActiveCheckIn
+    ? `${copy.recorder.statusActiveDescription} ${formatAttendanceTime(selectedItem?.first_check_in_at, currentLanguage.code)}`
+    : punchState.hasCheckOut
+      ? `${copy.recorder.statusCheckedOutDescription} ${formatAttendanceTime(selectedItem?.last_check_out_at, currentLanguage.code)}`
+      : copy.recorder.statusIdleDescription;
 
-  const loadDashboard = async () => {
+  const loadDashboard = async (attendanceDate = currentAttendanceDate) => {
     setIsLoadingDashboard(true);
     setErrorMessage('');
 
     try {
-      const response = await humanResourcesApi.getMyAttendanceDashboard(todayIsoDate());
+      const response = await humanResourcesApi.getMyAttendanceDashboard(attendanceDate);
       setDashboard(response);
     } catch (error) {
       setDashboard(null);
@@ -273,7 +354,20 @@ export default function Asistencia() {
   };
 
   useEffect(() => {
-    void loadDashboard();
+    void loadDashboard(currentAttendanceDate);
+  }, [currentAttendanceDate]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      const nextDate = todayIsoDate();
+      setCurrentAttendanceDate((currentDate) => (
+        currentDate === nextDate ? currentDate : nextDate
+      ));
+    }, 60_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   useEffect(() => {
@@ -308,6 +402,17 @@ export default function Asistencia() {
   useEffect(() => {
     attendancePhotoUpload.clearPhoto();
   }, [selectedEmployeeId]);
+
+  useEffect(() => {
+    attendancePhotoUpload.clearPhoto();
+    setRecorderLocationState(null);
+    setErrorMessage('');
+    setSuccessToastMessage('');
+    setCalendarMonth((currentMonth) => {
+      const nextMonth = currentAttendanceDate.slice(0, 7);
+      return currentMonth === nextMonth ? currentMonth : nextMonth;
+    });
+  }, [currentAttendanceDate]);
 
   useEffect(() => () => {
     if (successToastTimeoutRef.current !== null) {
@@ -379,7 +484,7 @@ export default function Asistencia() {
           event_timestamp: payload.eventTimestamp,
         });
 
-        await loadDashboard();
+        await loadDashboard(currentAttendanceDate);
         await loadCalendar(calendarMonth);
       },
     });
@@ -436,7 +541,21 @@ export default function Asistencia() {
       return;
     }
 
-    if (!attendancePhotoUpload.photo) {
+    const validationMessage = getAttendancePunchValidationMessage(
+      eventType,
+      punchState,
+      {
+        checkInAlreadyActive: copy.recorder.checkInAlreadyActive,
+        checkOutRequiresCheckIn: copy.recorder.checkOutRequiresCheckIn,
+      },
+    );
+
+    if (validationMessage) {
+      setErrorMessage(validationMessage);
+      return;
+    }
+
+    if (eventType === 'check_in' && !attendancePhotoUpload.photo) {
       setErrorMessage(copy.recorder.photoRequiredError);
       return;
     }
@@ -452,38 +571,47 @@ export default function Asistencia() {
 
     const eventTimestamp = localDateTimeString(new Date());
 
-    await runMutation({
-      title: copy.loading.registerTitle,
-      description: copy.loading.registerDescription,
-      task: async () => {
-        const photoObjectKey = await attendancePhotoUpload.ensureUploadedForCurrentUser({
-          event_type: eventType,
-          event_timestamp: eventTimestamp,
-          content_type: attendancePhotoUpload.photo?.contentType ?? 'image/jpeg',
-        });
+    try {
+      await runMutation({
+        title: copy.loading.registerTitle,
+        description: copy.loading.registerDescription,
+        task: async () => {
+          const photoObjectKey = attendancePhotoUpload.photo
+            ? await attendancePhotoUpload.ensureUploadedForCurrentUser({
+              event_type: eventType,
+              event_timestamp: eventTimestamp,
+              content_type: attendancePhotoUpload.photo?.contentType ?? 'image/jpeg',
+            })
+            : undefined;
 
-        await humanResourcesApi.recordMyAttendanceKioskEvent({
-          event_type: eventType,
-          event_kind: eventType,
-          location_id: recorderLocationId ? Number(recorderLocationId) : undefined,
-          auth_method: 'manual_override',
-          latitude: coordinates.latitude,
-          longitude: coordinates.longitude,
-          photo_url: photoObjectKey,
-          event_timestamp: eventTimestamp,
-        });
+          await humanResourcesApi.recordMyAttendanceKioskEvent({
+            event_type: eventType,
+            event_kind: eventType,
+            location_id: recorderLocationId ? Number(recorderLocationId) : undefined,
+            auth_method: 'manual_override',
+            latitude: coordinates.latitude,
+            longitude: coordinates.longitude,
+            photo_url: photoObjectKey,
+            event_timestamp: eventTimestamp,
+          });
 
-        await loadDashboard();
-        await loadCalendar(calendarMonth);
-      },
-    });
+          await loadDashboard(currentAttendanceDate);
+          await loadCalendar(calendarMonth);
+        },
+      });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : copy.labels.retry);
+      return;
+    }
 
     attendancePhotoUpload.clearPhoto();
     showSuccessToast(eventType === 'check_in' ? copy.success.checkIn : copy.success.checkOut);
   };
 
-  const inlineRecorderReady = Boolean(selectedItem && attendancePhotoUpload.photo && recorderLocationState);
   const recorderDisabled = !selectedItem;
+  const photoCaptureDisabled = recorderDisabled || isSubmitting || punchState.hasActiveCheckIn || punchState.hasCheckOut;
+  const canInlineCheckIn = Boolean(selectedItem) && !punchState.hasActiveCheckIn;
+  const canInlineCheckOut = Boolean(selectedItem) && punchState.hasActiveCheckIn;
 
   const handleUpdateStatus = async (
     date: string,
@@ -493,14 +621,19 @@ export default function Asistencia() {
       return;
     }
 
-    await runMutation({
-      title: copy.loading.correctTitle,
-      description: copy.loading.correctDescription,
-      task: async () => {
-        await humanResourcesApi.updateMyAttendanceDailyRecord(date, { status });
-        await Promise.all([loadDashboard(), loadCalendar(calendarMonth)]);
-      },
-    });
+    try {
+      await runMutation({
+        title: copy.loading.correctTitle,
+        description: copy.loading.correctDescription,
+        task: async () => {
+          await humanResourcesApi.updateMyAttendanceDailyRecord(date, { status });
+          await Promise.all([loadDashboard(currentAttendanceDate), loadCalendar(calendarMonth)]);
+        },
+      });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : copy.labels.retry);
+      return;
+    }
 
     showSuccessToast(status ? copy.success.correctionApplied : copy.success.correctionCleared);
   };
@@ -511,26 +644,23 @@ export default function Asistencia() {
         isVisible={isSubmitting}
         title={overlayTitle}
         description={overlayDescription}
+        className="z-[120]"
       />
 
       <SuccessToast
         isVisible={Boolean(successToastMessage)}
         message={successToastMessage}
         onClose={() => setSuccessToastMessage('')}
-        className="left-1/2 right-auto top-5 bottom-auto z-[120] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2"
+        className="z-[120]"
         durationMs={3600}
       />
-
-      {errorMessage ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-700/30 dark:bg-red-900/20 dark:text-red-300">
-          <div className="flex items-center justify-between gap-3">
-            <span>{errorMessage}</span>
-            <Button variant="outline" size="sm" onClick={() => void loadDashboard()}>
-              {copy.labels.retry}
-            </Button>
-          </div>
-        </div>
-      ) : null}
+      <FailureToast
+        isVisible={Boolean(errorMessage)}
+        message={errorMessage}
+        onClose={() => setErrorMessage('')}
+        className="z-[120]"
+        durationMs={4200}
+      />
 
       <div className="mb-6 rounded-lg border border-[#143675]/20 bg-[#143675]/5 p-6 dark:border-[#143675]/30 dark:bg-[#143675]/10">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -596,6 +726,22 @@ export default function Asistencia() {
               </div>
 
               <div className="mt-6 border-t border-gray-200 pt-6 dark:border-gray-700">
+                <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-4 dark:border-gray-700 dark:bg-gray-900/40">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                        {attendanceStatusTitle}
+                      </p>
+                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                        {attendanceStatusDescription}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className={statusBadgeClassName}>
+                      {statusBadgeLabel}
+                    </Badge>
+                  </div>
+                </div>
+
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
                     <h4 className="font-semibold text-gray-900 dark:text-white">{copy.recorder.photo}</h4>
@@ -603,17 +749,18 @@ export default function Asistencia() {
                   <p className="text-sm text-gray-500 dark:text-gray-400">{copy.recorder.photoRequired}</p>
                 </div>
 
-                <AttendancePhotoCaptureCard
-                  title={copy.recorder.photo}
-                  requiredText={copy.recorder.photoRequired}
+                <AttendanceRecorderPhotoCard
                   takePhotoLabel={copy.recorder.takePhoto}
                   chooseFromGalleryLabel={copy.recorder.chooseFromGallery}
-                  retakePhotoLabel={copy.recorder.retakePhoto}
                   captureLabel={copy.recorder.capturePhoto}
                   cancelLabel={copy.recorder.cancelCamera}
-                  helperText={copy.recorder.photoHint}
+                  helperText={photoCaptureDisabled && !attendancePhotoUpload.photo
+                    ? copy.recorder.photoAlreadyRecordedHint
+                    : copy.recorder.photoHint}
+                  capturedPhotoLabel={copy.recorder.capturedPhotoLabel}
+                  photoLockedHint={copy.recorder.photoLockedHint}
                   photo={attendancePhotoUpload.photo}
-                  disabled={recorderDisabled}
+                  disabled={photoCaptureDisabled}
                   onPhotoChange={attendancePhotoUpload.setCapturedPhoto}
                   onError={setErrorMessage}
                   errors={{
@@ -622,6 +769,19 @@ export default function Asistencia() {
                     cameraUnavailable: copy.recorder.cameraUnavailable,
                   }}
                 />
+
+                {!attendancePhotoUpload.photo && latestRecordedPhotoUrl ? (
+                  <div className="mt-4">
+                    <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-gray-500 dark:text-gray-400">
+                      {copy.recorder.savedPhotoLabel}
+                    </p>
+                    <img
+                      src={latestRecordedPhotoUrl}
+                      alt={copy.recorder.savedPhotoLabel}
+                      className="h-40 w-full rounded-lg border border-gray-200 object-cover shadow-sm dark:border-gray-700"
+                    />
+                  </div>
+                ) : null}
               </div>
             </>
           ) : (
@@ -677,20 +837,24 @@ export default function Asistencia() {
           </div>
 
           <div className="border-t border-gray-200 pt-6 dark:border-gray-700">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-gray-400" />
-                <h4 className="font-semibold text-gray-900 dark:text-white">{copy.recorder.record}</h4>
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-gray-400" />
+                  <h4 className="font-semibold text-gray-900 dark:text-white">{copy.recorder.record}</h4>
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {!selectedItem
+                    ? copy.recorder.selectEmployeeHint
+                    : punchState.hasActiveCheckIn
+                      ? copy.recorder.checkoutReadyHint
+                      : copy.recorder.submitHint}
+                </p>
               </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {selectedItem ? copy.recorder.recordHint : copy.recorder.selectEmployeeHint}
-              </p>
-            </div>
 
             <div className="grid grid-cols-2 gap-3">
               <Button
                 type="button"
-                disabled={recorderDisabled || !inlineRecorderReady || isSubmitting}
+                disabled={recorderDisabled || !canInlineCheckIn || isSubmitting}
                 className="bg-[#143675] text-white hover:bg-[#0f2855] disabled:bg-gray-300 disabled:text-gray-500"
                 onClick={() => {
                   void handleInlineAttendanceRecord('check_in');
@@ -700,7 +864,7 @@ export default function Asistencia() {
               </Button>
               <Button
                 type="button"
-                disabled={recorderDisabled || !inlineRecorderReady || isSubmitting}
+                disabled={recorderDisabled || !canInlineCheckOut || isSubmitting}
                 className="bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-300 disabled:text-gray-500"
                 onClick={() => {
                   void handleInlineAttendanceRecord('check_out');
