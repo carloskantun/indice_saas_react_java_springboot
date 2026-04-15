@@ -12,10 +12,11 @@ Current transitional strategy:
 
 Current committed baseline approach:
 
-- `B1__spring_backend_baseline.sql` is the cumulative baseline for the current Spring-owned subset of the schema.
-- It is intentionally limited to the tables the Spring backend currently reads or writes.
-- It also seeds the demo company, demo user, module catalog, and the small org/HR dataset used by the integrated slice.
-- `V2__config_center_company_settings.sql` adds the shared `company_settings` table when it does not already exist.
+- `B1__spring_backend_baseline.sql` is the original Spring-owned subset baseline kept for historical continuity.
+- `B18__spring_backend_baseline.sql` is the current cumulative baseline through `V18`.
+- New empty databases should use the latest baseline migration and then only apply versioned migrations above that version.
+- Existing adopted databases with a schema history table will ignore baseline migrations.
+- The baseline keeps the core demo company, demo user, module catalog, and small org/HR seed needed for local development.
 
 Migration naming rules for future SQL files:
 
@@ -28,5 +29,5 @@ Rules:
 - Do not edit an already applied versioned migration.
 - Do not make schema changes outside Flyway once a change is Spring-owned.
 - Keep MySQL-specific SQL valid for direct execution in MySQL when possible.
-- Treat `B1__spring_backend_baseline.sql` as immutable after adoption.
-- The next normal versioned migration should start at `V3__...`.
+- Treat committed baseline migrations as immutable after adoption.
+- The next normal versioned migration should start at `V19__...`.
