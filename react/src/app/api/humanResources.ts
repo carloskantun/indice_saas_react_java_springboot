@@ -272,6 +272,7 @@ export interface AttendanceKioskDevice {
   code: string;
   name: string;
   status: 'active' | 'inactive';
+  public_access_token?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -433,6 +434,10 @@ export interface AttendanceControlBulkAssignmentResponse {
 
 export interface AttendanceKioskDevicesResponse {
   items: AttendanceKioskDevice[];
+}
+
+export interface AttendanceKioskDeviceRotateTokenResponse {
+  kiosk_device: AttendanceKioskDevice;
 }
 
 export interface AttendanceKioskDevicePayload {
@@ -598,6 +603,54 @@ export interface AttendanceKioskEventPayload {
   photo_url?: string;
   event_timestamp?: string;
   metadata?: Record<string, unknown>;
+}
+
+export interface PublicKioskBootstrapResponse {
+  kiosk_device: {
+    id: number;
+    code: string;
+    name: string;
+  };
+  location: AttendanceLocation;
+  auth_methods: Array<'pin' | 'badge'>;
+  inactivity_timeout_seconds: number;
+}
+
+export interface PublicKioskIdentifyRequest {
+  auth_method: 'pin' | 'badge';
+  credential_payload: string;
+}
+
+export interface PublicKioskIdentifyResponse {
+  auth_attempt_event_id: number;
+  auth_method: 'pin' | 'badge';
+  employee: {
+    id: number;
+    employee_number?: string;
+    full_name: string;
+    position_title?: string;
+    department?: string;
+  };
+  identification_token: string;
+  expires_at: string;
+}
+
+export interface PublicKioskPunchRequest {
+  identification_token: string;
+  event_type: 'check_in' | 'check_out';
+  event_timestamp?: string;
+}
+
+export interface PublicKioskPunchResponse {
+  event_id: number;
+  employee_id: number;
+  event_kind: 'check_in' | 'check_out';
+  auth_method: 'pin' | 'badge';
+  result_status: 'success';
+  status: 'on_time' | 'late' | 'leave' | 'rest' | 'absence';
+  first_check_in_at?: string | null;
+  last_check_out_at?: string | null;
+  location: AttendanceLocation;
 }
 
 export interface AttendanceMediaPresignRequest {
@@ -900,6 +953,15 @@ export const humanResourcesApi = {
     });
   },
 
+  rotateAttendanceKioskDevicePublicToken(kioskDeviceId: string | number) {
+    return apiClient<AttendanceKioskDeviceRotateTokenResponse>(
+      `${endpoints.humanResources.attendanceKioskDeviceRotateToken}/${kioskDeviceId}/rotate-public-access-token`,
+      {
+        method: 'POST',
+      },
+    );
+  },
+
   listAttendanceAccessProfiles() {
     return apiClient<AttendanceAccessProfilesResponse>(endpoints.humanResources.attendanceAccessProfiles);
   },
@@ -994,6 +1056,24 @@ export const humanResourcesApi = {
 
   recordMyAttendanceKioskEvent(payload: Omit<AttendanceKioskEventPayload, 'employee_id'>) {
     return apiClient<{ status: string }>(endpoints.humanResources.attendanceSelfKioskEvents, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getPublicKioskBootstrap(deviceToken: string) {
+    return apiClient<PublicKioskBootstrapResponse>(`${endpoints.humanResources.attendancePublicKiosk}/${deviceToken}/bootstrap`);
+  },
+
+  identifyPublicKioskEmployee(deviceToken: string, payload: PublicKioskIdentifyRequest) {
+    return apiClient<PublicKioskIdentifyResponse>(`${endpoints.humanResources.attendancePublicKiosk}/${deviceToken}/identify`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  punchPublicKiosk(deviceToken: string, payload: PublicKioskPunchRequest) {
+    return apiClient<PublicKioskPunchResponse>(`${endpoints.humanResources.attendancePublicKiosk}/${deviceToken}/punch`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });

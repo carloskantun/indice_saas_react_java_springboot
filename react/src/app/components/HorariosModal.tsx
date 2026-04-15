@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from './ui/button';
 import { Checkbox } from './ui/checkbox';
 import { X, Search, Clock, AlertCircle, MapPin } from 'lucide-react';
+import { LoadingBarOverlay, runWithMinimumDuration } from './LoadingBarOverlay';
 import {
   humanResourcesApi,
   type AttendanceControlAssignment,
@@ -27,7 +28,12 @@ interface HorariosModalProps {
   templates: AttendanceControlTemplate[];
   locations: AttendanceControlLocation[];
   selectedTemplateId?: number | null;
-  onApplied?: () => Promise<void> | void;
+  effectiveStartDate?: string;
+  onApplied?: (result: {
+    employeeIds: number[];
+    templateId: number;
+    templateName: string;
+  }) => Promise<void> | void;
 }
 
 const weekdayConfig = [
@@ -104,6 +110,7 @@ export function HorariosModal({
   templates,
   locations,
   selectedTemplateId,
+  effectiveStartDate,
   onApplied,
 }: HorariosModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -127,6 +134,7 @@ export function HorariosModal({
     () => templates.find((template) => template.id === selectedTemplateId) ?? templates[0] ?? null,
     [selectedTemplateId, templates],
   );
+  const assignmentEffectiveStartDate = effectiveStartDate?.trim() || new Date().toISOString().slice(0, 10);
 
   useEffect(() => {
     if (!isOpen) {
@@ -193,6 +201,19 @@ export function HorariosModal({
         ? current.filter((id) => id !== employeeId)
         : [...current, employeeId],
     );
+  };
+
+  const setEmployeeSelection = (employeeId: number, shouldSelect: boolean) => {
+    setSelectedEmployeeIds((current) => {
+      const isSelected = current.includes(employeeId);
+      if (shouldSelect && !isSelected) {
+        return [...current, employeeId];
+      }
+      if (!shouldSelect && isSelected) {
+        return current.filter((id) => id !== employeeId);
+      }
+      return current;
+    });
   };
 
   const toggleAll = () => {
@@ -272,51 +293,65 @@ export function HorariosModal({
     setErrorMessage('');
 
     try {
-      const payload = buildTemplatePayload();
-      if (!payload) {
+      const appliedResult = await runWithMinimumDuration((async () => {
+        const payload = buildTemplatePayload();
+        if (!payload) {
+          return null;
+        }
+
+        const sameAsSelectedTemplate = selectedTemplate
+          ? normalizeTemplatePayload(payload) === normalizeTemplatePayload({
+              name: selectedTemplate.name,
+              status: selectedTemplate.status === 'inactive' ? 'inactive' : 'active',
+              schedule_mode: selectedTemplate.schedule_mode === 'open' ? 'open' : 'strict',
+              block_after_grace_period: Boolean(selectedTemplate.block_after_grace_period),
+              enforce_location: Boolean(selectedTemplate.enforce_location),
+              location_id: selectedTemplate.location_id ?? null,
+              days: selectedTemplate.days.map((day) => ({
+                day_of_week: day.day_of_week,
+                start_time: day.start_time ?? null,
+                end_time: day.end_time ?? null,
+                meal_minutes: day.meal_minutes ?? 0,
+                rest_minutes: day.rest_minutes ?? 0,
+                late_after_minutes: day.late_after_minutes,
+                is_rest_day: day.is_rest_day,
+              })),
+            })
+          : false;
+
+        let templateId = selectedTemplate?.id ?? null;
+        let appliedTemplateName = selectedTemplate?.name ?? payload.name;
+        if (!templateId || !sameAsSelectedTemplate) {
+          const templateName = sameAsSelectedTemplate
+            ? payload.name
+            : `${payload.name} ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
+          const response = await humanResourcesApi.createAttendanceControlTemplate({
+            ...payload,
+            name: templateName,
+          });
+          templateId = response.template.id;
+          appliedTemplateName = response.template.name;
+        }
+
+        await humanResourcesApi.bulkAssignAttendanceSchedule({
+          employee_ids: selectedEmployeeIds,
+          template_id: templateId,
+          effective_start_date: assignmentEffectiveStartDate,
+        });
+
+        return {
+          employeeIds: selectedEmployeeIds,
+          templateId,
+          templateName: appliedTemplateName,
+        };
+      })(), 850);
+
+      if (!appliedResult) {
         return;
       }
 
-      const sameAsSelectedTemplate = selectedTemplate
-        ? normalizeTemplatePayload(payload) === normalizeTemplatePayload({
-            name: selectedTemplate.name,
-            status: selectedTemplate.status === 'inactive' ? 'inactive' : 'active',
-            schedule_mode: selectedTemplate.schedule_mode === 'open' ? 'open' : 'strict',
-            block_after_grace_period: Boolean(selectedTemplate.block_after_grace_period),
-            enforce_location: Boolean(selectedTemplate.enforce_location),
-            location_id: selectedTemplate.location_id ?? null,
-            days: selectedTemplate.days.map((day) => ({
-              day_of_week: day.day_of_week,
-              start_time: day.start_time ?? null,
-              end_time: day.end_time ?? null,
-              meal_minutes: day.meal_minutes ?? 0,
-              rest_minutes: day.rest_minutes ?? 0,
-              late_after_minutes: day.late_after_minutes,
-              is_rest_day: day.is_rest_day,
-            })),
-          })
-        : false;
-
-      let templateId = selectedTemplate?.id ?? null;
-      if (!templateId || !sameAsSelectedTemplate) {
-        const templateName = sameAsSelectedTemplate
-          ? payload.name
-          : `${payload.name} ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
-        const response = await humanResourcesApi.createAttendanceControlTemplate({
-          ...payload,
-          name: templateName,
-        });
-        templateId = response.template.id;
-      }
-
-      await humanResourcesApi.bulkAssignAttendanceSchedule({
-        employee_ids: selectedEmployeeIds,
-        template_id: templateId,
-        effective_start_date: new Date().toISOString().slice(0, 10),
-      });
-
-      await Promise.resolve(onApplied?.());
       onClose();
+      await Promise.resolve(onApplied?.(appliedResult));
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'The schedule could not be applied.');
     } finally {
@@ -325,8 +360,16 @@ export function HorariosModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="my-8 flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg bg-white shadow-xl dark:bg-gray-800">
+    <>
+      <LoadingBarOverlay
+        isVisible={isSubmitting}
+        title="Applying schedule"
+        description="Saving the schedule configuration and assigning it to the selected collaborators."
+        className="z-[95]"
+      />
+
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="my-8 flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg bg-white shadow-xl dark:bg-gray-800">
         <div className="flex items-center justify-between border-b border-[#143675] bg-[#143675] p-6">
           <div className="flex items-center gap-2">
             <Clock className="h-6 w-6 text-white" />
@@ -338,8 +381,8 @@ export function HorariosModal({
         </div>
 
         <div className="border-b border-gray-200 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-700/50">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
-            <div className="md:col-span-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end">
+            <div className="xl:min-w-0 xl:flex-[1.8]">
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Look for</label>
               <input
                 type="text"
@@ -349,7 +392,7 @@ export function HorariosModal({
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
               />
             </div>
-            <div className="md:col-span-3">
+            <div className="xl:w-64 xl:flex-none">
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Unit</label>
               <select
                 value={unidadFilter}
@@ -362,7 +405,7 @@ export function HorariosModal({
                 ))}
               </select>
             </div>
-            <div className="md:col-span-3">
+            <div className="xl:w-64 xl:flex-none">
               <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">Business</label>
               <select
                 value={negocioFilter}
@@ -375,9 +418,9 @@ export function HorariosModal({
                 ))}
               </select>
             </div>
-            <div className="md:col-span-1 flex items-end md:justify-end">
+            <div className="xl:flex-none">
               <Button
-                className="w-full gap-2 whitespace-nowrap bg-[#143675] px-4 text-white hover:bg-[#0f2855] md:w-auto"
+                className="w-full gap-2 whitespace-nowrap bg-[#143675] px-4 text-white hover:bg-[#0f2855] xl:w-auto"
                 type="button"
                 onClick={applySearchFilters}
               >
@@ -426,12 +469,20 @@ export function HorariosModal({
                         </td>
                       </tr>
                     ) : (
-                      filteredAssignments.map((assignment) => (
-                        <tr key={assignment.employee_id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                      filteredAssignments.map((assignment) => {
+                        const isSelected = selectedEmployeeIds.includes(assignment.employee_id);
+
+                        return (
+                        <tr
+                          key={assignment.employee_id}
+                          className={`cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 ${isSelected ? 'bg-blue-50/70 dark:bg-blue-900/10' : ''}`}
+                          onClick={() => toggleEmployee(assignment.employee_id)}
+                        >
                           <td className="px-3 py-3">
                             <Checkbox
-                              checked={selectedEmployeeIds.includes(assignment.employee_id)}
-                              onCheckedChange={() => toggleEmployee(assignment.employee_id)}
+                              checked={isSelected}
+                              onCheckedChange={(checked) => setEmployeeSelection(assignment.employee_id, checked === true)}
+                              onClick={(event) => event.stopPropagation()}
                             />
                           </td>
                           <td className="px-3 py-3 text-sm text-gray-600 dark:text-gray-400">
@@ -444,7 +495,7 @@ export function HorariosModal({
                             {assignment.department || assignment.position_title || '—'}
                           </td>
                         </tr>
-                      ))
+                      )})
                     )}
                   </tbody>
                 </table>
@@ -454,7 +505,9 @@ export function HorariosModal({
             <div className="p-6">
               <div className="mb-4">
                 <h3 className="font-semibold text-gray-900 dark:text-white">Schedule to be applied</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400">It will be applied equally to all those selected</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  It will be applied equally to all those selected starting on {assignmentEffectiveStartDate}.
+                </p>
               </div>
 
               <div className="mb-4 flex items-center gap-2">
@@ -647,11 +700,13 @@ export function HorariosModal({
             onClick={() => void aplicarHorarios()}
             className="gap-2 bg-[#143675] text-white hover:bg-[#0f2855]"
             disabled={selectedEmployeeIds.length === 0 || isSubmitting}
+            title={selectedEmployeeIds.length === 0 ? 'Select at least one collaborator first.' : undefined}
           >
             Apply to selected positions
           </Button>
         </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

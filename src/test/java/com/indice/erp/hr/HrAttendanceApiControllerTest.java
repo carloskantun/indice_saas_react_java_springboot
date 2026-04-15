@@ -181,6 +181,83 @@ class HrAttendanceApiControllerTest {
     }
 
     @Test
+    void rotateKioskPublicAccessTokenRequiresAuthentication() throws Exception {
+        given(sessionAuthService.currentUser(any())).willReturn(Optional.empty());
+
+        mockMvc.perform(post("/api/v1/hr/attendance/kiosk-devices/4/rotate-public-access-token"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.message").value("Unauthorized"));
+    }
+
+    @Test
+    void publicKioskBootstrapReturnsPayloadWithoutAuthentication() throws Exception {
+        given(hrAttendanceService.publicKioskBootstrap("device-token")).willReturn(Map.of(
+            "kiosk_device", Map.of("id", 4, "code", "front-kiosk", "name", "Front Kiosk"),
+            "location", Map.of("id", 9, "name", "North Gate"),
+            "auth_methods", java.util.List.of("pin", "badge"),
+            "inactivity_timeout_seconds", 60
+        ));
+
+        mockMvc.perform(get("/api/v1/hr/attendance/public-kiosk/device-token/bootstrap"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.kiosk_device.code").value("front-kiosk"))
+            .andExpect(jsonPath("$.auth_methods[0]").value("pin"));
+    }
+
+    @Test
+    void publicKioskIdentifyReturnsPayloadWithoutAuthentication() throws Exception {
+        given(hrAttendanceService.publicKioskIdentify(eq("device-token"), anyMap())).willReturn(Map.of(
+            "auth_attempt_event_id", 10,
+            "auth_method", "pin",
+            "employee", Map.of(
+                "id", 12,
+                "employee_number", "EMP-0012",
+                "full_name", "Attendance User"
+            ),
+            "identification_token", "signed-token",
+            "expires_at", "2026-04-14T18:00:00Z"
+        ));
+
+        mockMvc.perform(
+            post("/api/v1/hr/attendance/public-kiosk/device-token/identify")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "auth_method": "pin",
+                      "credential_payload": "1234"
+                    }
+                    """)
+        )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.employee.id").value(12))
+            .andExpect(jsonPath("$.identification_token").value("signed-token"));
+    }
+
+    @Test
+    void publicKioskPunchReturnsCreatedPayloadWithoutAuthentication() throws Exception {
+        given(hrAttendanceService.publicKioskPunch(eq("device-token"), anyMap())).willReturn(Map.of(
+            "event_id", 14,
+            "employee_id", 12,
+            "event_kind", "check_in",
+            "status", "on_time"
+        ));
+
+        mockMvc.perform(
+            post("/api/v1/hr/attendance/public-kiosk/device-token/punch")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "identification_token": "signed-token",
+                      "event_type": "check_in"
+                    }
+                    """)
+        )
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.event_id").value(14))
+            .andExpect(jsonPath("$.event_kind").value("check_in"));
+    }
+
+    @Test
     void createAccessProfileReturnsCreatedPayload() throws Exception {
         var currentUser = new AuthSessionUser(1L, 1L, "Usuario Demo", "admin");
         given(sessionAuthService.currentUser(any())).willReturn(Optional.of(currentUser));

@@ -2,6 +2,7 @@ import { createBrowserRouter, redirect } from 'react-router';
 import App from './App';
 import { LoginPage } from './Auth';
 import { authApi } from './api/auth';
+import HumanResourcesKiosk from './BasicModules/HumanResources/Kiosk/Kiosk';
 
 const redirectToLanding = async () => {
   const session = await authApi.getSessionOrNull();
@@ -37,6 +38,10 @@ export const router = createBrowserRouter([
     path: '/login',
     element: <LoginPage />,
     loader: redirectIfAuthenticated,
+  },
+  {
+    path: '/kiosk/:deviceToken',
+    element: <HumanResourcesKiosk />,
   },
   {
     path: '/:pageId/*',
