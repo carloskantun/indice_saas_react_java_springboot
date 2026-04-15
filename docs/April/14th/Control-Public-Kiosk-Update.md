@@ -107,7 +107,7 @@ This note documents the HR Control, public kiosk, and schedules-modal work compl
 - `src/main/java/com/indice/erp/hr/HrAttendanceApiController.java`
 - `src/main/java/com/indice/erp/hr/HrAttendanceService.java`
 - `src/main/resources/application.properties`
-- `src/main/resources/db/migration/V17__hr_kiosk_public_access.sql`
+- `src/main/resources/db/migration/V18__hr_kiosk_public_access.sql`
 - `src/test/java/com/indice/erp/hr/HrAttendanceApiControllerTest.java`
 
 ## Verification Notes
