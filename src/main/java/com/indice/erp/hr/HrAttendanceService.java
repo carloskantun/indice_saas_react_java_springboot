@@ -14,18 +14,21 @@ import com.indice.erp.storage.ObjectStorageProperties;
 import com.indice.erp.storage.ObjectStorageService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.DayOfWeek;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -35,6 +38,10 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.UUID;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -53,6 +60,8 @@ public class HrAttendanceService {
         "rest",
         "absence"
     );
+    private static final List<String> PUBLIC_KIOSK_AUTH_METHODS = List.of("pin", "badge");
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectStorageService objectStorageService;
@@ -61,6 +70,9 @@ public class HrAttendanceService {
     private final BCryptPasswordEncoder passwordEncoder;
     private final HrFaceService hrFaceService;
     private final boolean enforceLocationRadius;
+    private final String kioskIdentificationTokenSecret;
+    private final int kioskIdentificationTokenTtlSeconds;
+    private final int kioskInactivityTimeoutSeconds;
 
     public HrAttendanceService(
         JdbcTemplate jdbcTemplate,
@@ -69,7 +81,10 @@ public class HrAttendanceService {
         ObjectMapper objectMapper,
         BCryptPasswordEncoder passwordEncoder,
         HrFaceService hrFaceService,
-        @Value("${app.hr.attendance.enforce-location-radius:false}") boolean enforceLocationRadius
+        @Value("${app.hr.attendance.enforce-location-radius:false}") boolean enforceLocationRadius,
+        @Value("${app.hr.kiosk.identification-token-secret:indice-kiosk-identification-secret}") String kioskIdentificationTokenSecret,
+        @Value("${app.hr.kiosk.identification-token-ttl-seconds:120}") int kioskIdentificationTokenTtlSeconds,
+        @Value("${app.hr.kiosk.inactivity-timeout-seconds:60}") int kioskInactivityTimeoutSeconds
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectStorageService = objectStorageService;
@@ -78,6 +93,11 @@ public class HrAttendanceService {
         this.passwordEncoder = passwordEncoder;
         this.hrFaceService = hrFaceService;
         this.enforceLocationRadius = enforceLocationRadius;
+        this.kioskIdentificationTokenSecret = kioskIdentificationTokenSecret == null || kioskIdentificationTokenSecret.isBlank()
+            ? "indice-kiosk-identification-secret"
+            : kioskIdentificationTokenSecret;
+        this.kioskIdentificationTokenTtlSeconds = Math.max(kioskIdentificationTokenTtlSeconds, 30);
+        this.kioskInactivityTimeoutSeconds = Math.max(kioskInactivityTimeoutSeconds, 15);
     }
 
     public Map<String, Object> listDashboard(long companyId, LocalDate date) {
@@ -375,14 +395,17 @@ public class HrAttendanceService {
         ensureUniqueKioskCode(companyId, kioskDeviceId, code);
 
         var metadataJson = toJson(payload.get("metadata"));
+        var publicAccessToken = kioskDeviceId == null || kioskDeviceId <= 0
+            ? generateUniqueKioskPublicAccessToken()
+            : loadKioskDevice(companyId, kioskDeviceId).publicAccessToken();
         if (kioskDeviceId == null || kioskDeviceId <= 0) {
             KeyHolder keyHolder = new GeneratedKeyHolder();
             jdbcTemplate.update(connection -> {
                 var statement = connection.prepareStatement(
                     """
                         INSERT INTO hr_kiosk_devices
-                        (company_id, unit_id, business_id, location_id, code, name, status, metadata_json, created_by)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), ?)
+                        (company_id, unit_id, business_id, location_id, code, name, status, public_access_token, metadata_json, created_by)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), ?)
                         """,
                     new String[] {"id"}
                 );
@@ -393,8 +416,9 @@ public class HrAttendanceService {
                 statement.setString(5, code);
                 statement.setString(6, name);
                 statement.setString(7, status);
-                statement.setString(8, metadataJson);
-                statement.setLong(9, userId);
+                statement.setString(8, publicAccessToken);
+                statement.setString(9, metadataJson);
+                statement.setLong(10, userId);
                 return statement;
             }, keyHolder);
             kioskDeviceId = keyHolder.getKey() == null ? null : keyHolder.getKey().longValue();
@@ -408,6 +432,7 @@ public class HrAttendanceService {
                         code = ?,
                         name = ?,
                         status = ?,
+                        public_access_token = ?,
                         metadata_json = CAST(? AS JSON)
                     WHERE id = ? AND company_id = ?
                     """,
@@ -417,6 +442,7 @@ public class HrAttendanceService {
                 code,
                 name,
                 status,
+                publicAccessToken,
                 metadataJson,
                 kioskDeviceId,
                 companyId
@@ -427,6 +453,182 @@ public class HrAttendanceService {
         }
 
         return Map.of("kiosk_device", toKioskDeviceMap(loadKioskDevice(companyId, kioskDeviceId)));
+    }
+
+    @Transactional
+    public Map<String, Object> rotateKioskPublicAccessToken(long companyId, long kioskDeviceId) {
+        loadKioskDevice(companyId, kioskDeviceId);
+        var nextToken = generateUniqueKioskPublicAccessToken();
+        var updated = jdbcTemplate.update(
+            """
+                UPDATE hr_kiosk_devices
+                SET public_access_token = ?
+                WHERE id = ? AND company_id = ?
+                """,
+            nextToken,
+            kioskDeviceId,
+            companyId
+        );
+        if (updated == 0) {
+            throw new NoSuchElementException("Kiosk device not found.");
+        }
+
+        return Map.of("kiosk_device", toKioskDeviceMap(loadKioskDevice(companyId, kioskDeviceId)));
+    }
+
+    public Map<String, Object> publicKioskBootstrap(String deviceToken) {
+        var kioskDevice = loadKioskDeviceByPublicAccessToken(deviceToken);
+        var location = requirePublicKioskLocation(kioskDevice);
+        var authMethods = determinePublicKioskAuthMethods(kioskDevice.companyId());
+
+        var body = new LinkedHashMap<String, Object>();
+        body.put("kiosk_device", Map.of(
+            "id", kioskDevice.id(),
+            "code", kioskDevice.code(),
+            "name", kioskDevice.name()
+        ));
+        body.put("location", toLocationMap(location));
+        body.put("auth_methods", authMethods);
+        body.put("inactivity_timeout_seconds", kioskInactivityTimeoutSeconds);
+        return body;
+    }
+
+    @Transactional
+    public Map<String, Object> publicKioskIdentify(String deviceToken, Map<String, Object> payload) {
+        var kioskDevice = loadKioskDeviceByPublicAccessToken(deviceToken);
+        var location = requirePublicKioskLocation(kioskDevice);
+        var authMethod = normalizePublicKioskAuthMethod(stringValue(payload, "auth_method", "method_type"));
+        var credentialPayload = nullable(stringValue(payload, "credential_payload", "credential", "pin", "badge_code"));
+        if (credentialPayload == null || credentialPayload.isBlank()) {
+            throw new IllegalArgumentException("credential_payload is required.");
+        }
+
+        var resolvedMethod = resolvePublicKioskAccessMethod(kioskDevice.companyId(), authMethod, credentialPayload);
+        if (resolvedMethod == null) {
+            throw new IllegalArgumentException("Credential validation failed.");
+        }
+
+        var employee = loadAttendanceEmployee(kioskDevice.companyId(), resolvedMethod.employeeId());
+        if ("terminated".equals(employee.status())) {
+            throw new IllegalArgumentException("This employee is terminated and cannot record attendance.");
+        }
+
+        var eventTimestamp = parseDateTime(payload, "event_timestamp", "recorded_at");
+        if (eventTimestamp == null) {
+            eventTimestamp = LocalDateTime.now();
+        }
+
+        var authAttemptMetadata = mergeMetadataJson(
+            toJson(payload.get("metadata")),
+            Map.of(
+                "public_kiosk", true,
+                "employee_id", employee.id(),
+                "event_kind", "auth_attempt"
+            )
+        );
+        var authAttemptId = appendAttendanceEvent(
+            kioskDevice.companyId(),
+            employee.id(),
+            "auth_attempt",
+            eventTimestamp,
+            location.id(),
+            kioskDevice.id(),
+            location.latitude(),
+            location.longitude(),
+            null,
+            "kiosk_public",
+            authMethod,
+            "success",
+            "auth_attempt",
+            authAttemptMetadata,
+            null,
+            null,
+            0L
+        );
+
+        var expiresAtEpochSeconds = Instant.now().getEpochSecond() + kioskIdentificationTokenTtlSeconds;
+        var body = new LinkedHashMap<String, Object>();
+        body.put("auth_attempt_event_id", authAttemptId);
+        body.put("auth_method", authMethod);
+        body.put("employee", Map.of(
+            "id", employee.id(),
+            "employee_number", employee.employeeNumber(),
+            "full_name", employee.fullName(),
+            "position_title", employee.positionTitle(),
+            "department", employee.department()
+        ));
+        body.put(
+            "identification_token",
+            createPublicKioskIdentificationToken(deviceToken, employee.id(), authMethod, expiresAtEpochSeconds)
+        );
+        body.put("expires_at", Instant.ofEpochSecond(expiresAtEpochSeconds).toString());
+        return body;
+    }
+
+    @Transactional
+    public Map<String, Object> publicKioskPunch(String deviceToken, Map<String, Object> payload) {
+        var kioskDevice = loadKioskDeviceByPublicAccessToken(deviceToken);
+        var location = requirePublicKioskLocation(kioskDevice);
+        var identificationToken = stringValue(payload, "identification_token");
+        if (identificationToken.isBlank()) {
+            throw new IllegalArgumentException("identification_token is required.");
+        }
+
+        var tokenClaims = verifyPublicKioskIdentificationToken(deviceToken, identificationToken);
+        var employee = loadAttendanceEmployee(kioskDevice.companyId(), tokenClaims.employeeId());
+        if ("terminated".equals(employee.status())) {
+            throw new IllegalArgumentException("This employee is terminated and cannot record attendance.");
+        }
+
+        var eventType = normalizePublicKioskEventType(stringValue(payload, "event_type", "event_kind"));
+        var eventTimestamp = parseDateTime(payload, "event_timestamp", "recorded_at");
+        if (eventTimestamp == null) {
+            eventTimestamp = LocalDateTime.now();
+        }
+
+        var scheduleRule = loadScheduleRule(kioskDevice.companyId(), employee.id(), eventTimestamp.toLocalDate());
+        validateScheduleRegistrationPolicy(scheduleRule, eventType, eventTimestamp, location);
+        validateOperationalEventTransition(kioskDevice.companyId(), employee.id(), eventTimestamp, eventType);
+
+        var metadataJson = mergeMetadataJson(
+            toJson(payload.get("metadata")),
+            Map.of(
+                "public_kiosk", true,
+                "identified_employee_id", employee.id()
+            )
+        );
+        var operationalEventId = appendAttendanceEvent(
+            kioskDevice.companyId(),
+            employee.id(),
+            eventType,
+            eventTimestamp,
+            location.id(),
+            kioskDevice.id(),
+            location.latitude(),
+            location.longitude(),
+            null,
+            "kiosk_public",
+            tokenClaims.authMethod(),
+            "success",
+            eventType,
+            metadataJson,
+            null,
+            null,
+            0L
+        );
+
+        var dailyRecord = rebuildDailyRecordProjection(kioskDevice.companyId(), employee.id(), eventTimestamp.toLocalDate());
+        var result = new LinkedHashMap<String, Object>();
+        result.put("event_id", operationalEventId);
+        result.put("employee_id", employee.id());
+        result.put("event_kind", eventType);
+        result.put("auth_method", tokenClaims.authMethod());
+        result.put("result_status", "success");
+        result.put("status", resolveEffectiveStatus(dailyRecord, scheduleRule));
+        result.put("first_check_in_at", toIsoString(dailyRecord.firstCheckInAt()));
+        result.put("last_check_out_at", toIsoString(dailyRecord.lastCheckOutAt()));
+        result.put("location", toLocationMap(location));
+        return result;
     }
 
     public Map<String, Object> listAccessProfiles(long companyId) {
@@ -2253,6 +2455,7 @@ public class HrAttendanceService {
                        d.code,
                        d.name,
                        COALESCE(LOWER(d.status), 'active') AS status,
+                       d.public_access_token,
                        d.metadata_json
                 FROM hr_kiosk_devices d
                 LEFT JOIN units u ON u.id = d.unit_id
@@ -2280,6 +2483,7 @@ public class HrAttendanceService {
                        d.code,
                        d.name,
                        COALESCE(LOWER(d.status), 'active') AS status,
+                       d.public_access_token,
                        d.metadata_json
                 FROM hr_kiosk_devices d
                 LEFT JOIN units u ON u.id = d.unit_id
@@ -2297,6 +2501,52 @@ public class HrAttendanceService {
             throw new NoSuchElementException("Kiosk device not found.");
         }
         return rows.getFirst();
+    }
+
+    private KioskDeviceRow loadKioskDeviceByPublicAccessToken(String publicAccessToken) {
+        var normalizedToken = publicAccessToken == null ? "" : publicAccessToken.trim();
+        if (normalizedToken.isBlank()) {
+            throw new IllegalArgumentException("Kiosk device token is required.");
+        }
+
+        var rows = jdbcTemplate.query(
+            """
+                SELECT d.id,
+                       d.company_id,
+                       d.unit_id,
+                       u.name AS unit_name,
+                       d.business_id,
+                       b.name AS business_name,
+                       d.location_id,
+                       l.name AS location_name,
+                       d.code,
+                       d.name,
+                       COALESCE(LOWER(d.status), 'active') AS status,
+                       d.public_access_token,
+                       d.metadata_json
+                FROM hr_kiosk_devices d
+                LEFT JOIN units u ON u.id = d.unit_id
+                LEFT JOIN businesses b ON b.id = d.business_id
+                LEFT JOIN hr_attendance_locations l ON l.id = d.location_id
+                WHERE d.public_access_token = ?
+                  AND COALESCE(LOWER(d.status), 'active') = 'active'
+                LIMIT 1
+                """,
+            (rs, rowNum) -> mapKioskDeviceRow(rs),
+            normalizedToken
+        );
+        if (rows.isEmpty()) {
+            throw new NoSuchElementException("Public kiosk device not found.");
+        }
+        return rows.getFirst();
+    }
+
+    private LocationRow requirePublicKioskLocation(KioskDeviceRow kioskDevice) {
+        if (kioskDevice.locationId() == null) {
+            throw new IllegalArgumentException("Kiosk device is not linked to an attendance location.");
+        }
+
+        return loadLocation(kioskDevice.companyId(), kioskDevice.locationId());
     }
 
     private List<AccessProfileRow> listAccessProfilesRows(long companyId) {
@@ -2455,6 +2705,90 @@ public class HrAttendanceService {
             .orElseThrow(() -> new NoSuchElementException("Employee access method not found."));
     }
 
+    private List<AccessMethodRow> loadPublicKioskAccessMethods(long companyId, String methodType) {
+        return jdbcTemplate.query(
+            """
+                SELECT m.id,
+                       m.company_id,
+                       m.access_profile_id,
+                       m.method_type,
+                       m.credential_ref,
+                       m.secret_hash,
+                       COALESCE(LOWER(m.status), 'active') AS status,
+                       m.priority,
+                       m.metadata_json,
+                       p.employee_id,
+                       COALESCE(e.employee_number, '') AS employee_number,
+                       TRIM(CONCAT_WS(' ', COALESCE(e.first_name, ''), COALESCE(e.last_name, ''))) AS employee_name
+                FROM hr_employee_access_methods m
+                JOIN hr_employee_access_profiles p ON p.id = m.access_profile_id
+                JOIN hr_employees e ON e.id = p.employee_id
+                WHERE m.company_id = ?
+                  AND COALESCE(LOWER(m.status), 'active') = 'active'
+                  AND COALESCE(LOWER(p.status), 'active') = 'active'
+                  AND COALESCE(LOWER(e.status), 'active') <> 'terminated'
+                  AND m.method_type = ?
+                ORDER BY p.employee_id ASC, m.priority ASC, m.id ASC
+                """,
+            (rs, rowNum) -> new AccessMethodRow(
+                rs.getLong("id"),
+                rs.getLong("company_id"),
+                rs.getLong("access_profile_id"),
+                safe(rs.getString("method_type")),
+                safe(rs.getString("credential_ref")),
+                safe(rs.getString("secret_hash")),
+                safe(rs.getString("status")),
+                rs.getInt("priority"),
+                safe(rs.getString("metadata_json")),
+                rs.getLong("employee_id"),
+                safe(rs.getString("employee_number")),
+                safe(rs.getString("employee_name"))
+            ),
+            companyId,
+            methodType
+        );
+    }
+
+    private List<String> determinePublicKioskAuthMethods(long companyId) {
+        var availableMethods = new ArrayList<String>();
+        for (var methodType : PUBLIC_KIOSK_AUTH_METHODS) {
+            if (!loadPublicKioskAccessMethods(companyId, methodType).isEmpty()) {
+                availableMethods.add(methodType);
+            }
+        }
+        return availableMethods;
+    }
+
+    private AccessMethodRow resolvePublicKioskAccessMethod(long companyId, String authMethod, String credentialPayload) {
+        var candidateMethods = loadPublicKioskAccessMethods(companyId, authMethod);
+        if (candidateMethods.isEmpty()) {
+            return null;
+        }
+
+        return switch (authMethod) {
+            case "badge" -> {
+                var matches = candidateMethods.stream()
+                    .filter((method) -> Objects.equals(nullable(method.credentialRef()), nullable(credentialPayload)))
+                    .toList();
+                if (matches.size() > 1) {
+                    throw new IllegalArgumentException("Badge credential is assigned to more than one employee.");
+                }
+                yield matches.isEmpty() ? null : matches.getFirst();
+            }
+            case "pin" -> {
+                var matches = candidateMethods.stream()
+                    .filter((method) -> method.secretHash() != null && !method.secretHash().isBlank())
+                    .filter((method) -> passwordEncoder.matches(credentialPayload, method.secretHash()))
+                    .toList();
+                if (matches.size() > 1) {
+                    throw new IllegalArgumentException("PIN is assigned to more than one employee.");
+                }
+                yield matches.isEmpty() ? null : matches.getFirst();
+            }
+            default -> null;
+        };
+    }
+
     private void ensureManualOverrideMethod(long companyId, long accessProfileId) {
         var existing = loadAccessMethods(companyId, accessProfileId).stream()
             .anyMatch((method) -> "manual_override".equals(method.methodType()));
@@ -2487,6 +2821,7 @@ public class HrAttendanceService {
         body.put("code", device.code());
         body.put("name", device.name());
         body.put("status", device.status());
+        body.put("public_access_token", device.publicAccessToken());
         body.put("metadata", parseJsonMap(device.metadataJson()));
         return body;
     }
@@ -2940,6 +3275,29 @@ public class HrAttendanceService {
         }
     }
 
+    private String generateUniqueKioskPublicAccessToken() {
+        while (true) {
+            var nextToken = UUID.randomUUID().toString().replace("-", "")
+                + Long.toHexString(Math.abs(SECURE_RANDOM.nextLong()));
+            if (!kioskPublicAccessTokenExists(nextToken)) {
+                return nextToken;
+            }
+        }
+    }
+
+    private boolean kioskPublicAccessTokenExists(String publicAccessToken) {
+        var count = jdbcTemplate.queryForObject(
+            """
+                SELECT COUNT(*)
+                FROM hr_kiosk_devices
+                WHERE public_access_token = ?
+                """,
+            Integer.class,
+            publicAccessToken
+        );
+        return count != null && count > 0;
+    }
+
     private void ensureUniqueAccessProfile(long companyId, long employeeId, Long profileId) {
         var count = jdbcTemplate.queryForObject(
             """
@@ -3046,6 +3404,14 @@ public class HrAttendanceService {
         return normalizeAuthMethod(value);
     }
 
+    private String normalizePublicKioskAuthMethod(String value) {
+        var normalized = normalizeEnabledAuthMethod(value);
+        if (!PUBLIC_KIOSK_AUTH_METHODS.contains(normalized)) {
+            throw new IllegalArgumentException("Public kiosk auth_method must be pin or badge.");
+        }
+        return normalized;
+    }
+
     private String normalizeEventKind(String value) {
         var normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
         normalized = normalized.replace('-', '_').replace(' ', '_');
@@ -3066,6 +3432,93 @@ public class HrAttendanceService {
             case "check_in", "check_out", "break_out", "break_in", "auth_attempt", "manual_override", "correction" -> eventKind;
             default -> throw new IllegalArgumentException("Unsupported event type.");
         };
+    }
+
+    private String normalizePublicKioskEventType(String value) {
+        var normalized = normalizeEventType(value);
+        return switch (normalized) {
+            case "check_in", "check_out" -> normalized;
+            default -> throw new IllegalArgumentException("Public kiosk event_type must be check_in or check_out.");
+        };
+    }
+
+    private String createPublicKioskIdentificationToken(
+        String deviceToken,
+        long employeeId,
+        String authMethod,
+        long expiresAtEpochSeconds
+    ) {
+        var payload = Map.of(
+            "device_token", deviceToken,
+            "employee_id", employeeId,
+            "auth_method", authMethod,
+            "expires_at_epoch", expiresAtEpochSeconds
+        );
+        try {
+            var encodedPayload = Base64.getUrlEncoder()
+                .withoutPadding()
+                .encodeToString(objectMapper.writeValueAsBytes(payload));
+            return encodedPayload + "." + signKioskIdentificationToken(encodedPayload);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Unable to create kiosk identification token.", ex);
+        }
+    }
+
+    private PublicKioskIdentificationToken verifyPublicKioskIdentificationToken(String deviceToken, String identificationToken) {
+        if (identificationToken == null || identificationToken.isBlank()) {
+            throw new IllegalArgumentException("identification_token is required.");
+        }
+
+        var segments = identificationToken.split("\\.");
+        if (segments.length != 2) {
+            throw new IllegalArgumentException("identification_token is invalid.");
+        }
+
+        var expectedSignature = signKioskIdentificationToken(segments[0]);
+        if (!MessageDigest.isEqual(
+            expectedSignature.getBytes(StandardCharsets.UTF_8),
+            segments[1].getBytes(StandardCharsets.UTF_8)
+        )) {
+            throw new IllegalArgumentException("identification_token is invalid.");
+        }
+
+        try {
+            var payloadJson = Base64.getUrlDecoder().decode(segments[0]);
+            var payload = objectMapper.readValue(payloadJson, new TypeReference<Map<String, Object>>() {
+            });
+            var tokenDevice = safe(String.valueOf(payload.getOrDefault("device_token", "")));
+            var authMethod = safe(String.valueOf(payload.getOrDefault("auth_method", "")));
+            var employeeId = parseLong(payload, "employee_id");
+            var expiresAtEpoch = parseLong(payload, "expires_at_epoch");
+
+            if (employeeId == null || employeeId <= 0 || expiresAtEpoch == null || expiresAtEpoch <= 0) {
+                throw new IllegalArgumentException("identification_token is invalid.");
+            }
+            if (!Objects.equals(tokenDevice, deviceToken)) {
+                throw new IllegalArgumentException("identification_token does not belong to this kiosk.");
+            }
+            if (Instant.now().getEpochSecond() > expiresAtEpoch) {
+                throw new IllegalArgumentException("identification_token has expired.");
+            }
+
+            return new PublicKioskIdentificationToken(employeeId, normalizePublicKioskAuthMethod(authMethod), expiresAtEpoch);
+        } catch (IllegalArgumentException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("identification_token is invalid.");
+        }
+    }
+
+    private String signKioskIdentificationToken(String encodedPayload) {
+        try {
+            var mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(kioskIdentificationTokenSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            return Base64.getUrlEncoder()
+                .withoutPadding()
+                .encodeToString(mac.doFinal(encodedPayload.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception ex) {
+            throw new IllegalStateException("Unable to sign kiosk identification token.", ex);
+        }
     }
 
     private Map<String, Object> parseJsonMap(String json) {
@@ -3517,6 +3970,7 @@ public class HrAttendanceService {
             safe(rs.getString("code")),
             safe(rs.getString("name")),
             safe(rs.getString("status")),
+            safe(rs.getString("public_access_token")),
             safe(rs.getString("metadata_json"))
         );
     }
@@ -3707,6 +4161,7 @@ public class HrAttendanceService {
         String code,
         String name,
         String status,
+        String publicAccessToken,
         String metadataJson
     ) {
     }
@@ -3785,6 +4240,13 @@ public class HrAttendanceService {
     private record AttendanceOperationalState(
         boolean checkedIn,
         boolean onBreak
+    ) {
+    }
+
+    private record PublicKioskIdentificationToken(
+        long employeeId,
+        String authMethod,
+        long expiresAtEpochSeconds
     ) {
     }
 

@@ -37,6 +37,7 @@ interface KioskModalProps {
   colaboradores: Colaborador[];
   registeredLocations: RegisteredLocation[];
   selfMode?: boolean;
+  closeOnSuccess?: boolean;
   onSubmit: (payload: {
     employeeId: number;
     eventType: 'check_in' | 'check_out' | 'break_out' | 'break_in';
@@ -289,6 +290,7 @@ export function KioskModal({
   colaboradores,
   registeredLocations,
   selfMode = false,
+  closeOnSuccess = true,
   onSubmit,
 }: KioskModalProps) {
   const { currentLanguage } = useLanguage();
@@ -496,7 +498,9 @@ export function KioskModal({
     return nextLocation;
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (
+    nextEventType: 'check_in' | 'check_out' | 'break_out' | 'break_in',
+  ) => {
     if (!selectedEmployee) {
       setErrorMessage(copy.errors.selectEmployee);
       return;
@@ -550,6 +554,7 @@ export function KioskModal({
     }
 
     try {
+      setEventType(nextEventType);
       setIsSubmitting(true);
       setErrorMessage('');
       const eventTimestamp = localDateTimeString(new Date());
@@ -558,20 +563,20 @@ export function KioskModal({
         ? undefined
         : selfMode
           ? await attendancePhotoUpload.ensureUploadedForCurrentUser({
-              event_type: eventType,
+              event_type: nextEventType,
               event_timestamp: eventTimestamp,
               content_type: attendancePhotoUpload.photo?.contentType ?? 'image/jpeg',
             })
           : await attendancePhotoUpload.ensureUploaded({
               employee_id: selectedEmployee.id,
-              event_type: eventType,
+              event_type: nextEventType,
               event_timestamp: eventTimestamp,
               content_type: attendancePhotoUpload.photo?.contentType ?? 'image/jpeg',
             });
 
       await onSubmit({
         employeeId: selectedEmployee.id,
-        eventType,
+        eventType: nextEventType,
         locationId: Number(selectedLocationId),
         kioskDeviceId: Number(selectedKioskDeviceId),
         authMethod: selectedAuthMethod,
@@ -586,7 +591,9 @@ export function KioskModal({
       attendancePhotoUpload.clearPhoto();
       setCredentialPayload('');
       setVerifiedFaceSessionId(null);
-      onClose();
+      if (closeOnSuccess) {
+        onClose();
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : copy.errors.submitFailed);
     } finally {
@@ -910,8 +917,7 @@ export function KioskModal({
                       <Button
                         type="button"
                         onClick={() => {
-                          setEventType('check_in');
-                          void handleSubmit();
+                          void handleSubmit('check_in');
                         }}
                         disabled={!isReadyToRecord || isSubmitting}
                         className="bg-[#143675] text-white hover:bg-[#0f2855] disabled:bg-gray-300 disabled:text-gray-500"
@@ -921,8 +927,7 @@ export function KioskModal({
                       <Button
                         type="button"
                         onClick={() => {
-                          setEventType('check_out');
-                          void handleSubmit();
+                          void handleSubmit('check_out');
                         }}
                         disabled={!isReadyToRecord || isSubmitting}
                         className="bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-300 disabled:text-gray-500"
@@ -932,8 +937,7 @@ export function KioskModal({
                       <Button
                         type="button"
                         onClick={() => {
-                          setEventType('break_out');
-                          void handleSubmit();
+                          void handleSubmit('break_out');
                         }}
                         disabled={!isReadyToRecord || isSubmitting}
                         className="bg-amber-600 text-white hover:bg-amber-700 disabled:bg-gray-300 disabled:text-gray-500"
@@ -943,8 +947,7 @@ export function KioskModal({
                       <Button
                         type="button"
                         onClick={() => {
-                          setEventType('break_in');
-                          void handleSubmit();
+                          void handleSubmit('break_in');
                         }}
                         disabled={!isReadyToRecord || isSubmitting}
                         className="bg-sky-600 text-white hover:bg-sky-700 disabled:bg-gray-300 disabled:text-gray-500"

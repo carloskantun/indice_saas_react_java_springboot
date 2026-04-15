@@ -318,6 +318,58 @@ public class HrAttendanceApiController {
         }
     }
 
+    @PostMapping("/kiosk-devices/{kioskDeviceId}/rotate-public-access-token")
+    public ResponseEntity<?> rotateKioskPublicAccessToken(HttpSession session, @PathVariable long kioskDeviceId) {
+        var currentUser = sessionAuthService.currentUser(session);
+        if (currentUser.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Unauthorized"));
+        }
+
+        try {
+            return ResponseEntity.ok(
+                hrAttendanceService.rotateKioskPublicAccessToken(
+                    currentUser.get().companyId(),
+                    kioskDeviceId
+                )
+            );
+        } catch (NoSuchElementException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", ex.getMessage()));
+        }
+    }
+
+    @GetMapping("/public-kiosk/{deviceToken}/bootstrap")
+    public ResponseEntity<?> publicKioskBootstrap(@PathVariable String deviceToken) {
+        try {
+            return ResponseEntity.ok(hrAttendanceService.publicKioskBootstrap(deviceToken));
+        } catch (NoSuchElementException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", ex.getMessage()));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
+        }
+    }
+
+    @PostMapping("/public-kiosk/{deviceToken}/identify")
+    public ResponseEntity<?> publicKioskIdentify(@PathVariable String deviceToken, @RequestBody Map<String, Object> payload) {
+        try {
+            return ResponseEntity.ok(hrAttendanceService.publicKioskIdentify(deviceToken, payload));
+        } catch (NoSuchElementException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", ex.getMessage()));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
+        }
+    }
+
+    @PostMapping("/public-kiosk/{deviceToken}/punch")
+    public ResponseEntity<?> publicKioskPunch(@PathVariable String deviceToken, @RequestBody Map<String, Object> payload) {
+        try {
+            return ResponseEntity.status(HttpStatus.CREATED).body(hrAttendanceService.publicKioskPunch(deviceToken, payload));
+        } catch (NoSuchElementException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", ex.getMessage()));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
+        }
+    }
+
     @GetMapping("/access-profiles")
     public ResponseEntity<?> accessProfiles(HttpSession session) {
         var currentUser = sessionAuthService.currentUser(session);
