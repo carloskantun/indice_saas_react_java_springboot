@@ -101,6 +101,122 @@ export interface RegisterEmployeeDocumentPayload {
   object_key: string;
 }
 
+export interface BackendRecordWitness {
+  id: number;
+  employee_id?: number | null;
+  name: string;
+  created_at?: string | null;
+}
+
+export interface BackendRecordAttachment {
+  id: number;
+  original_filename: string;
+  mime_type: string;
+  size_bytes: number;
+  object_key: string;
+  download_url?: string | null;
+  created_at?: string | null;
+}
+
+export interface BackendRecordActivity {
+  id: number;
+  activity_type: 'created' | 'updated' | 'status_changed' | 'attachment_added' | 'attachment_removed' | 'deleted';
+  from_status?: 'pending' | 'reviewed' | 'resolved' | null;
+  to_status?: 'pending' | 'reviewed' | 'resolved' | null;
+  note?: string;
+  actor_user_id: number;
+  actor_name: string;
+  created_at?: string | null;
+}
+
+export interface BackendRecordItem {
+  id: number;
+  record_number?: string;
+  employee: {
+    id: number;
+    name: string;
+    position?: string;
+    department?: string;
+  };
+  unit?: {
+    id?: number | null;
+    name?: string;
+  } | null;
+  business?: {
+    id?: number | null;
+    name?: string;
+  } | null;
+  type: 'incident' | 'warning' | 'recognition' | 'observation' | 'training';
+  severity?: 'low' | 'medium' | 'high' | null;
+  status: 'pending' | 'reviewed' | 'resolved';
+  title: string;
+  description: string;
+  actions_taken?: string;
+  event_date: string;
+  reported_by: {
+    user_id?: number | null;
+    employee_id?: number | null;
+    name: string;
+  };
+  created_at?: string | null;
+  updated_at?: string | null;
+  witnesses?: BackendRecordWitness[];
+  attachments?: BackendRecordAttachment[];
+  activity?: BackendRecordActivity[];
+}
+
+export interface RecordsListResponse {
+  items: BackendRecordItem[];
+  count: number;
+  page: number;
+  size: number;
+  total_count: number;
+  total_pages: number;
+  summary: {
+    total_count: number;
+    pending_count: number;
+    reviewed_count: number;
+    resolved_count: number;
+    high_severity_count: number;
+  };
+}
+
+export interface RecordDetailsResponse {
+  record_id: number;
+  record: BackendRecordItem;
+}
+
+export interface CreateRecordPayload {
+  employee_id: number;
+  record_type: BackendRecordItem['type'];
+  severity?: NonNullable<BackendRecordItem['severity']>;
+  title: string;
+  description: string;
+  actions_taken?: string;
+  event_date: string;
+  witnesses?: Array<string | { employee_id?: number | null; name: string }>;
+}
+
+export interface RecordAttachmentPresignPayload {
+  file_name: string;
+  content_type: string;
+  size_bytes: number;
+}
+
+export interface RecordAttachmentPresignResponse {
+  object_key: string;
+  upload_url: string;
+  expires_at: string;
+  upload_headers: Record<string, string>;
+}
+
+export interface RegisterRecordAttachmentPayload {
+  original_filename: string;
+  mime_type: string;
+  size_bytes: number;
+  object_key: string;
+}
+
 export interface EmployeesListResponse {
   items: BackendEmployee[];
   count: number;
@@ -1147,5 +1263,84 @@ export const humanResourcesApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  },
+
+  listRecords(filters: Record<string, string | number | undefined> = {}) {
+    return apiClient<RecordsListResponse>(
+      `${endpoints.humanResources.recordsList}${toQueryString(filters)}`,
+    );
+  },
+
+  getRecordDetails(recordId: string | number) {
+    return apiClient<RecordDetailsResponse>(`${endpoints.humanResources.recordDetails}/${recordId}`);
+  },
+
+  createRecord(payload: CreateRecordPayload) {
+    return apiClient<BackendRecordItem>(endpoints.humanResources.recordsCreate, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  updateRecord(recordId: string | number, payload: CreateRecordPayload & { status?: BackendRecordItem['status'] }) {
+    return apiClient<BackendRecordItem>(`${endpoints.humanResources.recordUpdate}/${recordId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  deleteRecord(recordId: string | number) {
+    return apiClient<{ success: boolean }>(`${endpoints.humanResources.recordDelete}/${recordId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  presignRecordAttachmentUpload(recordId: string | number, payload: RecordAttachmentPresignPayload) {
+    return apiClient<RecordAttachmentPresignResponse>(
+      `${endpoints.humanResources.recordAttachments}/${recordId}/attachments/presign-upload`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
+  async uploadRecordAttachment(
+    uploadUrl: string,
+    file: Blob,
+    contentType: string,
+    uploadHeaders: Record<string, string> = {},
+  ) {
+    const headers = new Headers(uploadHeaders);
+
+    if (contentType && !headers.has('Content-Type')) {
+      headers.set('Content-Type', contentType);
+    }
+
+    const response = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers,
+      body: file,
+    });
+
+    if (!response.ok) {
+      throw new Error('Record attachment upload failed.');
+    }
+  },
+
+  registerRecordAttachment(recordId: string | number, payload: RegisterRecordAttachmentPayload) {
+    return apiClient<BackendRecordAttachment>(`${endpoints.humanResources.recordAttachments}/${recordId}/attachments`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  deleteRecordAttachment(recordId: string | number, attachmentId: string | number) {
+    return apiClient<{ success: boolean }>(
+      `${endpoints.humanResources.recordAttachments}/${recordId}/attachments/${attachmentId}`,
+      {
+        method: 'DELETE',
+      },
+    );
   },
 };
