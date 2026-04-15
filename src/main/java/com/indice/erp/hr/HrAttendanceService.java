@@ -2921,15 +2921,18 @@ public class HrAttendanceService {
             return;
         }
 
-        var priorEvents = loadAttendanceEventRows(companyId, employeeId, eventTimestamp.toLocalDate()).stream()
+        var dayEvents = loadAttendanceEventRows(companyId, employeeId, eventTimestamp.toLocalDate());
+        var priorEvents = dayEvents.stream()
             .filter((event) -> !event.eventTimestamp().isAfter(eventTimestamp))
             .toList();
         var state = resolveOperationalState(priorEvents);
+        var checkInAlreadyRecorded = dayEvents.stream()
+            .anyMatch((event) -> "check_in".equals(event.eventKind()) || "check_in".equals(event.eventType()));
 
         switch (eventKind) {
             case "check_in" -> {
-                if (state.checkedIn()) {
-                    throw new IllegalArgumentException("Check-in is already active for this employee.");
+                if (checkInAlreadyRecorded) {
+                    throw new IllegalArgumentException("Check-in has already been recorded for this employee today.");
                 }
             }
             case "break_out" -> {

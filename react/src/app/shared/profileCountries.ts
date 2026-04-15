@@ -1,3 +1,5 @@
+import { parsePhoneNumberFromString } from 'libphonenumber-js/max';
+
 export type ProfileCountry = 'AR' | 'BR' | 'CA' | 'CL' | 'CO' | 'ES' | 'MX' | 'PE' | 'US';
 
 export type ProfileCountryOption = {
@@ -119,6 +121,15 @@ export function splitProfilePhone(
       country: normalizedCountry,
       dialCode: getDialCodeForProfileCountry(normalizedCountry),
       number: phoneMatch ? phoneMatch[2] : normalizedPhone,
+    };
+  }
+
+  const parsedPhone = parsePhoneNumberFromString(normalizedPhone);
+  if (parsedPhone?.country && isProfileCountry(parsedPhone.country)) {
+    return {
+      country: parsedPhone.country,
+      dialCode: getDialCodeForProfileCountry(parsedPhone.country),
+      number: parsedPhone.nationalNumber,
     };
   }
 

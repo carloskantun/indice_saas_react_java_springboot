@@ -12,7 +12,7 @@ export interface AttendancePunchState {
 export type AttendancePunchAction = 'check_in' | 'check_out' | 'break_out' | 'break_in';
 
 export interface AttendancePunchValidationMessages {
-  checkInAlreadyActive: string;
+  checkInAlreadyRecorded: string;
   checkOutRequiresCheckIn: string;
 }
 
@@ -34,8 +34,8 @@ export function getAttendancePunchValidationMessage(
   punchState: AttendancePunchState,
   messages: AttendancePunchValidationMessages,
 ): string | null {
-  if (action === 'check_in' && punchState.hasActiveCheckIn) {
-    return messages.checkInAlreadyActive;
+  if (action === 'check_in' && punchState.hasCheckIn) {
+    return messages.checkInAlreadyRecorded;
   }
 
   if (action === 'check_out' && !punchState.hasActiveCheckIn) {

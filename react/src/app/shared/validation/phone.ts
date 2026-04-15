@@ -1,11 +1,13 @@
 import {
   AsYouType,
+  getCountryCallingCode,
+  isSupportedCountry,
   parsePhoneNumberFromString,
+  validatePhoneNumberLength,
   type CountryCode,
 } from 'libphonenumber-js/max';
 
 import {
-  getDialCodeForProfileCountry,
   isProfileCountry,
   type ProfileCountry,
 } from '../profileCountries';
@@ -17,7 +19,7 @@ export type PhoneValidationError =
 export type PhoneValidationResult =
   | {
       ok: true;
-      country: ProfileCountry;
+      country: CountryCode;
       e164: string;
       international: string;
       national: string;
@@ -27,59 +29,108 @@ export type PhoneValidationResult =
       error: PhoneValidationError;
     };
 
-const toLibPhoneCountryCode = (country: ProfileCountry): CountryCode => (
-  country as unknown as CountryCode
-);
-
-const PHONE_DIGIT_LIMITS: Record<ProfileCountry, number> = {
-  AR: 11,
-  BR: 11,
-  CA: 10,
-  CL: 9,
-  CO: 10,
-  ES: 9,
-  MX: 10,
-  PE: 9,
-  US: 10,
-};
+const MAX_PHONE_DIGITS = 15;
+const PHONE_DIGIT_LIMIT_CACHE = new Map<CountryCode, number>();
 
 function stripToDigits(rawNumber: string): string {
   return rawNumber.replace(/\D/g, '');
 }
 
-export function getPhoneDigitLimitForCountry(country?: string): number | undefined {
-  if (!country || !isProfileCountry(country)) {
+export function normalizePhoneCountry(country?: string): CountryCode | undefined {
+  const normalizedCountry = (country ?? '').trim().toUpperCase();
+  if (!normalizedCountry) {
     return undefined;
   }
 
-  return PHONE_DIGIT_LIMITS[country];
+  return isSupportedCountry(normalizedCountry as CountryCode)
+    ? (normalizedCountry as CountryCode)
+    : undefined;
+}
+
+function inferNationalDigitLimit(country: CountryCode): number {
+  const cachedLimit = PHONE_DIGIT_LIMIT_CACHE.get(country);
+  if (cachedLimit !== undefined) {
+    return cachedLimit;
+  }
+
+  for (let digitCount = 1; digitCount <= MAX_PHONE_DIGITS; digitCount += 1) {
+    const lengthResult = validatePhoneNumberLength('0'.repeat(digitCount), country);
+    if (lengthResult === 'TOO_LONG') {
+      const inferredLimit = digitCount - 1;
+      PHONE_DIGIT_LIMIT_CACHE.set(country, inferredLimit);
+      return inferredLimit;
+    }
+  }
+
+  PHONE_DIGIT_LIMIT_CACHE.set(country, MAX_PHONE_DIGITS);
+  return MAX_PHONE_DIGITS;
+}
+
+function extractNationalDigitsForCountry(rawNumber: string, country: CountryCode): string {
+  const digits = stripToDigits(rawNumber ?? '');
+  if (!digits) {
+    return '';
+  }
+
+  const trimmedNumber = rawNumber.trim();
+  const internationalCandidate = parsePhoneNumberFromString(
+    trimmedNumber.startsWith('+') ? trimmedNumber : `+${digits}`,
+  );
+
+  if (internationalCandidate?.country === country) {
+    return internationalCandidate.nationalNumber;
+  }
+
+  const countryCallingCode = getCountryCallingCode(country);
+  if (digits.length > countryCallingCode.length && digits.startsWith(countryCallingCode)) {
+    const withoutCountryCode = digits.slice(countryCallingCode.length);
+    if (validatePhoneNumberLength(withoutCountryCode, country) !== 'TOO_LONG') {
+      return withoutCountryCode;
+    }
+  }
+
+  return digits;
+}
+
+function trimToCountryPhoneLength(rawDigits: string, country: CountryCode): string {
+  let acceptedDigits = '';
+
+  for (const digit of rawDigits) {
+    const nextDigits = `${acceptedDigits}${digit}`;
+    if (validatePhoneNumberLength(nextDigits, country) === 'TOO_LONG') {
+      break;
+    }
+    acceptedDigits = nextDigits;
+  }
+
+  return acceptedDigits;
+}
+
+export function getPhoneDigitLimitForCountry(country?: string): number | undefined {
+  const normalizedCountry = normalizePhoneCountry(country);
+  if (!normalizedCountry) {
+    return undefined;
+  }
+
+  return inferNationalDigitLimit(normalizedCountry);
 }
 
 export function normalizePhoneInputForCountry(
   rawNumber: string,
   country?: string,
 ): string {
-  if (!country || !isProfileCountry(country)) {
+  const normalizedCountry = normalizePhoneCountry(country);
+  if (!normalizedCountry) {
     return rawNumber;
   }
 
-  const digitLimit = PHONE_DIGIT_LIMITS[country];
-  let digits = stripToDigits(rawNumber ?? '');
-
-  if (!digits) {
+  const nationalDigits = extractNationalDigitsForCountry(rawNumber, normalizedCountry);
+  if (!nationalDigits) {
     return '';
   }
 
-  const dialCodeDigits = getDialCodeForProfileCountry(country).replace(/\D/g, '');
-
-  // If the user pastes a full international number while a country is already selected,
-  // keep only the national number because the UI shows the dial code separately.
-  if (digits.length > digitLimit && digits.startsWith(dialCodeDigits)) {
-    digits = digits.slice(dialCodeDigits.length);
-  }
-
-  const normalizedDigits = digits.slice(0, digitLimit);
-  return new AsYouType(toLibPhoneCountryCode(country)).input(normalizedDigits);
+  const trimmedDigits = trimToCountryPhoneLength(nationalDigits, normalizedCountry);
+  return new AsYouType(normalizedCountry).input(trimmedDigits);
 }
 
 /**
@@ -88,21 +139,30 @@ export function normalizePhoneInputForCountry(
  */
 export function validatePhoneForCountry(
   rawNumber: string,
-  country: ProfileCountry,
+  country: string,
 ): PhoneValidationResult {
+  const normalizedCountry = normalizePhoneCountry(country);
+  if (!normalizedCountry) {
+    return { ok: false, error: 'unsupported_country' };
+  }
+
   const normalized = rawNumber.trim();
   if (!normalized) {
     return { ok: false, error: 'invalid_phone' };
   }
 
-  const phoneNumber = parsePhoneNumberFromString(normalized, toLibPhoneCountryCode(country));
+  const phoneNumber = parsePhoneNumberFromString(normalized, normalizedCountry);
   if (!phoneNumber || !phoneNumber.isValid()) {
+    return { ok: false, error: 'invalid_phone' };
+  }
+
+  if (phoneNumber.country && phoneNumber.country !== normalizedCountry) {
     return { ok: false, error: 'invalid_phone' };
   }
 
   return {
     ok: true,
-    country,
+    country: normalizedCountry,
     e164: phoneNumber.number,
     international: phoneNumber.formatInternational(),
     national: phoneNumber.formatNational(),
@@ -126,9 +186,10 @@ export function formatPhoneAsYouType(
 ): string {
   const normalized = rawNumber ?? '';
 
-  if (!country || !isProfileCountry(country)) {
+  const normalizedCountry = normalizePhoneCountry(country);
+  if (!normalizedCountry) {
     return normalized;
   }
 
-  return new AsYouType(toLibPhoneCountryCode(country)).input(normalized);
+  return new AsYouType(normalizedCountry).input(normalized);
 }

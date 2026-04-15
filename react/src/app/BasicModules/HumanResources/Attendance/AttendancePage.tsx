@@ -141,7 +141,7 @@ const attendanceCopy = {
       locationDenied: 'You must allow location access to register attendance.',
       locationUnavailable: 'The device location could not be retrieved.',
       photoRequiredError: 'Take a photo before recording attendance.',
-      checkInAlreadyActive: 'You already have an active check-in.',
+      checkInAlreadyRecorded: 'Check-in has already been recorded for today.',
       checkOutRequiresCheckIn: 'Check-out requires an active check-in.',
       statusActiveTitle: 'You are checked in.',
       statusActiveDescription: 'Checked in at',
@@ -248,7 +248,7 @@ const attendanceCopy = {
       locationDenied: 'Debes permitir la ubicación para registrar asistencia.',
       locationUnavailable: 'No se pudo obtener la ubicación del dispositivo.',
       photoRequiredError: 'Toma una foto antes de registrar asistencia.',
-      checkInAlreadyActive: 'Ya tienes un ingreso activo.',
+      checkInAlreadyRecorded: 'El ingreso de hoy ya fue registrado.',
       checkOutRequiresCheckIn: 'Debes registrar un ingreso antes de registrar la salida.',
       statusActiveTitle: 'Ya registraste tu ingreso.',
       statusActiveDescription: 'Ingreso registrado a las',
@@ -319,16 +319,23 @@ export default function Attendance() {
       ? `${copy.recorder.statusCheckedOutDescription} ${formatAttendanceTime(selectedItem?.last_check_out_at, currentLanguage.code)}`
       : copy.recorder.statusIdleDescription;
 
+  const refreshDashboardSnapshot = async (attendanceDate = currentAttendanceDate) => {
+    const response = await humanResourcesApi.getMyAttendanceDashboard(attendanceDate);
+    setDashboard(response);
+    return response;
+  };
+
   const loadDashboard = async (attendanceDate = currentAttendanceDate) => {
     setIsLoadingDashboard(true);
     setErrorMessage('');
 
     try {
-      const response = await humanResourcesApi.getMyAttendanceDashboard(attendanceDate);
-      setDashboard(response);
+      const response = await refreshDashboardSnapshot(attendanceDate);
+      return response;
     } catch (error) {
       setDashboard(null);
       setErrorMessage(error instanceof Error ? error.message : copy.labels.retry);
+      return null;
     } finally {
       setIsLoadingDashboard(false);
     }
@@ -479,13 +486,30 @@ export default function Attendance() {
       eventType,
       punchState,
       {
-        checkInAlreadyActive: copy.recorder.checkInAlreadyActive,
+        checkInAlreadyRecorded: copy.recorder.checkInAlreadyRecorded,
         checkOutRequiresCheckIn: copy.recorder.checkOutRequiresCheckIn,
       },
     );
 
     if (validationMessage) {
       setErrorMessage(validationMessage);
+      return;
+    }
+
+    const latestDashboard = await loadDashboard(currentAttendanceDate);
+    const latestSelectedItem = latestDashboard?.items[0] ?? null;
+    const latestPunchState = deriveAttendancePunchState(latestSelectedItem);
+    const latestValidationMessage = getAttendancePunchValidationMessage(
+      eventType,
+      latestPunchState,
+      {
+        checkInAlreadyRecorded: copy.recorder.checkInAlreadyRecorded,
+        checkOutRequiresCheckIn: copy.recorder.checkOutRequiresCheckIn,
+      },
+    );
+
+    if (latestValidationMessage) {
+      setErrorMessage(latestValidationMessage);
       return;
     }
 
@@ -534,6 +558,27 @@ export default function Attendance() {
         },
       });
     } catch (error) {
+      try {
+        const postErrorDashboard = await refreshDashboardSnapshot(currentAttendanceDate);
+        const postErrorSelectedItem = postErrorDashboard?.items[0] ?? null;
+        const postErrorPunchState = deriveAttendancePunchState(postErrorSelectedItem);
+        const postErrorValidationMessage = getAttendancePunchValidationMessage(
+          eventType,
+          postErrorPunchState,
+          {
+            checkInAlreadyRecorded: copy.recorder.checkInAlreadyRecorded,
+            checkOutRequiresCheckIn: copy.recorder.checkOutRequiresCheckIn,
+          },
+        );
+
+        if (postErrorValidationMessage) {
+          setErrorMessage(postErrorValidationMessage);
+          return;
+        }
+      } catch {
+        // Fall back to the original error below if the refresh also fails.
+      }
+
       setErrorMessage(error instanceof Error ? error.message : copy.labels.retry);
       return;
     }
@@ -544,7 +589,7 @@ export default function Attendance() {
 
   const recorderDisabled = !selectedItem;
   const photoCaptureDisabled = recorderDisabled || isSubmitting || punchState.hasActiveCheckIn || punchState.hasCheckOut;
-  const canInlineCheckIn = Boolean(selectedItem) && !punchState.hasActiveCheckIn;
+  const canInlineCheckIn = Boolean(selectedItem) && !punchState.hasCheckIn;
   const canInlineCheckOut = Boolean(selectedItem) && punchState.hasActiveCheckIn;
 
   const handleUpdateStatus = async (

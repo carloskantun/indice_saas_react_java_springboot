@@ -188,7 +188,7 @@ export function ColumnasConfigModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleCancel}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col p-0">
+      <DialogContent hideCloseButton className="max-w-2xl max-h-[80vh] flex flex-col p-0">
         <DialogHeader className="sr-only">
           <DialogTitle>{copy.title}</DialogTitle>
           <DialogDescription>{copy.description}</DialogDescription>
