@@ -4,12 +4,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.indice.erp.auth.AuthSessionUser;
 import com.indice.erp.auth.SessionAuthService;
+import com.indice.erp.storage.ObjectStorageDisabledException;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -93,5 +95,58 @@ class HrEmployeeApiControllerTest {
                     """))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.message").value("Employee not found."));
+    }
+
+    @Test
+    void detailsReturnsExpandedEmployeeEnvelope() throws Exception {
+        var currentUser = new AuthSessionUser(1L, 1L, "Usuario Demo", "admin");
+        var detailBody = new LinkedHashMap<String, Object>();
+        detailBody.put("employee_id", 12L);
+        detailBody.put("employee", Map.of(
+            "id", 12L,
+            "full_name", "Jordan Smith",
+            "email", "jordan@example.com"
+        ));
+        detailBody.put("profile", Map.of(
+            "registration_country", "CA",
+            "state_province", "Ontario"
+        ));
+        detailBody.put("access", Map.of(
+            "access_role", "manager",
+            "invitation_status", "not_invited"
+        ));
+        detailBody.put("documents", List.of());
+
+        given(sessionAuthService.currentUser(any())).willReturn(Optional.of(currentUser));
+        given(hrEmployeeService.getEmployeeDetails(1L, 12L)).willReturn(detailBody);
+
+        mockMvc.perform(get("/api/v1/hr/employees/12"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.employee_id").value(12))
+            .andExpect(jsonPath("$.employee.full_name").value("Jordan Smith"))
+            .andExpect(jsonPath("$.profile.registration_country").value("CA"))
+            .andExpect(jsonPath("$.access.access_role").value("manager"));
+    }
+
+    @Test
+    void documentPresignReturnsServiceUnavailableWhenStorageIsDisabled() throws Exception {
+        var currentUser = new AuthSessionUser(1L, 1L, "Usuario Demo", "admin");
+
+        given(sessionAuthService.currentUser(any())).willReturn(Optional.of(currentUser));
+        given(hrEmployeeService.createDocumentUpload(anyLong(), anyLong(), any(Map.class)))
+            .willThrow(new ObjectStorageDisabledException("Object storage is not enabled."));
+
+        mockMvc.perform(post("/api/v1/hr/employees/12/documents/presign-upload")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "document_type": "resume",
+                      "file_name": "resume.pdf",
+                      "content_type": "application/pdf",
+                      "size_bytes": 1024
+                    }
+                    """))
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(jsonPath("$.message").value("Object storage is not enabled."));
     }
 }

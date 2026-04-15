@@ -81,7 +81,20 @@ public class HrAttendanceService {
     }
 
     public Map<String, Object> listDashboard(long companyId, LocalDate date) {
-        var employees = listAttendanceEmployees(companyId);
+        return buildDashboard(companyId, date, listAttendanceEmployees(companyId));
+    }
+
+    @Transactional
+    public Map<String, Object> selfDashboard(long companyId, long userId, LocalDate date) {
+        return buildDashboard(companyId, date, List.of(resolveSessionAttendanceEmployee(companyId, userId)));
+    }
+
+    @Transactional
+    public long resolveSelfEmployeeId(long companyId, long userId) {
+        return resolveSessionAttendanceEmployee(companyId, userId).id();
+    }
+
+    private Map<String, Object> buildDashboard(long companyId, LocalDate date, List<AttendanceEmployee> employees) {
         var dailyRecordsByEmployee = loadDailyRecords(companyId, date);
         var scheduleRulesByEmployee = loadScheduleRules(companyId, date);
         var locations = listLocations(companyId);
@@ -202,6 +215,12 @@ public class HrAttendanceService {
         body.put("month", month.toString());
         body.put("items", days);
         return body;
+    }
+
+    @Transactional
+    public Map<String, Object> selfCalendar(long companyId, long userId, YearMonth month) {
+        var employee = resolveSessionAttendanceEmployee(companyId, userId);
+        return employeeCalendar(companyId, employee.id(), month);
     }
 
     public Map<String, Object> controlOverview(long companyId, LocalDate date) {
@@ -941,6 +960,14 @@ public class HrAttendanceService {
         return body;
     }
 
+    @Transactional
+    public Map<String, Object> createSelfPhotoUpload(long companyId, long userId, Map<String, Object> payload) {
+        var employee = resolveSessionAttendanceEmployee(companyId, userId);
+        var normalizedPayload = new LinkedHashMap<String, Object>(payload);
+        normalizedPayload.put("employee_id", employee.id());
+        return createPhotoUpload(companyId, normalizedPayload);
+    }
+
     public Map<String, Object> recordKioskEvent(long companyId, long userId, Map<String, Object> payload) {
         var employeeId = parseLong(payload, "employee_id");
         if (employeeId == null || employeeId <= 0) {
@@ -1065,6 +1092,14 @@ public class HrAttendanceService {
         return result;
     }
 
+    @Transactional
+    public Map<String, Object> recordSelfKioskEvent(long companyId, long userId, Map<String, Object> payload) {
+        var employee = resolveSessionAttendanceEmployee(companyId, userId);
+        var normalizedPayload = new LinkedHashMap<String, Object>(payload);
+        normalizedPayload.put("employee_id", employee.id());
+        return recordKioskEvent(companyId, userId, normalizedPayload);
+    }
+
     public Map<String, Object> updateDailyRecord(long companyId, long userId, long employeeId, LocalDate date, Map<String, Object> payload) {
         loadAttendanceEmployee(companyId, employeeId);
         var targetStatusRaw = stringValue(payload, "status", "corrected_status");
@@ -1106,6 +1141,12 @@ public class HrAttendanceService {
         body.put("effective_status", resolveEffectiveStatus(refreshed, scheduleRule));
         body.put("notes", refreshed != null ? refreshed.notes() : null);
         return body;
+    }
+
+    @Transactional
+    public Map<String, Object> updateSelfDailyRecord(long companyId, long userId, LocalDate date, Map<String, Object> payload) {
+        var employee = resolveSessionAttendanceEmployee(companyId, userId);
+        return updateDailyRecord(companyId, userId, employee.id(), date, payload);
     }
 
     public void ensureDefaultScheduleAssignment(long companyId, long employeeId, long createdBy) {
@@ -1199,6 +1240,304 @@ public class HrAttendanceService {
             throw new NoSuchElementException("Employee not found.");
         }
         return employees.getFirst();
+    }
+
+    private AttendanceEmployee resolveSessionAttendanceEmployee(long companyId, long userId) {
+        var linkedEmployees = jdbcTemplate.query(
+            """
+                SELECT e.id,
+                       COALESCE(e.employee_number, '') AS employee_number,
+                       TRIM(CONCAT_WS(' ', COALESCE(e.first_name, ''), COALESCE(e.last_name, ''))) AS full_name,
+                       COALESCE(e.position, '') AS position,
+                       COALESCE(e.department, '') AS department,
+                       COALESCE(LOWER(e.status), 'active') AS status,
+                       unit_ref.id AS unit_id,
+                       unit_ref.name AS unit_name,
+                       business_ref.id AS business_id,
+                       business_ref.name AS business_name
+                FROM hr_employee_portal_access access_ref
+                JOIN hr_employees e ON e.id = access_ref.employee_id
+                LEFT JOIN units unit_ref ON unit_ref.id = e.unit_id
+                LEFT JOIN businesses business_ref ON business_ref.id = e.business_id
+                WHERE access_ref.company_id = ?
+                  AND e.company_id = ?
+                  AND access_ref.linked_user_id = ?
+                  AND COALESCE(LOWER(e.status), 'active') <> 'terminated'
+                ORDER BY e.id ASC
+                LIMIT 1
+                """,
+            (rs, rowNum) -> mapAttendanceEmployee(rs),
+            companyId,
+            companyId,
+            userId
+        );
+
+        if (!linkedEmployees.isEmpty()) {
+            return linkedEmployees.getFirst();
+        }
+
+        var sessionUser = loadAttendanceSessionUser(companyId, userId);
+        var emailMatchedEmployees = jdbcTemplate.query(
+            """
+                SELECT e.id,
+                       COALESCE(e.employee_number, '') AS employee_number,
+                       TRIM(CONCAT_WS(' ', COALESCE(e.first_name, ''), COALESCE(e.last_name, ''))) AS full_name,
+                       COALESCE(e.position, '') AS position,
+                       COALESCE(e.department, '') AS department,
+                       COALESCE(LOWER(e.status), 'active') AS status,
+                       unit_ref.id AS unit_id,
+                       unit_ref.name AS unit_name,
+                       business_ref.id AS business_id,
+                       business_ref.name AS business_name,
+                       access_ref.linked_user_id
+                FROM hr_employees e
+                LEFT JOIN hr_employee_portal_access access_ref ON access_ref.employee_id = e.id
+                LEFT JOIN units unit_ref ON unit_ref.id = e.unit_id
+                LEFT JOIN businesses business_ref ON business_ref.id = e.business_id
+                WHERE e.company_id = ?
+                  AND LOWER(COALESCE(e.email, '')) = ?
+                ORDER BY e.id ASC
+                LIMIT 1
+                """,
+            (rs, rowNum) -> new EmailMatchedAttendanceEmployee(
+                mapAttendanceEmployee(rs),
+                getNullableLong(rs, "linked_user_id")
+            ),
+            companyId,
+            sessionUser.email()
+        );
+
+        if (!emailMatchedEmployees.isEmpty()) {
+            var matchedEmployee = emailMatchedEmployees.getFirst();
+            if ("terminated".equals(matchedEmployee.employee().status())) {
+                throw new IllegalArgumentException("Your HR employee profile is terminated. Contact an administrator.");
+            }
+            if (matchedEmployee.linkedUserId() != null && matchedEmployee.linkedUserId() != userId) {
+                throw new IllegalArgumentException("Your employee profile is already linked to another user.");
+            }
+
+            bindEmployeeToPlatformUser(companyId, matchedEmployee.employee().id(), userId);
+            ensureAttendanceProfileDependencies(companyId, matchedEmployee.employee().id(), userId);
+            return loadAttendanceEmployee(companyId, matchedEmployee.employee().id());
+        }
+
+        var provisionedEmployeeId = provisionAttendanceEmployeeForUser(companyId, userId, sessionUser);
+        return loadAttendanceEmployee(companyId, provisionedEmployeeId);
+    }
+
+    private AttendanceSessionUser loadAttendanceSessionUser(long companyId, long userId) {
+        var rows = jdbcTemplate.query(
+            """
+                SELECT u.id,
+                       LOWER(TRIM(COALESCE(u.email, ''))) AS email,
+                       COALESCE(NULLIF(TRIM(u.full_name), ''), TRIM(u.email), CONCAT('User ', u.id)) AS full_name
+                FROM users u
+                JOIN user_companies uc ON uc.user_id = u.id
+                WHERE u.id = ?
+                  AND uc.company_id = ?
+                  AND LOWER(COALESCE(uc.status, 'active')) IN ('active', 'activo')
+                LIMIT 1
+                """,
+            (rs, rowNum) -> new AttendanceSessionUser(
+                rs.getLong("id"),
+                safe(rs.getString("email")),
+                safe(rs.getString("full_name"))
+            ),
+            userId,
+            companyId
+        );
+
+        if (rows.isEmpty()) {
+            throw new NoSuchElementException("No active company user was found for the current session.");
+        }
+
+        var sessionUser = rows.getFirst();
+        if (sessionUser.email().isBlank()) {
+            throw new IllegalArgumentException("Your user account must have an email address to use Attendance.");
+        }
+        return sessionUser;
+    }
+
+    private long provisionAttendanceEmployeeForUser(long companyId, long userId, AttendanceSessionUser sessionUser) {
+        var nameParts = deriveEmployeeName(sessionUser.fullName(), sessionUser.email());
+        var employeeNumber = generateNextAttendanceEmployeeNumber(companyId);
+
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+        jdbcTemplate.update(connection -> {
+            var statement = connection.prepareStatement(
+                """
+                    INSERT INTO hr_employees
+                    (company_id, employee_number, first_name, last_name, email, hire_date, pay_period, salary_type, contract_type, status, created_by)
+                    VALUES (?, ?, ?, ?, ?, CURRENT_DATE(), 'weekly', 'daily', 'permanent', 'active', ?)
+                    """,
+                new String[] {"id"}
+            );
+            statement.setLong(1, companyId);
+            statement.setString(2, employeeNumber);
+            statement.setString(3, nameParts.firstName());
+            statement.setString(4, nameParts.lastName());
+            statement.setString(5, sessionUser.email());
+            statement.setLong(6, userId);
+            return statement;
+        }, keyHolder);
+
+        var employeeId = keyHolder.getKey() == null ? 0L : keyHolder.getKey().longValue();
+        if (employeeId <= 0) {
+            throw new IllegalStateException("The employee profile could not be provisioned.");
+        }
+
+        bindEmployeeToPlatformUser(companyId, employeeId, userId);
+        ensureAttendanceProfileDependencies(companyId, employeeId, userId);
+        return employeeId;
+    }
+
+    private void bindEmployeeToPlatformUser(long companyId, long employeeId, long userId) {
+        jdbcTemplate.update(
+            """
+                INSERT INTO hr_employee_portal_access
+                (employee_id, company_id, access_role, linked_user_id, invitation_status, created_by)
+                VALUES (?, ?, 'employee', ?, 'linked', ?)
+                ON DUPLICATE KEY UPDATE
+                  company_id = VALUES(company_id),
+                  linked_user_id = VALUES(linked_user_id),
+                  invitation_status = VALUES(invitation_status),
+                  updated_at = CURRENT_TIMESTAMP
+                """,
+            employeeId,
+            companyId,
+            userId,
+            userId
+        );
+    }
+
+    private void ensureAttendanceProfileDependencies(long companyId, long employeeId, long userId) {
+        jdbcTemplate.update(
+            """
+                INSERT INTO hr_employee_profiles (employee_id, company_id, workday_hours)
+                VALUES (?, ?, 8.00)
+                ON DUPLICATE KEY UPDATE
+                  company_id = VALUES(company_id),
+                  updated_at = CURRENT_TIMESTAMP
+                """,
+            employeeId,
+            companyId
+        );
+        ensureDefaultScheduleAssignment(companyId, employeeId, userId);
+        ensureDefaultAccessProfile(companyId, employeeId, userId);
+    }
+
+    private AttendanceNameParts deriveEmployeeName(String fullName, String email) {
+        var normalizedFullName = fullName == null ? "" : fullName.trim().replaceAll("\\s+", " ");
+        if (normalizedFullName.isBlank()) {
+            var emailLocalPart = email == null ? "" : email.trim();
+            var atIndex = emailLocalPart.indexOf('@');
+            normalizedFullName = atIndex > 0 ? emailLocalPart.substring(0, atIndex) : emailLocalPart;
+            normalizedFullName = normalizedFullName.replace('.', ' ').replace('_', ' ').replace('-', ' ').trim();
+        }
+
+        if (normalizedFullName.isBlank()) {
+            return new AttendanceNameParts("User", "Attendance");
+        }
+
+        var parts = normalizedFullName.split("\\s+");
+        var firstName = parts[0].trim();
+        var lastName = parts.length > 1
+            ? String.join(" ", java.util.Arrays.copyOfRange(parts, 1, parts.length)).trim()
+            : "User";
+
+        if (firstName.isBlank()) {
+            firstName = "User";
+        }
+        if (lastName.isBlank()) {
+            lastName = "User";
+        }
+        return new AttendanceNameParts(firstName, lastName);
+    }
+
+    private void ensureAttendanceEmployeeNumberSequenceRow(long companyId) {
+        jdbcTemplate.update(
+            """
+                INSERT INTO hr_employee_number_sequences (company_id, prefix, padding, next_number)
+                SELECT ?, 'EMP', 4,
+                       COALESCE(MAX(
+                         CASE
+                           WHEN TRIM(COALESCE(employee_number, '')) REGEXP '^EMP-[0-9]+$'
+                             THEN CAST(SUBSTRING(TRIM(employee_number), 5) AS UNSIGNED)
+                           ELSE 0
+                         END
+                       ), 0) + 1
+                FROM hr_employees
+                WHERE company_id = ?
+                ON DUPLICATE KEY UPDATE
+                  next_number = GREATEST(hr_employee_number_sequences.next_number, VALUES(next_number))
+                """,
+            companyId,
+            companyId
+        );
+    }
+
+    private AttendanceEmployeeNumberSequence loadAttendanceEmployeeNumberSequence(long companyId) {
+        ensureAttendanceEmployeeNumberSequenceRow(companyId);
+
+        var rows = jdbcTemplate.query(
+            """
+                SELECT prefix, padding, next_number
+                FROM hr_employee_number_sequences
+                WHERE company_id = ?
+                FOR UPDATE
+                """,
+            (rs, rowNum) -> new AttendanceEmployeeNumberSequence(
+                safe(rs.getString("prefix")),
+                rs.getInt("padding"),
+                rs.getLong("next_number")
+            ),
+            companyId
+        );
+
+        if (rows.isEmpty()) {
+            throw new IllegalStateException("Employee number sequence could not be initialized.");
+        }
+
+        return rows.getFirst();
+    }
+
+    private String generateNextAttendanceEmployeeNumber(long companyId) {
+        while (true) {
+            var sequence = loadAttendanceEmployeeNumberSequence(companyId);
+            var candidate = formatAttendanceEmployeeNumber(sequence.prefix(), sequence.padding(), sequence.nextNumber());
+
+            jdbcTemplate.update(
+                """
+                    UPDATE hr_employee_number_sequences
+                    SET next_number = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE company_id = ?
+                    """,
+                sequence.nextNumber() + 1,
+                companyId
+            );
+
+            Integer count = jdbcTemplate.queryForObject(
+                """
+                    SELECT COUNT(*)
+                    FROM hr_employees
+                    WHERE company_id = ?
+                      AND employee_number = ?
+                    """,
+                Integer.class,
+                companyId,
+                candidate
+            );
+            if (count == null || count == 0) {
+                return candidate;
+            }
+        }
+    }
+
+    private String formatAttendanceEmployeeNumber(String prefix, int padding, long nextNumber) {
+        var normalizedPrefix = prefix == null || prefix.isBlank() ? "EMP" : prefix.trim().toUpperCase(Locale.ROOT);
+        var effectivePadding = Math.max(padding, 4);
+        var digits = String.format(Locale.ROOT, "%0" + effectivePadding + "d", nextNumber);
+        return normalizedPrefix + "-" + digits;
     }
 
     private List<AttendanceEmployee> listAttendanceEmployees(long companyId) {
@@ -3209,6 +3548,32 @@ public class HrAttendanceService {
         String unitName,
         Long businessId,
         String businessName
+    ) {
+    }
+
+    private record EmailMatchedAttendanceEmployee(
+        AttendanceEmployee employee,
+        Long linkedUserId
+    ) {
+    }
+
+    private record AttendanceSessionUser(
+        long userId,
+        String email,
+        String fullName
+    ) {
+    }
+
+    private record AttendanceNameParts(
+        String firstName,
+        String lastName
+    ) {
+    }
+
+    private record AttendanceEmployeeNumberSequence(
+        String prefix,
+        int padding,
+        long nextNumber
     ) {
     }
 

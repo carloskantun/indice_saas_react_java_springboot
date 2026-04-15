@@ -1,6 +1,7 @@
 package com.indice.erp.hr;
 
 import com.indice.erp.auth.SessionAuthService;
+import com.indice.erp.storage.ObjectStorageDisabledException;
 import jakarta.servlet.http.HttpSession;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -46,6 +47,20 @@ public class HrEmployeeApiController {
         return ResponseEntity.ok(body);
     }
 
+    @GetMapping("/{employeeId}")
+    public ResponseEntity<?> details(HttpSession session, @PathVariable long employeeId) {
+        var user = sessionAuthService.currentUser(session);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Unauthorized"));
+        }
+
+        try {
+            return ResponseEntity.ok(hrEmployeeService.getEmployeeDetails(user.get().companyId(), employeeId));
+        } catch (NoSuchElementException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", ex.getMessage()));
+        }
+    }
+
     @PostMapping
     public ResponseEntity<?> create(HttpSession session, @RequestBody Map<String, Object> payload) {
         var user = sessionAuthService.currentUser(session);
@@ -78,6 +93,78 @@ public class HrEmployeeApiController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", ex.getMessage()));
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
+        }
+    }
+
+    @PostMapping("/{employeeId}/documents/presign-upload")
+    public ResponseEntity<?> createDocumentUpload(
+        HttpSession session,
+        @PathVariable long employeeId,
+        @RequestBody Map<String, Object> payload
+    ) {
+        var user = sessionAuthService.currentUser(session);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Unauthorized"));
+        }
+
+        try {
+            return ResponseEntity.ok(
+                hrEmployeeService.createDocumentUpload(user.get().companyId(), employeeId, payload)
+            );
+        } catch (NoSuchElementException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", ex.getMessage()));
+        } catch (ObjectStorageDisabledException ex) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("message", ex.getMessage()));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
+        }
+    }
+
+    @PostMapping("/{employeeId}/documents")
+    public ResponseEntity<?> registerDocument(
+        HttpSession session,
+        @PathVariable long employeeId,
+        @RequestBody Map<String, Object> payload
+    ) {
+        var user = sessionAuthService.currentUser(session);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Unauthorized"));
+        }
+
+        try {
+            return ResponseEntity.status(HttpStatus.CREATED).body(
+                hrEmployeeService.registerEmployeeDocument(
+                    user.get().companyId(),
+                    user.get().userId(),
+                    employeeId,
+                    payload
+                )
+            );
+        } catch (NoSuchElementException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", ex.getMessage()));
+        } catch (ObjectStorageDisabledException ex) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("message", ex.getMessage()));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/{employeeId}/documents/{documentId}")
+    public ResponseEntity<?> deleteDocument(
+        HttpSession session,
+        @PathVariable long employeeId,
+        @PathVariable long documentId
+    ) {
+        var user = sessionAuthService.currentUser(session);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Unauthorized"));
+        }
+
+        try {
+            hrEmployeeService.deleteEmployeeDocument(user.get().companyId(), employeeId, documentId);
+            return ResponseEntity.ok(Map.of("success", true));
+        } catch (NoSuchElementException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", ex.getMessage()));
         }
     }
 

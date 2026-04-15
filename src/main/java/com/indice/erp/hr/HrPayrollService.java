@@ -168,6 +168,7 @@ public class HrPayrollService {
         }
 
         periodEndDate = normalizeRunPeriodEndDate(payPeriod, periodStartDate);
+        var normalizedPeriodEndDate = periodEndDate;
 
         var groupingMode = normalizeGroupingMode(stringValue(payload, "grouping_mode"), preferences.groupingMode());
         var employees = loadEligibleEmployees(companyId, payPeriod, true);
@@ -179,7 +180,7 @@ public class HrPayrollService {
         var createdRuns = new ArrayList<Map<String, Object>>();
 
         for (var group : groupedEmployees) {
-            var existingRun = findExistingRun(companyId, groupingMode, group.groupingKey(), payPeriod, periodStartDate, periodEndDate);
+            var existingRun = findExistingRun(companyId, groupingMode, group.groupingKey(), payPeriod, periodStartDate, normalizedPeriodEndDate);
             if (existingRun != null) {
                 var existingSummary = toRunSummaryMap(existingRun);
                 existingSummary.put("reused", true);
@@ -203,7 +204,7 @@ public class HrPayrollService {
                 statement.setString(4, nullable(group.groupingLabel()));
                 statement.setString(5, payPeriod);
                 statement.setObject(6, periodStartDate);
-                statement.setObject(7, periodEndDate);
+                statement.setObject(7, normalizedPeriodEndDate);
                 statement.setLong(8, userId);
                 return statement;
             }, keyHolder);
@@ -214,7 +215,7 @@ public class HrPayrollService {
             }
 
             for (var employee : group.employees()) {
-                createRunLine(companyId, runId, employee, preferences, payPeriod, periodStartDate, periodEndDate);
+                createRunLine(companyId, runId, employee, preferences, payPeriod, periodStartDate, normalizedPeriodEndDate);
             }
 
             recomputeRunTotals(runId);

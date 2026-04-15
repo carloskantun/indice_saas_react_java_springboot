@@ -10,8 +10,13 @@ import {
   Trash2,
   Wallet,
 } from 'lucide-react';
-import { AgregarColaboradorModal } from '../../../components/AgregarColaboradorModal';
-import type { ColaboradorData } from '../../../components/AgregarColaboradorModal';
+import {
+  EmployeeModal,
+  createEmptyEmployeeFormData,
+  type EmployeeDocumentType,
+  type EmployeeFormData,
+} from '../../../components/EmployeeModal';
+import { FailureToast } from '../../../components/FailureToast';
 import { LoadingBarOverlay, runWithMinimumDuration } from '../../../components/LoadingBarOverlay';
 import { SuccessToast } from '../../../components/SuccessToast';
 import { TerminarContratoModal, type ContractTerminationFormData } from '../../../components/TerminarContratoModal';
@@ -21,10 +26,23 @@ import {
 } from '../../../components/rh/ColumnasConfigModal';
 import { Button } from '../../../components/ui/button';
 import { Checkbox } from '../../../components/ui/checkbox';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '../../../components/ui/pagination';
 import { Skeleton } from '../../../components/ui/skeleton';
 import { useLanguage } from '../../../shared/context';
 import { dashboardApi } from '../../../api/dashboard';
-import { humanResourcesApi, type BackendEmployee } from '../../../api/humanResources';
+import {
+  humanResourcesApi,
+  type BackendEmployee,
+  type EmployeeDetailsResponse,
+} from '../../../api/humanResources';
 
 type EmployeeStatus = 'active' | 'inactive' | 'terminated';
 type EmployeePayPeriod = 'weekly' | 'biweekly' | 'monthly';
@@ -75,6 +93,8 @@ const employeePageCopy = {
     subtitle: 'Persisted employee records, assignments, and contracts',
     addEmployee: 'Add employee',
     configureColumns: 'Columns',
+    detailLoadingTitle: 'Loading employee details',
+    detailLoadingDescription: 'We are retrieving the complete employee profile, documents, and access settings.',
     loadingTitle: 'Saving employee changes',
     loadingDescription: 'We are updating the HR record and refreshing the employee table.',
     terminateLoadingTitle: 'Terminating employee',
@@ -86,6 +106,13 @@ const employeePageCopy = {
       updated: 'Employee updated successfully.',
       terminated: 'Employee terminated successfully.',
       deleted: 'Employee deleted successfully.',
+    },
+    errorMessages: {
+      load: 'Unable to load employees.',
+      detail: 'Unable to load employee details.',
+      save: 'Unable to save employee.',
+      delete: 'Unable to delete employee.',
+      terminate: 'Unable to terminate employee.',
     },
     summary: {
       total: 'Total employees',
@@ -111,6 +138,7 @@ const employeePageCopy = {
     columns: {
       selection: 'Selection',
       employee: 'Employee',
+      employeeNumber: 'Employee ID',
       email: 'Email',
       position: 'Position',
       department: 'Department',
@@ -128,6 +156,12 @@ const employeePageCopy = {
       selectEmployee: (name: string) => `Select ${name}`,
       deleteConfirm: 'Delete this terminated employee permanently?',
     },
+    pagination: {
+      previous: 'Previous',
+      next: 'Next',
+      showing: (start: number, end: number, total: number) => `Showing ${start}-${end} of ${total} employees`,
+      page: (current: number, total: number) => `Page ${current} of ${total}`,
+    },
     businessFallback: 'Unassigned',
     unitFallback: 'Unassigned',
     dateFallback: 'No date',
@@ -137,6 +171,8 @@ const employeePageCopy = {
     subtitle: 'Expedientes persistidos, asignaciones y contratos del personal',
     addEmployee: 'Agregar colaborador',
     configureColumns: 'Columnas',
+    detailLoadingTitle: 'Cargando detalle del colaborador',
+    detailLoadingDescription: 'Estamos obteniendo el perfil completo, documentos y accesos del colaborador.',
     loadingTitle: 'Guardando colaborador',
     loadingDescription: 'Estamos actualizando el expediente y refrescando la tabla.',
     terminateLoadingTitle: 'Terminando contrato',
@@ -148,6 +184,13 @@ const employeePageCopy = {
       updated: 'Colaborador actualizado correctamente.',
       terminated: 'Contrato terminado correctamente.',
       deleted: 'Colaborador eliminado correctamente.',
+    },
+    errorMessages: {
+      load: 'No se pudo cargar colaboradores.',
+      detail: 'No se pudo cargar el detalle del colaborador.',
+      save: 'No se pudo guardar el colaborador.',
+      delete: 'No se pudo eliminar el colaborador.',
+      terminate: 'No se pudo terminar el contrato.',
     },
     summary: {
       total: 'Total de colaboradores',
@@ -173,6 +216,7 @@ const employeePageCopy = {
     columns: {
       selection: 'Selección',
       employee: 'Colaborador',
+      employeeNumber: 'ID de colaborador',
       email: 'Correo',
       position: 'Puesto',
       department: 'Departamento',
@@ -190,6 +234,12 @@ const employeePageCopy = {
       selectEmployee: (name: string) => `Seleccionar a ${name}`,
       deleteConfirm: '¿Eliminar permanentemente este colaborador terminado?',
     },
+    pagination: {
+      previous: 'Anterior',
+      next: 'Siguiente',
+      showing: (start: number, end: number, total: number) => `Mostrando ${start}-${end} de ${total} colaboradores`,
+      page: (current: number, total: number) => `Página ${current} de ${total}`,
+    },
     businessFallback: 'Sin asignar',
     unitFallback: 'Sin asignar',
     dateFallback: 'Sin fecha',
@@ -198,9 +248,11 @@ const employeePageCopy = {
 
 const columnsStorageKey = 'rh-colaboradores-columns-v3';
 const allFilterValue = 'all';
+const employeesPerPage = 10;
 
 const createDefaultColumns = (copy: typeof employeePageCopy.en | typeof employeePageCopy.es): ColumnConfig[] => [
   { id: 'employee', label: copy.columns.employee, visible: true, locked: true },
+  { id: 'employeeNumber', label: copy.columns.employeeNumber, visible: false },
   { id: 'email', label: copy.columns.email, visible: true },
   { id: 'position', label: copy.columns.position, visible: true },
   { id: 'department', label: copy.columns.department, visible: true },
@@ -268,6 +320,18 @@ const formatDate = (value: string, locale: string, fallback: string) => {
   }).format(parsed);
 };
 
+const normalizeErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  if (typeof error === 'string' && error.trim()) {
+    return error;
+  }
+
+  return fallback;
+};
+
 const getStatusClasses = (status: EmployeeStatus) => {
   switch (status) {
     case 'active':
@@ -310,24 +374,86 @@ const mapEmployee = (
   status: employee.status,
 });
 
-const toModalSeed = (employee: EmployeeViewModel) => ({
-  nombre: employee.firstName,
-  apellidos: employee.lastName,
-  correo: employee.email,
-  telefonoMovil: employee.phone,
-  departamento: employee.department,
-  puesto: employee.position,
-  unidadNegocio: employee.unitId === allFilterValue ? '' : employee.unitId,
-  negocio: employee.businessId === allFilterValue ? '' : employee.businessId,
-  fechaIngreso: employee.joinDate,
-  tipoSalario: employee.salaryType,
-  salario: employee.salary ? String(employee.salary) : '',
-  sueldoPorHora: employee.hourlyRate ? String(employee.hourlyRate) : '',
-  periodoPago: employee.payPeriod,
-  tipoContrato: employee.contractType,
-  fechaInicioContrato: employee.contractStartDate,
-  fechaFinContrato: employee.contractEndDate,
-});
+const documentTypeOrder: EmployeeDocumentType[] = [
+  'birth_certificate',
+  'government_id',
+  'proof_of_address',
+  'resume',
+  'profile_photo',
+];
+
+const toEmployeeFormData = (details?: EmployeeDetailsResponse | null): EmployeeFormData => {
+  const base = createEmptyEmployeeFormData();
+  if (!details) {
+    return base;
+  }
+
+  const next = {
+    ...base,
+    employeeId: details.employee.id,
+    employeeNumber: details.employee.employee_number ?? '',
+    firstName: details.employee.first_name ?? '',
+    lastName: details.employee.last_name ?? '',
+    email: details.employee.email ?? '',
+    mobilePhone: details.employee.phone ?? '',
+    dateOfBirth: details.profile.date_of_birth ? String(details.profile.date_of_birth) : '',
+    address: details.profile.address ?? '',
+    nationalId: details.profile.national_id ?? '',
+    taxId: details.profile.tax_id ?? '',
+    socialSecurityNumber: details.profile.social_security_number ?? '',
+    registrationCountry: details.profile.registration_country ?? '',
+    stateProvince: details.profile.state_province ?? '',
+    alternatePhone: details.profile.alternate_phone ?? '',
+    emergencyContactName: details.profile.emergency_contact_name ?? '',
+    emergencyContactRelationship: details.profile.emergency_contact_relationship ?? '',
+    emergencyContactPhone: details.profile.emergency_contact_phone ?? '',
+    department: details.employee.department ?? '',
+    position: details.employee.position_title || details.employee.position || '',
+    businessUnitId: details.employee.unit_id ? String(details.employee.unit_id) : '',
+    businessId: details.employee.business_id ? String(details.employee.business_id) : '',
+    hireDate: details.employee.hire_date ? String(details.employee.hire_date) : '',
+    salaryType: details.employee.salary_type ?? 'daily',
+    workdayHours:
+      details.profile.workday_hours !== null && details.profile.workday_hours !== undefined
+        ? String(details.profile.workday_hours)
+        : '8',
+    salary:
+      details.employee.salary !== null && details.employee.salary !== undefined
+        ? String(details.employee.salary)
+        : '',
+    hourlyRate:
+      details.employee.hourly_rate !== null && details.employee.hourly_rate !== undefined
+        ? String(details.employee.hourly_rate)
+        : '',
+    payPeriod: details.employee.pay_period ?? 'weekly',
+    contractType: details.employee.contract_type ?? 'permanent',
+    contractStartDate: details.employee.contract_start_date ? String(details.employee.contract_start_date) : '',
+    contractEndDate: details.employee.contract_end_date ? String(details.employee.contract_end_date) : '',
+    accessRole: details.access.access_role ?? 'employee',
+    inviteOnSave: false,
+    invitationStatus: details.access.invitation_status ?? 'not_invited',
+    linkedUserName: details.access.linked_user_name ?? '',
+    linkedUserEmail: details.access.linked_user_email ?? '',
+  } satisfies EmployeeFormData;
+
+  documentTypeOrder.forEach((documentType) => {
+    const existingDocument = details.documents.find((document) => document.document_type === documentType);
+    if (!existingDocument) {
+      return;
+    }
+
+    next.documents[documentType] = {
+      documentType,
+      existingId: existingDocument.id,
+      existingFileName: existingDocument.original_filename,
+      existingDownloadUrl: existingDocument.download_url ?? undefined,
+      file: null,
+      removeExisting: false,
+    };
+  });
+
+  return next;
+};
 
 export default function Colaboradores() {
   const { currentLanguage } = useLanguage();
@@ -354,18 +480,22 @@ export default function Colaboradores() {
   const [businessFilter, setBusinessFilter] = useState(allFilterValue);
   const [departmentFilter, setDepartmentFilter] = useState(allFilterValue);
   const [statusFilter, setStatusFilter] = useState(allFilterValue);
+  const [currentPage, setCurrentPage] = useState(1);
   const [columns, setColumns] = useState<ColumnConfig[]>(() => getInitialColumns(defaultColumns));
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
   const [editingEmployee, setEditingEmployee] = useState<EmployeeViewModel | null>(null);
+  const [modalInitialData, setModalInitialData] = useState<EmployeeFormData>(createEmptyEmployeeFormData());
   const [terminatingEmployee, setTerminatingEmployee] = useState<EmployeeViewModel | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isColumnsModalOpen, setIsColumnsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPreparingModal, setIsPreparingModal] = useState(false);
   const [loadingOverlayTitle, setLoadingOverlayTitle] = useState<string>(copy.loadingTitle);
   const [loadingOverlayDescription, setLoadingOverlayDescription] = useState<string>(copy.loadingDescription);
   const [loadError, setLoadError] = useState('');
   const [successToastMessage, setSuccessToastMessage] = useState('');
+  const [failureToastMessage, setFailureToastMessage] = useState('');
 
   const visibleColumns = columns.filter((column) => column.visible);
   const departmentOptions = useMemo(
@@ -418,7 +548,7 @@ export default function Colaboradores() {
         ...businessesResponse.map((business) => ({ value: String(business.id), label: business.name })),
       ]);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Unable to load employees.');
+      setLoadError(normalizeErrorMessage(error, copy.errorMessages.load));
     } finally {
       setIsLoading(false);
     }
@@ -449,12 +579,29 @@ export default function Colaboradores() {
     return matchesSearch && matchesUnit && matchesBusiness && matchesDepartment && matchesStatus;
   });
 
-  const filteredEmployeeIds = filteredEmployees.map((employee) => employee.id);
-  const allFilteredSelected =
-    filteredEmployeeIds.length > 0 &&
-    filteredEmployeeIds.every((employeeId) => selectedEmployeeIds.includes(employeeId));
-  const someFilteredSelected =
-    !allFilteredSelected && filteredEmployeeIds.some((employeeId) => selectedEmployeeIds.includes(employeeId));
+  const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / employeesPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStartIndex = (safeCurrentPage - 1) * employeesPerPage;
+  const pageEndIndex = pageStartIndex + employeesPerPage;
+  const paginatedEmployees = filteredEmployees.slice(pageStartIndex, pageEndIndex);
+  const visibleEmployeeIds = paginatedEmployees.map((employee) => employee.id);
+  const allVisibleSelected =
+    visibleEmployeeIds.length > 0 &&
+    visibleEmployeeIds.every((employeeId) => selectedEmployeeIds.includes(employeeId));
+  const someVisibleSelected =
+    !allVisibleSelected && visibleEmployeeIds.some((employeeId) => selectedEmployeeIds.includes(employeeId));
+  const paginationStart = filteredEmployees.length === 0 ? 0 : pageStartIndex + 1;
+  const paginationEnd = filteredEmployees.length === 0 ? 0 : Math.min(pageEndIndex, filteredEmployees.length);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, unitFilter, businessFilter, departmentFilter, statusFilter]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const toggleSelection = (employeeId: number) => {
     setSelectedEmployeeIds((currentIds) =>
@@ -466,11 +613,11 @@ export default function Colaboradores() {
 
   const toggleAllVisibleSelections = () => {
     setSelectedEmployeeIds((currentIds) => {
-      if (allFilteredSelected) {
-        return currentIds.filter((id) => !filteredEmployeeIds.includes(id));
+      if (allVisibleSelected) {
+        return currentIds.filter((id) => !visibleEmployeeIds.includes(id));
       }
 
-      return Array.from(new Set([...currentIds, ...filteredEmployeeIds]));
+      return Array.from(new Set([...currentIds, ...visibleEmployeeIds]));
     });
   };
 
@@ -485,6 +632,7 @@ export default function Colaboradores() {
   }) => {
     setLoadingOverlayTitle(title);
     setLoadingOverlayDescription(description);
+    setFailureToastMessage('');
     setIsSubmitting(true);
 
     try {
@@ -502,51 +650,214 @@ export default function Colaboradores() {
     setSummary(response.summary);
   };
 
-  const handleSaveEmployee = async (data: ColaboradorData) => {
-    const parseForeignKeyValue = (value: string | undefined) => {
-      const normalized = String(value ?? '').trim();
-      return /^\d+$/.test(normalized) ? Number(normalized) : null;
-    };
+  const openCreateEmployeeModal = () => {
+    setEditingEmployee(null);
+    setModalInitialData(createEmptyEmployeeFormData());
+    setIsModalOpen(true);
+  };
+
+  const openEditEmployeeModal = async (employee: EmployeeViewModel) => {
+    setLoadingOverlayTitle(copy.detailLoadingTitle);
+    setLoadingOverlayDescription(copy.detailLoadingDescription);
+    setFailureToastMessage('');
+    setIsPreparingModal(true);
+
+    try {
+      const details = await runWithMinimumDuration(
+        humanResourcesApi.getEmployeeDetails(employee.id),
+        500,
+      );
+      setEditingEmployee(employee);
+      setModalInitialData(toEmployeeFormData(details));
+      setIsModalOpen(true);
+    } catch (error) {
+      setFailureToastMessage(normalizeErrorMessage(error, copy.errorMessages.detail));
+    } finally {
+      setIsPreparingModal(false);
+    }
+  };
+
+  const parseForeignKeyValue = (value: string | undefined) => {
+    const normalized = String(value ?? '').trim();
+    return /^\d+$/.test(normalized) ? Number(normalized) : null;
+  };
+
+  const syncEmployeeDocuments = async (employeeId: number, data: EmployeeFormData) => {
+    const documentErrors: string[] = [];
+
+    for (const documentType of documentTypeOrder) {
+      const slot = data.documents[documentType];
+
+      if (slot.removeExisting && slot.existingId && !slot.file) {
+        try {
+          await humanResourcesApi.deleteEmployeeDocument(employeeId, slot.existingId);
+        } catch (error) {
+          documentErrors.push(normalizeErrorMessage(error, `Unable to delete ${documentType}.`));
+        }
+      }
+
+      if (!slot.file) {
+        continue;
+      }
+
+      try {
+        const presign = await humanResourcesApi.presignEmployeeDocumentUpload(employeeId, {
+          document_type: documentType,
+          file_name: slot.file.name,
+          content_type: slot.file.type,
+          size_bytes: slot.file.size,
+        });
+
+        await humanResourcesApi.uploadEmployeeDocument(
+          presign.upload_url,
+          slot.file,
+          slot.file.type,
+          presign.upload_headers,
+        );
+
+        await humanResourcesApi.registerEmployeeDocument(employeeId, {
+          document_type: documentType,
+          original_filename: slot.file.name,
+          mime_type: slot.file.type,
+          size_bytes: slot.file.size,
+          object_key: presign.object_key,
+        });
+      } catch (error) {
+        documentErrors.push(normalizeErrorMessage(error, `Unable to save ${documentType}.`));
+      }
+    }
+
+    return documentErrors;
+  };
+
+  const handleSaveEmployee = async (data: EmployeeFormData) => {
+    const trimmedFirstName = data.firstName.trim();
+    const trimmedLastName = data.lastName.trim();
+    const trimmedEmail = data.email.trim();
+    const trimmedMobilePhone = data.mobilePhone.trim();
+    const trimmedPosition = data.position.trim();
+    const trimmedDepartment = data.department.trim();
+    const parsedUnitId = parseForeignKeyValue(data.businessUnitId);
+    const parsedBusinessId = parseForeignKeyValue(data.businessId);
+    const trimmedSalary = data.salary.trim();
+    const trimmedHourlyRate = data.hourlyRate.trim();
+    const trimmedAddress = data.address.trim();
+    const trimmedNationalId = data.nationalId.trim();
+    const trimmedTaxId = data.taxId.trim();
+    const trimmedSocialSecurityNumber = data.socialSecurityNumber.trim();
+    const trimmedStateProvince = data.stateProvince.trim();
+    const trimmedAlternatePhone = data.alternatePhone.trim();
+    const trimmedEmergencyContactName = data.emergencyContactName.trim();
+    const trimmedEmergencyContactRelationship = data.emergencyContactRelationship.trim();
+    const trimmedEmergencyContactPhone = data.emergencyContactPhone.trim();
+    const trimmedWorkdayHours = data.workdayHours.trim();
 
     const payload = {
-      first_name: String(data.nombre ?? ''),
-      last_name: String(data.apellidos ?? ''),
-      email: String(data.correo ?? ''),
-      phone: String(data.telefonoMovil ?? ''),
-      position: String(data.puesto ?? ''),
-      department: String(data.departamento ?? ''),
-      unit_id: parseForeignKeyValue(data.unidadNegocio),
-      business_id: parseForeignKeyValue(data.negocio),
-      hire_date: String(data.fechaIngreso ?? ''),
-      salary: String(data.salario ?? ''),
-      pay_period: String(data.periodoPago ?? 'weekly'),
-      salary_type: String(data.tipoSalario ?? 'daily'),
-      hourly_rate: String(data.sueldoPorHora ?? ''),
-      contract_type: String(data.tipoContrato ?? 'permanent'),
-      contract_start_date: String(data.fechaInicioContrato ?? ''),
-      contract_end_date: String(data.fechaFinContrato ?? ''),
+      first_name: trimmedFirstName,
+      last_name: trimmedLastName,
+      email: trimmedEmail,
+      phone: trimmedMobilePhone,
+      position: trimmedPosition,
+      department: trimmedDepartment,
+      unit_id: parsedUnitId,
+      business_id: parsedBusinessId,
+      hire_date: data.hireDate,
+      salary: trimmedSalary,
+      pay_period: data.payPeriod,
+      salary_type: data.salaryType,
+      hourly_rate: trimmedHourlyRate,
+      contract_type: data.contractType,
+      contract_start_date: data.contractStartDate,
+      contract_end_date: data.contractEndDate,
+      employee_number: data.employeeNumber.trim(),
+      employee: {
+        employee_number: data.employeeNumber.trim(),
+        first_name: trimmedFirstName,
+        last_name: trimmedLastName,
+        email: trimmedEmail,
+        phone: trimmedMobilePhone,
+        position: trimmedPosition,
+        department: trimmedDepartment,
+        unit_id: parsedUnitId,
+        business_id: parsedBusinessId,
+        hire_date: data.hireDate,
+        salary: trimmedSalary,
+        pay_period: data.payPeriod,
+        salary_type: data.salaryType,
+        hourly_rate: trimmedHourlyRate,
+        contract_type: data.contractType,
+        contract_start_date: data.contractStartDate,
+        contract_end_date: data.contractEndDate,
+      },
+      date_of_birth: data.dateOfBirth,
+      address: trimmedAddress,
+      national_id: trimmedNationalId,
+      tax_id: trimmedTaxId,
+      social_security_number: trimmedSocialSecurityNumber,
+      registration_country: data.registrationCountry,
+      state_province: trimmedStateProvince,
+      alternate_phone: trimmedAlternatePhone,
+      emergency_contact_name: trimmedEmergencyContactName,
+      emergency_contact_relationship: trimmedEmergencyContactRelationship,
+      emergency_contact_phone: trimmedEmergencyContactPhone,
+      workday_hours: trimmedWorkdayHours,
+      profile: {
+        date_of_birth: data.dateOfBirth,
+        address: trimmedAddress,
+        national_id: trimmedNationalId,
+        tax_id: trimmedTaxId,
+        social_security_number: trimmedSocialSecurityNumber,
+        registration_country: data.registrationCountry,
+        state_province: trimmedStateProvince,
+        alternate_phone: trimmedAlternatePhone,
+        emergency_contact_name: trimmedEmergencyContactName,
+        emergency_contact_relationship: trimmedEmergencyContactRelationship,
+        emergency_contact_phone: trimmedEmergencyContactPhone,
+        workday_hours: trimmedWorkdayHours,
+      },
+      access_role: data.accessRole,
+      invite_on_save: data.inviteOnSave,
+      access: {
+        access_role: data.accessRole,
+        invite_on_save: data.inviteOnSave,
+      },
       status: editingEmployee?.status ?? 'active',
     };
 
     try {
+      let savedEmployeeId = editingEmployee?.id ?? 0;
+      let documentErrors: string[] = [];
+
       await runMutation({
         title: copy.loadingTitle,
         description: copy.loadingDescription,
         task: async () => {
-          if (editingEmployee) {
-            await humanResourcesApi.updateEmployee(editingEmployee.id, payload);
-          } else {
-            await humanResourcesApi.createEmployee(payload);
-          }
+          const savedEmployee = editingEmployee
+            ? await humanResourcesApi.updateEmployee(editingEmployee.id, payload)
+            : await humanResourcesApi.createEmployee(payload);
 
+          savedEmployeeId = savedEmployee.id;
+          documentErrors = await syncEmployeeDocuments(savedEmployeeId, data);
+          if (editingEmployee) {
+            setEditingEmployee((current) => (current ? { ...current, id: savedEmployeeId } : current));
+          } else {
+            setEditingEmployee(null);
+          }
           await refreshEmployees();
         },
       });
 
-      setSuccessToastMessage(editingEmployee ? copy.successMessages.updated : copy.successMessages.created);
+      if (documentErrors.length > 0) {
+        setFailureToastMessage(
+          `${editingEmployee ? copy.successMessages.updated : copy.successMessages.created} ${documentErrors[0]}`,
+        );
+      } else {
+        setSuccessToastMessage(editingEmployee ? copy.successMessages.updated : copy.successMessages.created);
+      }
       setEditingEmployee(null);
+      setModalInitialData(createEmptyEmployeeFormData());
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Unable to save employee.');
+      setFailureToastMessage(normalizeErrorMessage(error, copy.errorMessages.save));
       throw error;
     }
   };
@@ -572,7 +883,7 @@ export default function Colaboradores() {
       });
       setSuccessToastMessage(copy.successMessages.deleted);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Unable to delete employee.');
+      setFailureToastMessage(normalizeErrorMessage(error, copy.errorMessages.delete));
     }
   };
 
@@ -600,7 +911,7 @@ export default function Colaboradores() {
       setTerminatingEmployee(null);
       setSuccessToastMessage(copy.successMessages.terminated);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Unable to terminate employee.');
+      setFailureToastMessage(normalizeErrorMessage(error, copy.errorMessages.terminate));
     }
   };
 
@@ -621,6 +932,12 @@ export default function Colaboradores() {
               <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{employee.fullName}</p>
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{employee.code}</p>
             </div>
+          </td>
+        );
+      case 'employeeNumber':
+        return (
+          <td key={columnId} className="px-6 py-4 align-top text-sm font-medium text-gray-600 dark:text-gray-300">
+            {employee.code || '—'}
           </td>
         );
       case 'email':
@@ -698,8 +1015,7 @@ export default function Colaboradores() {
                 size="icon"
                 className="h-8 w-8 text-[#4338ca] hover:bg-[#4338ca]/10"
                 onClick={() => {
-                  setEditingEmployee(employee);
-                  setIsModalOpen(true);
+                  void openEditEmployeeModal(employee);
                 }}
               >
                 <Edit className="h-4 w-4" />
@@ -722,10 +1038,45 @@ export default function Colaboradores() {
     }
   };
 
+  const changePage = (page: number) => {
+    if (page < 1 || page > totalPages || page === safeCurrentPage) {
+      return;
+    }
+
+    setCurrentPage(page);
+  };
+
+  const paginationItems = useMemo(() => {
+    if (totalPages <= 1) {
+      return [1];
+    }
+
+    const pages = new Set<number>([1, totalPages, safeCurrentPage]);
+    if (safeCurrentPage - 1 > 1) {
+      pages.add(safeCurrentPage - 1);
+    }
+    if (safeCurrentPage + 1 < totalPages) {
+      pages.add(safeCurrentPage + 1);
+    }
+
+    const sortedPages = Array.from(pages).sort((left, right) => left - right);
+    const items: Array<number | 'ellipsis'> = [];
+
+    sortedPages.forEach((page, index) => {
+      const previousPage = sortedPages[index - 1];
+      if (previousPage && page - previousPage > 1) {
+        items.push('ellipsis');
+      }
+      items.push(page);
+    });
+
+    return items;
+  }, [safeCurrentPage, totalPages]);
+
   return (
     <>
       <LoadingBarOverlay
-        isVisible={isSubmitting}
+        isVisible={isSubmitting || isPreparingModal}
         title={loadingOverlayTitle}
         description={loadingOverlayDescription}
       />
@@ -734,6 +1085,12 @@ export default function Colaboradores() {
         isVisible={Boolean(successToastMessage)}
         message={successToastMessage}
         onClose={() => setSuccessToastMessage('')}
+      />
+
+      <FailureToast
+        isVisible={Boolean(failureToastMessage)}
+        message={failureToastMessage}
+        onClose={() => setFailureToastMessage('')}
       />
 
       {loadError ? (
@@ -767,8 +1124,7 @@ export default function Colaboradores() {
             </Button>
             <Button
               onClick={() => {
-                setEditingEmployee(null);
-                setIsModalOpen(true);
+                openCreateEmployeeModal();
               }}
               className="bg-[#143675] text-white hover:bg-[#0f2855]"
             >
@@ -913,7 +1269,7 @@ export default function Colaboradores() {
               <tr>
                 <th className="w-12 px-5 py-3.5 text-left">
                   <Checkbox
-                    checked={allFilteredSelected ? true : someFilteredSelected ? 'indeterminate' : false}
+                    checked={allVisibleSelected ? true : someVisibleSelected ? 'indeterminate' : false}
                     onCheckedChange={toggleAllVisibleSelections}
                     aria-label={copy.table.selectAllVisible}
                   />
@@ -949,7 +1305,7 @@ export default function Colaboradores() {
                   </td>
                 </tr>
               ) : (
-                filteredEmployees.map((employee) => (
+                paginatedEmployees.map((employee) => (
                   <tr key={employee.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/40">
                     <td className="px-5 py-4 align-top">
                       <Checkbox
@@ -965,6 +1321,64 @@ export default function Colaboradores() {
             </tbody>
           </table>
         </div>
+        {filteredEmployees.length > 0 ? (
+          <div className="flex flex-col gap-4 border-t border-gray-200 px-6 py-4 dark:border-gray-700 md:flex-row md:items-center md:justify-between">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {copy.pagination.showing(paginationStart, paginationEnd, filteredEmployees.length)}
+            </p>
+            <div className="flex flex-col items-start gap-3 md:items-end">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {copy.pagination.page(safeCurrentPage, totalPages)}
+              </p>
+              <Pagination className="mx-0 w-auto justify-start md:justify-end">
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href="#"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        changePage(safeCurrentPage - 1);
+                      }}
+                      aria-disabled={safeCurrentPage === 1}
+                      className={safeCurrentPage === 1 ? 'pointer-events-none opacity-50' : undefined}
+                    />
+                  </PaginationItem>
+                  {paginationItems.map((item, index) => (
+                    item === 'ellipsis' ? (
+                      <PaginationItem key={`ellipsis-${index}`}>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    ) : (
+                      <PaginationItem key={item}>
+                        <PaginationLink
+                          href="#"
+                          isActive={item === safeCurrentPage}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            changePage(item);
+                          }}
+                        >
+                          {item}
+                        </PaginationLink>
+                      </PaginationItem>
+                    )
+                  ))}
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        changePage(safeCurrentPage + 1);
+                      }}
+                      aria-disabled={safeCurrentPage === totalPages}
+                      className={safeCurrentPage === totalPages ? 'pointer-events-none opacity-50' : undefined}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <ColumnasConfigModal
@@ -975,14 +1389,15 @@ export default function Colaboradores() {
         onSave={setColumns}
       />
 
-      <AgregarColaboradorModal
+      <EmployeeModal
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
           setEditingEmployee(null);
+          setModalInitialData(createEmptyEmployeeFormData());
         }}
         onSave={handleSaveEmployee}
-        colaboradorData={editingEmployee ? (toModalSeed(editingEmployee) as any) : null}
+        initialData={modalInitialData}
         mode={editingEmployee ? 'edit' : 'create'}
         unitOptions={unitOptions}
         businessOptions={businessOptions}

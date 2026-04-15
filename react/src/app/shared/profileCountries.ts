@@ -1,4 +1,4 @@
-export type ProfileCountry = 'AR' | 'BR' | 'CA' | 'CL' | 'CO' | 'ES' | 'MX' | 'US';
+export type ProfileCountry = 'AR' | 'BR' | 'CA' | 'CL' | 'CO' | 'ES' | 'MX' | 'PE' | 'US';
 
 export type ProfileCountryOption = {
   code: ProfileCountry;
@@ -18,6 +18,7 @@ export const PROFILE_COUNTRY_OPTIONS: ProfileCountryOption[] = [
   { code: 'AR', dialCode: '+54', flag: '🇦🇷', fallbackName: 'Argentina' },
   { code: 'BR', dialCode: '+55', flag: '🇧🇷', fallbackName: 'Brazil' },
   { code: 'CL', dialCode: '+56', flag: '🇨🇱', fallbackName: 'Chile' },
+  { code: 'PE', dialCode: '+51', flag: '🇵🇪', fallbackName: 'Peru' },
 ];
 
 const PROFILE_COUNTRY_BY_CODE = new Map(
@@ -27,6 +28,7 @@ const PROFILE_COUNTRY_BY_CODE = new Map(
 const COUNTRY_BY_DIAL_CODE: Partial<Record<string, ProfileCountry>> = {
   '+1': 'US',
   '+34': 'ES',
+  '+51': 'PE',
   '+52': 'MX',
   '+54': 'AR',
   '+55': 'BR',
@@ -43,6 +45,40 @@ export function isProfileCountry(value: string): value is ProfileCountry {
 export function normalizeProfileCountry(value?: string): ProfileCountry | undefined {
   const normalizedValue = (value ?? '').trim().toUpperCase();
   return isProfileCountry(normalizedValue) ? normalizedValue : undefined;
+}
+
+const COUNTRY_NAME_TO_CODE: Record<string, ProfileCountry> = {
+  argentina: 'AR',
+  brazil: 'BR',
+  brasil: 'BR',
+  canada: 'CA',
+  chile: 'CL',
+  colombia: 'CO',
+  espana: 'ES',
+  spain: 'ES',
+  mexico: 'MX',
+  peru: 'PE',
+  estadosunidos: 'US',
+  unitedstates: 'US',
+};
+
+const normalizeCountryName = (value?: string) => (
+  (value ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z]/g, '')
+);
+
+export function resolveProfileCountry(value?: string): ProfileCountry | undefined {
+  const normalizedCode = normalizeProfileCountry(value);
+  if (normalizedCode) {
+    return normalizedCode;
+  }
+
+  const normalizedName = normalizeCountryName(value);
+  return normalizedName ? COUNTRY_NAME_TO_CODE[normalizedName] : undefined;
 }
 
 export function getDefaultProfileCountry(): ProfileCountry {

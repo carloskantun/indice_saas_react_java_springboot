@@ -8,6 +8,16 @@ import {
   User,
 } from 'lucide-react';
 import { useLanguage } from '../shared/context';
+import {
+  getDefaultProfileCountry,
+  type ProfileCountry,
+  resolveProfileCountry,
+} from '../shared/profileCountries';
+import { validateEmail } from '../shared/validation/email';
+import {
+  normalizePhoneInputForCountry,
+  validatePhoneForProfileCountry,
+} from '../shared/validation/phone';
 import { Button } from './ui/button';
 
 interface AgregarColaboradorModalProps {
@@ -92,8 +102,8 @@ const initialFormState: ColaboradorData = {
   puesto: '',
   unidadNegocio: '',
   negocio: '',
-  paisRegistro: 'Mexico',
-  provinciaEstado: 'Mexico City',
+  paisRegistro: '',
+  provinciaEstado: '',
   fechaIngreso: '',
   tipoSalario: 'daily',
   horasJornada: 8,
@@ -186,7 +196,7 @@ const modalTranslations = {
     validation: {
       required: 'This field is required.',
       invalidEmail: 'Enter a valid email address.',
-      invalidPhone: 'Enter a valid phone number with 7 to 15 digits.',
+      invalidPhone: 'Enter a valid phone number.',
       invalidNumber: 'Enter a valid numeric value.',
       positiveHours: 'Workday hours must be between 1 and 24.',
       positiveAmount: 'Enter an amount greater than zero.',
@@ -341,7 +351,7 @@ const modalTranslations = {
     validation: {
       required: 'Este campo es obligatorio.',
       invalidEmail: 'Ingresa un correo electrónico válido.',
-      invalidPhone: 'Ingresa un teléfono válido con 7 a 15 dígitos.',
+      invalidPhone: 'Ingresa un teléfono válido.',
       invalidNumber: 'Ingresa un valor numérico válido.',
       positiveHours: 'Las horas de jornada deben estar entre 1 y 24.',
       positiveAmount: 'Ingresa un monto mayor a cero.',
@@ -595,11 +605,44 @@ export function AgregarColaboradorModal({
     [businessOptions, copy.options.negocios],
   );
 
+  const getSelectedPhoneCountry = (countryValue: string): ProfileCountry | undefined => (
+    resolveProfileCountry(countryValue)
+  );
+
   const handleInputChange = <T extends keyof ColaboradorData>(field: T, value: ColaboradorData[T]) => {
-    setFormData((previousState) => ({
-      ...previousState,
-      [field]: field === 'horasJornada' ? Number(value) || 0 : value,
-    }));
+    setFormData((previousState) => {
+      if (field === 'paisRegistro') {
+        const nextCountry = getSelectedPhoneCountry(String(value ?? ''));
+        return {
+          ...previousState,
+          paisRegistro: String(value ?? ''),
+          telefonoMovil: nextCountry
+            ? normalizePhoneInputForCountry(previousState.telefonoMovil, nextCountry)
+            : previousState.telefonoMovil,
+          telefonoAlterno: nextCountry
+            ? normalizePhoneInputForCountry(previousState.telefonoAlterno, nextCountry)
+            : previousState.telefonoAlterno,
+          telefonoEmergencia: nextCountry
+            ? normalizePhoneInputForCountry(previousState.telefonoEmergencia, nextCountry)
+            : previousState.telefonoEmergencia,
+        };
+      }
+
+      if (field === 'telefonoMovil' || field === 'telefonoAlterno' || field === 'telefonoEmergencia') {
+        const country = getSelectedPhoneCountry(previousState.paisRegistro);
+        return {
+          ...previousState,
+          [field]: country
+            ? normalizePhoneInputForCountry(String(value ?? ''), country)
+            : String(value ?? ''),
+        };
+      }
+
+      return {
+        ...previousState,
+        [field]: field === 'horasJornada' ? Number(value) || 0 : value,
+      };
+    });
 
     if (field in touchedFields) {
       setTouchedFields((previous) => ({
@@ -634,6 +677,8 @@ export function AgregarColaboradorModal({
     const normalizedEmail = formData.correo.trim();
     const normalizedMobile = formData.telefonoMovil.trim();
     const normalizedAlternate = formData.telefonoAlterno.trim();
+    const resolvedPhoneCountry = getSelectedPhoneCountry(formData.paisRegistro);
+    const phoneCountry = resolvedPhoneCountry ?? getDefaultProfileCountry();
 
     if (!formData.nombre.trim()) {
       errors.nombre = copy.validation.required;
@@ -645,13 +690,17 @@ export function AgregarColaboradorModal({
 
     if (!normalizedEmail) {
       errors.correo = copy.validation.required;
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    } else if (!validateEmail(normalizedEmail).ok) {
       errors.correo = copy.validation.invalidEmail;
     }
 
     const phoneIsValid = (value: string) => {
       if (!value) {
         return true;
+      }
+
+      if (resolvedPhoneCountry) {
+        return validatePhoneForProfileCountry(value, phoneCountry).ok;
       }
 
       if (!/^[\d\s()+-]+$/.test(value)) {
@@ -747,14 +796,19 @@ export function AgregarColaboradorModal({
     copy.validation.required,
     formData.apellidos,
     formData.correo,
+    formData.departamento,
     formData.fechaFinContrato,
     formData.fechaInicioContrato,
     formData.horasJornada,
+    formData.negocio,
     formData.nombre,
+    formData.paisRegistro,
+    formData.puesto,
     formData.salario,
     formData.sueldoPorHora,
     formData.telefonoAlterno,
     formData.telefonoMovil,
+    formData.unidadNegocio,
     selectedContractType,
     selectedSalaryType,
   ]);

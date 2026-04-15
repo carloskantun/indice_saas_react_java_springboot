@@ -410,16 +410,16 @@ export default function Announcements() {
         onClose={() => setIsModalOpen(false)}
         onSave={(data) => {
           const nextId = `COM-${300 + announcements.length + 1}`;
-          const estadoMap: Record<string, RHComunicado['estado']> = {
-            publicado: 'Publicado',
-            programado: 'Programado',
-            borrador: 'Borrador',
+          const estadoMap: Record<'draft' | 'scheduled' | 'published', RHComunicado['estado']> = {
+            draft: 'Borrador',
+            scheduled: 'Programado',
+            published: 'Publicado',
           };
-          const tipoMap: Record<string, RHComunicado['tipo']> = {
+          const tipoMap: Record<'general' | 'urgent' | 'reminder' | 'celebration', RHComunicado['tipo']> = {
             general: 'General',
-            urgente: 'Urgente',
-            recordatorio: 'Recordatorio',
-            celebracion: 'Celebracion',
+            urgent: 'Urgente',
+            reminder: 'Recordatorio',
+            celebration: 'Celebracion',
           };
 
           setAnnouncements((current) => [
@@ -428,11 +428,11 @@ export default function Announcements() {
               titulo: data.titulo,
               tipo: tipoMap[data.tipo] ?? 'General',
               destinatarios:
-                data.destinatarios === 'todos'
+                data.destinatarios === 'all'
                   ? 'Todo el personal'
-                  : data.destinatarios === 'por-departamento'
+                  : data.destinatarios === 'departments'
                     ? 'Departamentos seleccionados'
-                    : data.destinatarios === 'por-unidad'
+                    : data.destinatarios === 'units'
                       ? 'Unidades seleccionadas'
                       : 'Destinatarios específicos',
               estado: estadoMap[data.estado] ?? 'Borrador',

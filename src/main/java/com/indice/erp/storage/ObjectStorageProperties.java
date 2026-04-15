@@ -36,6 +36,7 @@ public class ObjectStorageProperties {
         private String region = "us-east-1";
         private String bucketAttendance = "indice-hr-attendance";
         private String bucketBiometric = "indice-hr-biometric";
+        private String bucketDocuments = "indice-hr-documents";
         private int presignExpirySeconds = 900;
 
         public String getEndpoint() {
@@ -100,6 +101,14 @@ public class ObjectStorageProperties {
 
         public void setBucketBiometric(String bucketBiometric) {
             this.bucketBiometric = bucketBiometric;
+        }
+
+        public String getBucketDocuments() {
+            return bucketDocuments;
+        }
+
+        public void setBucketDocuments(String bucketDocuments) {
+            this.bucketDocuments = bucketDocuments;
         }
 
         public int getPresignExpirySeconds() {
