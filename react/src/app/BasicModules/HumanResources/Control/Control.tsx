@@ -229,6 +229,7 @@ const controlCopy = {
       kioskLinkCopied: 'Kiosk link copied.',
       kioskLinkRotated: 'Kiosk link rotated successfully.',
       kioskTokenUnavailable: 'This kiosk does not have a public device link yet.',
+      kioskTabBlocked: 'Allow pop-ups for this site to open the kiosk in a new tab.',
       kioskQrTitle: 'Kiosk QR',
       selectedKioskDevice: 'Selected kiosk device',
       eventTime: 'Event time',
@@ -425,6 +426,7 @@ const controlCopy = {
       kioskLinkCopied: 'Enlace del kiosco copiado.',
       kioskLinkRotated: 'Enlace del kiosco rotado correctamente.',
       kioskTokenUnavailable: 'Este kiosco todavía no tiene un enlace público disponible.',
+      kioskTabBlocked: 'Permite las ventanas emergentes de este sitio para abrir el kiosco en una nueva pestaña.',
       kioskQrTitle: 'QR del kiosco',
       selectedKioskDevice: 'Dispositivo de kiosco seleccionado',
       eventTime: 'Hora del evento',
@@ -1343,10 +1345,15 @@ export default function Control() {
       return;
     }
 
-    const kioskWindow = window.open(selectedKioskDeviceLink, '_blank', 'noopener,noreferrer');
-    if (!kioskWindow) {
-      window.location.assign(selectedKioskDeviceLink);
+    const kioskLink = selectedKioskDeviceLink;
+    const kioskWindow = window.open('', '_blank');
+    if (kioskWindow) {
+      kioskWindow.opener = null;
+      kioskWindow.location.href = kioskLink;
+      return;
     }
+
+    setErrorMessage(copy.labels.kioskTabBlocked);
   };
 
   const handleCopyKioskLink = async () => {
