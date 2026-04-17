@@ -1,15 +1,15 @@
-// Traducciones para el módulo de Procesos y Tareas
-export const procesosTareasTranslations = {
+// Translations for the Processes and Tasks module
+export const processesTasksTranslations = {
   'es-MX': {
     title: 'Procesos y Tareas',
     subtitle: 'Agenda, tareas, proyectos, KPIs y procesos recurrentes',
     back: 'Regresar',
     tabs: {
       agenda: 'Agenda',
-      proyectos: 'Proyectos',
-      procesos: 'Procesos',
+      projects: 'Proyectos',
+      processes: 'Procesos',
       kpis: 'KPIs',
-      organigrama: 'Organigrama',
+      orgChart: 'Organigrama',
     },
   },
   'es-CO': {
@@ -18,10 +18,10 @@ export const procesosTareasTranslations = {
     back: 'Regresar',
     tabs: {
       agenda: 'Agenda',
-      proyectos: 'Proyectos',
-      procesos: 'Procesos',
+      projects: 'Proyectos',
+      processes: 'Procesos',
       kpis: 'KPIs',
-      organigrama: 'Organigrama',
+      orgChart: 'Organigrama',
     },
   },
   'en-US': {
@@ -30,10 +30,10 @@ export const procesosTareasTranslations = {
     back: 'Back',
     tabs: {
       agenda: 'Agenda',
-      proyectos: 'Projects',
-      procesos: 'Processes',
+      projects: 'Projects',
+      processes: 'Processes',
       kpis: 'KPIs',
-      organigrama: 'Org Chart',
+      orgChart: 'Org Chart',
     },
   },
   'en-CA': {
@@ -42,10 +42,10 @@ export const procesosTareasTranslations = {
     back: 'Back',
     tabs: {
       agenda: 'Agenda',
-      proyectos: 'Projects',
-      procesos: 'Processes',
+      projects: 'Projects',
+      processes: 'Processes',
       kpis: 'KPIs',
-      organigrama: 'Org Chart',
+      orgChart: 'Org Chart',
     },
   },
   'fr-CA': {
@@ -54,10 +54,10 @@ export const procesosTareasTranslations = {
     back: 'Retour',
     tabs: {
       agenda: 'Agenda',
-      proyectos: 'Projets',
-      procesos: 'Processus',
+      projects: 'Projets',
+      processes: 'Processus',
       kpis: 'ICP',
-      organigrama: 'Organigramme',
+      orgChart: 'Organigramme',
     },
   },
   'pt-BR': {
@@ -66,10 +66,10 @@ export const procesosTareasTranslations = {
     back: 'Voltar',
     tabs: {
       agenda: 'Agenda',
-      proyectos: 'Projetos',
-      procesos: 'Processos',
+      projects: 'Projetos',
+      processes: 'Processos',
       kpis: 'KPIs',
-      organigrama: 'Organograma',
+      orgChart: 'Organograma',
     },
   },
   'ko-CA': {
@@ -78,10 +78,10 @@ export const procesosTareasTranslations = {
     back: '뒤로',
     tabs: {
       agenda: '일정',
-      proyectos: '프로젝트',
-      procesos: '프로세스',
+      projects: '프로젝트',
+      processes: '프로세스',
       kpis: 'KPI',
-      organigrama: '조직도',
+      orgChart: '조직도',
     },
   },
   'zh-CA': {
@@ -90,10 +90,10 @@ export const procesosTareasTranslations = {
     back: '返回',
     tabs: {
       agenda: '日程',
-      proyectos: '项目',
-      procesos: '流程',
+      projects: '项目',
+      processes: '流程',
       kpis: '关键绩效指标',
-      organigrama: '组织结构图',
+      orgChart: '组织结构图',
     },
   },
 };

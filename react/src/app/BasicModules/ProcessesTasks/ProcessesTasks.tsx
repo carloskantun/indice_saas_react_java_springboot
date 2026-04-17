@@ -1,14 +1,14 @@
 import { Button } from '../../components/ui/button';
 import { FavoritesBar } from '../../components/FavoritesBar';
-import { useProcesosTareasTranslations } from '../../hooks/useProcesosTareasTranslations';
+import { useProcessesTasksTranslations } from '../../hooks/useProcessesTasksTranslations';
 import { useRoutedModuleTab } from '../../hooks/useRoutedModuleTab';
 import Agenda from './Agenda';
-import Proyectos from './Proyectos';
-import Procesos from './Procesos';
+import Projects from './Projects';
+import Processes from './Processes';
 import KPIs from './KPIs';
-import Organigrama from './Organigrama';
+import OrgChart from './OrgChart';
 
-interface ProcesosTareasProps {
+interface ProcessesTasksProps {
   onNavigate: (page?: string) => void;
 }
 
@@ -29,8 +29,8 @@ const legacyProcessTaskTabAliases: Partial<Record<string, ProcessTaskTabId>> = {
   organigrama: 'org-chart',
 };
 
-export default function ProcesosTareas({ onNavigate }: ProcesosTareasProps) {
-  const t = useProcesosTareasTranslations();
+export default function ProcessesTasks({ onNavigate }: ProcessesTasksProps) {
+  const t = useProcessesTasksTranslations();
   const { activeTab, setActiveTab } = useRoutedModuleTab<ProcessTaskTabId>(
     'calendar',
     processTaskTabIds,
@@ -39,10 +39,10 @@ export default function ProcesosTareas({ onNavigate }: ProcesosTareasProps) {
 
   const tabs = [
     { id: 'calendar', label: t.tabs.agenda, emoji: '📋', component: Agenda },
-    { id: 'projects', label: t.tabs.proyectos, emoji: '🎯', component: Proyectos },
-    { id: 'processes', label: t.tabs.procesos, emoji: '⚙️', component: Procesos },
+    { id: 'projects', label: t.tabs.projects, emoji: '🎯', component: Projects },
+    { id: 'processes', label: t.tabs.processes, emoji: '⚙️', component: Processes },
     { id: 'kpis', label: t.tabs.kpis, emoji: '📊', component: KPIs },
-    { id: 'org-chart', label: t.tabs.organigrama, emoji: '🏢', component: Organigrama },
+    { id: 'org-chart', label: t.tabs.orgChart, emoji: '🏢', component: OrgChart },
   ];
 
   // Get the active component
