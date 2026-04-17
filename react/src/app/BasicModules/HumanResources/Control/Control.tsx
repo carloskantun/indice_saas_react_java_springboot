@@ -649,7 +649,7 @@ export default function Control() {
   const [selectedKioskDeviceId, setSelectedKioskDeviceId] = useState<number | null>(null);
   const [selectedCalendarDay, setSelectedCalendarDay] = useState<AttendanceCalendarDay | null>(null);
   const [pendingCalendarStatus, setPendingCalendarStatus] = useState<AttendanceCalendarDay['effective_status'] | ''>('');
-  const [faceEnrollment, setFaceEnrollment] = useState<{ id: number; status: string; enrolled_at?: string | null } | null>(null);
+  const [faceEnrollment, setFaceEnrollment] = useState<{ id?: number | null; status: string; enrolled_at?: string | null } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
   const [isUpdatingCalendarDay, setIsUpdatingCalendarDay] = useState(false);
@@ -914,6 +914,7 @@ export default function Control() {
     () => accessProfiles.find((profile) => profile.employee_id === selectedEmployeeId) ?? null,
     [accessProfiles, selectedEmployeeId],
   );
+  const hasStoredFaceEnrollment = faceEnrollment != null && faceEnrollment.status !== 'not_enrolled';
 
   const attendanceCalendarMap = useMemo(
     () => new Map(attendanceCalendarDays.map((day) => [day.day, day])),
@@ -1628,9 +1629,9 @@ export default function Control() {
                     </Button>
                   ) : null}
                   <Button variant="outline" size="sm" onClick={() => setIsFaceEnrollmentModalOpen(true)}>
-                    {faceEnrollment ? 'Re-enroll face' : 'Enroll face'}
+                    {hasStoredFaceEnrollment ? 'Re-enroll face' : 'Enroll face'}
                   </Button>
-                  {faceEnrollment ? (
+                  {hasStoredFaceEnrollment ? (
                     <Button variant="outline" size="sm" onClick={() => void handleDeleteFaceEnrollment()}>
                       Delete face
                     </Button>

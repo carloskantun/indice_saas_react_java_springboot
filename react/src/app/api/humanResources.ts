@@ -815,10 +815,11 @@ export interface FaceCapturePresignResponse {
 
 export interface FaceEnrollmentStatusResponse {
   enrollment: {
-    id: number;
+    id?: number | null;
     employee_id: number;
     status: string;
     enrolled_at?: string | null;
+    expires_at?: string | null;
     required_steps?: string[];
   } | null;
 }
