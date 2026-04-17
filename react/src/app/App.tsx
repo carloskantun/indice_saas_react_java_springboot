@@ -13,7 +13,7 @@ import { Button } from './components/ui/button';
 import { useLanguage } from './shared/context';
 import { useFavorites } from './shared/context';
 import HumanResources from './BasicModules/HumanResources';
-import ProcesosTareas from './BasicModules/ProcessesTasks';
+import ProcessesTasks from './BasicModules/ProcessesTasks';
 import PanelInicial from './BasicModules/Dashboard';
 import Gastos from './BasicModules/Expenses';
 import CajaChica from './BasicModules/PettyCash';
@@ -466,7 +466,7 @@ export default function App() {
     ) : currentPage === 'human-resources' ? (
       <HumanResources onNavigate={handleModuleNavigation} />
     ) : currentPage === 'processes-tasks' ? (
-      <ProcesosTareas onNavigate={handleModuleNavigation} />
+      <ProcessesTasks onNavigate={handleModuleNavigation} />
     ) : currentPage === 'home-panel' ? (
       <PanelInicial onNavigate={handleModuleNavigation} />
     ) : currentPage === 'expenses' ? (

@@ -154,7 +154,7 @@ const getInitials = (name: string) =>
     .map((part) => part[0]?.toUpperCase() ?? '')
     .join('');
 
-export default function Organigrama() {
+export default function OrgChart() {
   const [searchQuery, setSearchQuery] = useState('');
   const [assignments, setAssignments] = useState<OrgChartAssignment[]>(
     defaultProcessOrgChartAssignments,

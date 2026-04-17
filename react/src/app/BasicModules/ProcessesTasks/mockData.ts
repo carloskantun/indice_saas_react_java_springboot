@@ -1,573 +1,528 @@
-export type AgendaStatus = 'En curso' | 'Pendiente' | 'En riesgo' | 'Completada';
-export type AgendaPriority = 'Alta' | 'Media' | 'Baja';
+export type ProcessTaskType = 'task' | 'project-task' | 'process';
+export type ProcessTaskStatus = 'pending' | 'in-progress' | 'completed' | 'audited' | 'overdue';
+export type ProcessTaskPriority = 'high' | 'medium' | 'low';
+
+export type AgendaStatus = ProcessTaskStatus;
+export type AgendaPriority = ProcessTaskPriority;
+
+export interface ProcessTaskFile {
+  id: string;
+  name: string;
+  type: string;
+  sizeLabel: string;
+  uploadedAt: string;
+  uploadedBy: string;
+  url: string;
+}
+
+export interface ProcessTaskHistoryEntry {
+  id: string;
+  kind: 'created' | 'updated' | 'completed' | 'duplicated' | 'file-added' | 'audit';
+  title: string;
+  description: string;
+  createdAt: string;
+  createdBy: string;
+}
 
 export interface ProcessAgendaItem {
   id: number;
+  folio: string;
+  type: ProcessTaskType;
+  unit: string;
+  business: string;
   title: string;
-  owner: string;
-  area: string;
+  description: string;
+  createdAt: string;
+  startDate: string;
+  dueDate: string;
+  status: ProcessTaskStatus;
+  creator: string;
+  responsible: string;
+  priority: ProcessTaskPriority;
+  attachments: number;
+  projectId: number | null;
   project: string;
-  dueDate: string;
-  startTime: string;
-  duration: string;
-  priority: AgendaPriority;
-  status: AgendaStatus;
-  location: string;
-  blockers: string[];
-  checklist: { label: string; done: boolean }[];
+  completion: number;
+  notes: string;
+  weighting: number;
+  audited: boolean;
+  auditNotes: string;
+  files: ProcessTaskFile[];
+  history: ProcessTaskHistoryEntry[];
 }
 
-export const processAgendaItems: ProcessAgendaItem[] = [
-  {
-    id: 1,
-    title: 'Revision diaria de backlog operativo',
-    owner: 'Marta Ruiz',
-    area: 'Operaciones',
-    project: 'Sprint de integraciones',
-    dueDate: 'Hoy',
-    startTime: '08:30',
-    duration: '45 min',
-    priority: 'Alta',
-    status: 'En curso',
-    location: 'Sala Operativa',
-    blockers: ['Falta confirmar prioridad de dos tickets de soporte'],
-    checklist: [
-      { label: 'Actualizar tareas vencidas', done: true },
-      { label: 'Asignar responsables del dia', done: true },
-      { label: 'Publicar riesgos en canal de seguimiento', done: false },
-    ],
-  },
-  {
-    id: 2,
-    title: 'Seguimiento del proyecto de onboarding digital',
-    owner: 'Jorge Herrera',
-    area: 'Transformacion',
-    project: 'Onboarding 2.0',
-    dueDate: 'Hoy',
-    startTime: '10:00',
-    duration: '60 min',
-    priority: 'Alta',
-    status: 'Pendiente',
-    location: 'Zoom',
-    blockers: ['Diseño pendiente de aprobar por RH'],
-    checklist: [
-      { label: 'Revisar dependencias del flujo', done: true },
-      { label: 'Confirmar fechas de QA', done: false },
-      { label: 'Alinear mensaje de lanzamiento', done: false },
-    ],
-  },
-  {
-    id: 3,
-    title: 'Cierre semanal de pendientes administrativos',
-    owner: 'Sofia Campos',
-    area: 'Administracion',
-    project: 'Control semanal',
-    dueDate: '26 Mar',
-    startTime: '12:00',
-    duration: '30 min',
-    priority: 'Media',
-    status: 'Completada',
-    location: 'Backoffice',
-    blockers: [],
-    checklist: [
-      { label: 'Cruce de pendientes abiertos', done: true },
-      { label: 'Envio de resumen al liderazgo', done: true },
-      { label: 'Registro en tablero maestro', done: true },
-    ],
-  },
-  {
-    id: 4,
-    title: 'Ajuste del flujo de aprobaciones de compras',
-    owner: 'Carlos Ibarra',
-    area: 'Finanzas',
-    project: 'Gobierno de compras',
-    dueDate: '27 Mar',
-    startTime: '14:00',
-    duration: '90 min',
-    priority: 'Alta',
-    status: 'En riesgo',
-    location: 'Comite de compras',
-    blockers: ['Proveedor aun no comparte tiempos de respuesta'],
-    checklist: [
-      { label: 'Documentar cambio de politica', done: true },
-      { label: 'Validar firmas necesarias', done: false },
-      { label: 'Actualizar manual operativo', done: false },
-    ],
-  },
-  {
-    id: 5,
-    title: 'Revision quincenal de KPIs de servicio',
-    owner: 'Daniela Solis',
-    area: 'Servicio',
-    project: 'Ritual de desempeno',
-    dueDate: '28 Mar',
-    startTime: '09:00',
-    duration: '45 min',
-    priority: 'Media',
-    status: 'Pendiente',
-    location: 'Sala Norte',
-    blockers: [],
-    checklist: [
-      { label: 'Consolidar metricas', done: true },
-      { label: 'Preparar desvio por area', done: false },
-      { label: 'Definir acciones correctivas', done: false },
-    ],
-  },
-  {
-    id: 6,
-    title: 'Liberacion del proceso de mantenimiento preventivo',
-    owner: 'Luis Mejia',
-    area: 'Mantenimiento',
-    project: 'Preventivos Q2',
-    dueDate: '29 Mar',
-    startTime: '16:00',
-    duration: '75 min',
-    priority: 'Baja',
-    status: 'En curso',
-    location: 'Planta 2',
-    blockers: ['Esperando confirmacion del calendario de unidades'],
-    checklist: [
-      { label: 'Cargar checklist tecnico', done: true },
-      { label: 'Asignar tecnicos por turno', done: false },
-      { label: 'Publicar ventana de mantenimiento', done: false },
-    ],
-  },
-];
-
-export type ProjectStatus = 'En ejecucion' | 'En riesgo' | 'Planeacion' | 'Cerrado';
-
-export interface ProjectMilestone {
-  id: number;
-  name: string;
-  dueDate: string;
-  owner: string;
-  status: 'Listo' | 'En curso' | 'Pendiente';
-}
+export type ProjectStatus = 'active' | 'at-risk' | 'planning' | 'closed';
 
 export interface ProcessProject {
   id: number;
+  folio: string;
   name: string;
+  unit: string;
+  business: string;
   owner: string;
-  area: string;
+  createdAt: string;
+  startDate: string;
+  dueDate: string;
   progress: number;
   status: ProjectStatus;
   budget: number;
-  spent: number;
-  team: number;
-  dueDate: string;
-  priority: AgendaPriority;
+  priority: ProcessTaskPriority;
   summary: string;
-  nextDeliverable: string;
-  risks: string[];
-  milestones: ProjectMilestone[];
+}
+
+function buildHistoryEntry(
+  id: string,
+  kind: ProcessTaskHistoryEntry['kind'],
+  title: string,
+  description: string,
+  createdAt: string,
+  createdBy: string,
+): ProcessTaskHistoryEntry {
+  return {
+    id,
+    kind,
+    title,
+    description,
+    createdAt,
+    createdBy,
+  };
+}
+
+function buildFile(
+  id: string,
+  name: string,
+  sizeLabel: string,
+  uploadedBy: string,
+  uploadedAt: string,
+): ProcessTaskFile {
+  return {
+    id,
+    name,
+    type: 'application/pdf',
+    sizeLabel,
+    uploadedAt,
+    uploadedBy,
+    url: `data:text/plain;charset=utf-8,${encodeURIComponent(`${name} preview generated from mock workspace data.`)}`,
+  };
 }
 
 export const processProjects: ProcessProject[] = [
   {
     id: 1,
-    name: 'Onboarding 2.0',
+    folio: 'P-2026-001',
+    name: 'Digital onboarding rollout',
+    unit: 'Human Resources',
+    business: 'People',
     owner: 'Jorge Herrera',
-    area: 'Transformacion',
-    progress: 74,
-    status: 'En ejecucion',
+    createdAt: '2026-03-28',
+    startDate: '2026-04-01',
+    dueDate: '2026-05-10',
+    progress: 72,
+    status: 'active',
     budget: 320000,
-    spent: 241500,
-    team: 8,
-    dueDate: '18 Abr',
-    priority: 'Alta',
-    summary: 'Estandariza el ingreso de nuevos colaboradores con tareas, firmas y capacitacion digital.',
-    nextDeliverable: 'Validacion final del flujo de documentos y accesos.',
-    risks: ['Pendiente aprobacion visual del correo de bienvenida', 'Falta definir tutorial corto para lideres'],
-    milestones: [
-      { id: 11, name: 'Mapa de journey aprobado', dueDate: '25 Mar', owner: 'Producto', status: 'Listo' },
-      { id: 12, name: 'QA del flujo automatizado', dueDate: '02 Abr', owner: 'Tecnologia', status: 'En curso' },
-      { id: 13, name: 'Lanzamiento interno', dueDate: '18 Abr', owner: 'RH', status: 'Pendiente' },
-    ],
+    priority: 'high',
+    summary: 'Standardize the onboarding experience with automated tasks, approvals, and training checkpoints.',
   },
   {
     id: 2,
-    name: 'Gobierno de compras',
+    folio: 'P-2026-002',
+    name: 'Procurement governance',
+    unit: 'Finance',
+    business: 'Administration',
     owner: 'Carlos Ibarra',
-    area: 'Finanzas',
-    progress: 49,
-    status: 'En riesgo',
+    createdAt: '2026-03-24',
+    startDate: '2026-04-03',
+    dueDate: '2026-05-02',
+    progress: 46,
+    status: 'at-risk',
     budget: 180000,
-    spent: 119000,
-    team: 5,
-    dueDate: '11 Abr',
-    priority: 'Alta',
-    summary: 'Reduce tiempos de autorizacion y mejora trazabilidad de requisiciones criticas.',
-    nextDeliverable: 'Matriz final de aprobadores por monto y tipo de gasto.',
-    risks: ['Proveedor externo no confirma SLA', 'Dos unidades siguen usando el flujo anterior'],
-    milestones: [
-      { id: 21, name: 'Politica unificada', dueDate: '21 Mar', owner: 'Finanzas', status: 'Listo' },
-      { id: 22, name: 'Entrenamiento a jefaturas', dueDate: '31 Mar', owner: 'Compras', status: 'En curso' },
-      { id: 23, name: 'Activacion en todas las unidades', dueDate: '11 Abr', owner: 'Operaciones', status: 'Pendiente' },
-    ],
+    priority: 'high',
+    summary: 'Reduce approval delays and create a clearer purchasing governance flow across the company.',
   },
   {
     id: 3,
-    name: 'Preventivos Q2',
+    folio: 'P-2026-003',
+    name: 'Preventive maintenance cycle',
+    unit: 'Warehouse',
+    business: 'Operations',
     owner: 'Luis Mejia',
-    area: 'Mantenimiento',
+    createdAt: '2026-03-20',
+    startDate: '2026-04-05',
+    dueDate: '2026-05-28',
     progress: 61,
-    status: 'En ejecucion',
+    status: 'active',
     budget: 250000,
-    spent: 132000,
-    team: 6,
-    dueDate: '30 Abr',
-    priority: 'Media',
-    summary: 'Programa y coordina mantenimientos preventivos sin interrumpir la operacion diaria.',
-    nextDeliverable: 'Calendario final por unidad y ventana operativa.',
-    risks: ['Capacidad limitada en turno nocturno'],
-    milestones: [
-      { id: 31, name: 'Inventario tecnico consolidado', dueDate: '19 Mar', owner: 'Almacen', status: 'Listo' },
-      { id: 32, name: 'Asignacion de cuadrillas', dueDate: '01 Abr', owner: 'Mantenimiento', status: 'En curso' },
-      { id: 33, name: 'Inicio de ronda Q2', dueDate: '08 Abr', owner: 'Operaciones', status: 'Pendiente' },
-    ],
+    priority: 'medium',
+    summary: 'Coordinate Q2 preventive maintenance without affecting the operating schedule of each unit.',
   },
   {
     id: 4,
-    name: 'Ritual de desempeno',
+    folio: 'P-2026-004',
+    name: 'Service performance ritual',
+    unit: 'Sales',
+    business: 'Commercial',
     owner: 'Daniela Solis',
-    area: 'Servicio',
-    progress: 33,
-    status: 'Planeacion',
+    createdAt: '2026-04-01',
+    startDate: '2026-04-12',
+    dueDate: '2026-05-22',
+    progress: 28,
+    status: 'planning',
     budget: 90000,
-    spent: 22000,
-    team: 4,
-    dueDate: '09 May',
-    priority: 'Media',
-    summary: 'Crea una rutina operativa para revisar KPIs semanales, acciones y responsables.',
-    nextDeliverable: 'Tablero consolidado con acuerdos por celula.',
-    risks: ['Falta definir esquema de escalamiento'],
-    milestones: [
-      { id: 41, name: 'Definicion de metricas por equipo', dueDate: '29 Mar', owner: 'Servicio', status: 'En curso' },
-      { id: 42, name: 'Piloto en dos unidades', dueDate: '17 Abr', owner: 'Calidad', status: 'Pendiente' },
-      { id: 43, name: 'Cierre y ajustes', dueDate: '09 May', owner: 'Direccion', status: 'Pendiente' },
-    ],
-  },
-];
-
-export type ProcessStatus = 'Estable' | 'En seguimiento' | 'Critico';
-export type ProcessAutomation = 'Manual' | 'Mixto' | 'Automatizado';
-export type ProcessFrequency = 'Diario' | 'Semanal' | 'Quincenal' | 'Mensual';
-
-export interface ProcessStep {
-  id: number;
-  name: string;
-  owner: string;
-  sla: string;
-  complete: boolean;
-}
-
-export interface RecurringProcess {
-  id: number;
-  name: string;
-  area: string;
-  owner: string;
-  frequency: ProcessFrequency;
-  status: ProcessStatus;
-  automation: ProcessAutomation;
-  compliance: number;
-  lastRun: string;
-  nextRun: string;
-  bottleneck: string;
-  description: string;
-  steps: ProcessStep[];
-}
-
-export const recurringProcesses: RecurringProcess[] = [
-  {
-    id: 1,
-    name: 'Aprobacion diaria de requisiciones',
-    area: 'Compras',
-    owner: 'Carlos Ibarra',
-    frequency: 'Diario',
-    status: 'En seguimiento',
-    automation: 'Mixto',
-    compliance: 86,
-    lastRun: '25 Mar 18:00',
-    nextRun: '26 Mar 18:00',
-    bottleneck: 'Se acumulan aprobaciones fuera de horario en dos unidades.',
-    description: 'Proceso que centraliza revisiones, validaciones presupuestales y liberacion a compras.',
-    steps: [
-      { id: 11, name: 'Recepcion de requisiciones', owner: 'Analista', sla: '2 h', complete: true },
-      { id: 12, name: 'Revision presupuestal', owner: 'Finanzas', sla: '4 h', complete: true },
-      { id: 13, name: 'Aprobacion final', owner: 'Gerencia', sla: '6 h', complete: false },
-    ],
-  },
-  {
-    id: 2,
-    name: 'Cierre semanal de pendientes',
-    area: 'Administracion',
-    owner: 'Sofia Campos',
-    frequency: 'Semanal',
-    status: 'Estable',
-    automation: 'Automatizado',
-    compliance: 96,
-    lastRun: '22 Mar 17:30',
-    nextRun: '29 Mar 17:30',
-    bottleneck: 'Sin bloqueos criticos, solo seguimiento de excepciones.',
-    description: 'Consolida pendientes, genera resumen ejecutivo y actualiza backlog maestro.',
-    steps: [
-      { id: 21, name: 'Extraccion de pendientes', owner: 'Sistema', sla: '15 min', complete: true },
-      { id: 22, name: 'Clasificacion por area', owner: 'Backoffice', sla: '1 h', complete: true },
-      { id: 23, name: 'Envio de resumen', owner: 'Administracion', sla: '30 min', complete: true },
-    ],
-  },
-  {
-    id: 3,
-    name: 'Revision de mantenimiento preventivo',
-    area: 'Mantenimiento',
-    owner: 'Luis Mejia',
-    frequency: 'Quincenal',
-    status: 'Critico',
-    automation: 'Manual',
-    compliance: 68,
-    lastRun: '15 Mar 09:00',
-    nextRun: '30 Mar 09:00',
-    bottleneck: 'No hay capacidad suficiente para cubrir todos los equipos en una sola ventana.',
-    description: 'Asegura inspecciones, programacion de cuadrillas y cierre de hallazgos tecnicos.',
-    steps: [
-      { id: 31, name: 'Inspeccion inicial', owner: 'Tecnico lider', sla: '1 dia', complete: true },
-      { id: 32, name: 'Asignacion de cuadrillas', owner: 'Coordinacion', sla: '4 h', complete: false },
-      { id: 33, name: 'Liberacion del reporte', owner: 'Supervision', sla: '6 h', complete: false },
-    ],
-  },
-  {
-    id: 4,
-    name: 'Ritual quincenal de KPIs',
-    area: 'Servicio',
-    owner: 'Daniela Solis',
-    frequency: 'Quincenal',
-    status: 'En seguimiento',
-    automation: 'Mixto',
-    compliance: 81,
-    lastRun: '14 Mar 11:00',
-    nextRun: '28 Mar 11:00',
-    bottleneck: 'Aun no se estandariza el formato de acciones correctivas.',
-    description: 'Revisa tendencias, acuerdos y responsables de metricas de servicio.',
-    steps: [
-      { id: 41, name: 'Consolidar datos', owner: 'Analitica', sla: '2 h', complete: true },
-      { id: 42, name: 'Sesion de revision', owner: 'Lideres', sla: '1 h', complete: false },
-      { id: 43, name: 'Seguimiento de acuerdos', owner: 'PMO', sla: '48 h', complete: false },
-    ],
-  },
-];
-
-export type KPIStatus = 'Sobre meta' | 'En rango' | 'Atencion';
-
-export interface ProcessKPI {
-  id: string;
-  title: string;
-  area: string;
-  current: number;
-  target: number;
-  unit: string;
-  trend: string;
-  direction: 'up' | 'down';
-  status: KPIStatus;
-  summary: string;
-}
-
-export const processKpis: ProcessKPI[] = [
-  {
-    id: 'task-completion',
-    title: 'Cierre de tareas semanales',
-    area: 'Operacion',
-    current: 91,
-    target: 88,
-    unit: '%',
-    trend: '+6 pts vs semana anterior',
-    direction: 'up',
-    status: 'Sobre meta',
-    summary: 'Las celulas estan cerrando tareas priorizadas por encima del objetivo definido.',
-  },
-  {
-    id: 'sla-approval',
-    title: 'Cumplimiento SLA de aprobaciones',
-    area: 'Compras',
-    current: 82,
-    target: 90,
-    unit: '%',
-    trend: '-4 pts por bloqueos de firmas',
-    direction: 'down',
-    status: 'Atencion',
-    summary: 'Las autorizaciones de requisiciones urgentes estan fuera del SLA esperado.',
-  },
-  {
-    id: 'cycle-time',
-    title: 'Tiempo promedio de ciclo',
-    area: 'Transformacion',
-    current: 4.8,
-    target: 5.5,
-    unit: ' dias',
-    trend: '-0.7 dias en el ultimo corte',
-    direction: 'up',
-    status: 'Sobre meta',
-    summary: 'Los flujos priorizados estan completando etapas mas rapido que el objetivo.',
-  },
-  {
-    id: 'risk-incidents',
-    title: 'Procesos con incidencias criticas',
-    area: 'Operacion',
-    current: 3,
-    target: 2,
-    unit: '',
-    trend: '+1 incidente abierto',
-    direction: 'down',
-    status: 'Atencion',
-    summary: 'Se mantienen focos rojos en mantenimiento y aprobaciones especiales.',
-  },
-  {
-    id: 'automation-rate',
-    title: 'Nivel de automatizacion',
-    area: 'PMO',
-    current: 64,
-    target: 70,
-    unit: '%',
-    trend: '+5 pts desde febrero',
-    direction: 'up',
-    status: 'En rango',
-    summary: 'La cobertura automatizada sigue creciendo, aunque aun hay procesos manuales criticos.',
-  },
-  {
-    id: 'meeting-discipline',
-    title: 'Disciplina de rituales operativos',
-    area: 'Servicio',
-    current: 87,
-    target: 85,
-    unit: '%',
-    trend: '+3 pts en asistencia y acuerdos',
-    direction: 'up',
-    status: 'Sobre meta',
-    summary: 'Las sesiones de seguimiento se estan ejecutando con mayor consistencia.',
-  },
-];
-
-export type OrgLevel = 'Direccion' | 'Coordinacion' | 'Operacion';
-
-export interface OrgNode {
-  id: number;
-  name: string;
-  role: string;
-  area: string;
-  level: OrgLevel;
-  lead: string;
-  people: number;
-  location: string;
-  focus: string;
-  directReports: number;
-  activeProjects: number;
-  responsibilities: string[];
-}
-
-export const processOrgNodes: OrgNode[] = [
-  {
-    id: 1,
-    name: 'Oficina de Operaciones',
-    role: 'Direccion de Procesos',
-    area: 'Direccion',
-    level: 'Direccion',
-    lead: 'Andrea Molina',
-    people: 12,
-    location: 'Corporativo',
-    focus: 'Define prioridades, gobierno operativo y escalamiento de riesgos.',
-    directReports: 4,
-    activeProjects: 6,
-    responsibilities: ['Prioridades trimestrales', 'Rituales ejecutivos', 'Remocion de bloqueos criticos'],
-  },
-  {
-    id: 2,
-    name: 'PMO de Transformacion',
-    role: 'Coordinacion',
-    area: 'Transformacion',
-    level: 'Coordinacion',
-    lead: 'Jorge Herrera',
-    people: 7,
-    location: 'Corporativo',
-    focus: 'Coordina proyectos transversales y dependencias entre areas.',
-    directReports: 2,
-    activeProjects: 4,
-    responsibilities: ['Roadmap de proyectos', 'Seguimiento de hitos', 'Priorizacion de backlog'],
-  },
-  {
-    id: 3,
-    name: 'Mesa de Compras',
-    role: 'Coordinacion',
-    area: 'Compras',
-    level: 'Coordinacion',
-    lead: 'Carlos Ibarra',
-    people: 5,
-    location: 'Monterrey',
-    focus: 'Administra aprobaciones, proveedores y reglas de control.',
-    directReports: 2,
-    activeProjects: 2,
-    responsibilities: ['SLA de requisiciones', 'Gobierno de compras', 'Gestion de proveedores'],
-  },
-  {
-    id: 4,
-    name: 'Celula de Servicio',
-    role: 'Coordinacion',
-    area: 'Servicio',
-    level: 'Coordinacion',
-    lead: 'Daniela Solis',
-    people: 6,
-    location: 'Queretaro',
-    focus: 'Gestiona rituales de desempeno, acuerdos y planes correctivos.',
-    directReports: 3,
-    activeProjects: 3,
-    responsibilities: ['KPIs semanales', 'Seguimiento de acuerdos', 'Escalamiento de hallazgos'],
+    priority: 'medium',
+    summary: 'Create a repeatable operational ritual for KPI reviews, action plans, and leadership follow-ups.',
   },
   {
     id: 5,
-    name: 'Backoffice Administrativo',
-    role: 'Operacion',
-    area: 'Administracion',
-    level: 'Operacion',
-    lead: 'Sofia Campos',
-    people: 9,
-    location: 'Guadalajara',
-    focus: 'Ejecuta cierres, tableros y control de pendientes semanales.',
-    directReports: 0,
-    activeProjects: 1,
-    responsibilities: ['Cierres semanales', 'Seguimiento documental', 'Actualizacion de tablero maestro'],
+    folio: 'P-2026-005',
+    name: 'Support playbook refresh',
+    unit: 'Technology',
+    business: 'Operations',
+    owner: 'Marta Ruiz',
+    createdAt: '2026-03-18',
+    startDate: '2026-03-21',
+    dueDate: '2026-04-15',
+    progress: 100,
+    status: 'closed',
+    budget: 76000,
+    priority: 'low',
+    summary: 'Refresh operating playbooks for support squads and close recurring coordination gaps.',
+  },
+];
+
+export const processAgendaItems: ProcessAgendaItem[] = [
+  {
+    id: 1,
+    folio: 'T-2026-001',
+    type: 'project-task',
+    unit: 'Human Resources',
+    business: 'People',
+    title: 'Approve onboarding journey map',
+    description: 'Review the final onboarding journey map before activating the automated workflow.',
+    createdAt: '2026-04-01',
+    startDate: '2026-04-02',
+    dueDate: '2026-04-18',
+    status: 'in-progress',
+    creator: 'Jorge Herrera',
+    responsible: 'Maria Rodriguez',
+    priority: 'high',
+    attachments: 2,
+    projectId: 1,
+    project: 'Digital onboarding rollout',
+    completion: 68,
+    notes: 'Waiting for legal wording on the policy acknowledgment step.',
+    weighting: 4,
+    audited: false,
+    auditNotes: '',
+    files: [
+      buildFile('file-1', 'Onboarding-flow-v3.pdf', '1.2 MB', 'Jorge Herrera', '2026-04-02T09:15:00'),
+      buildFile('file-2', 'Welcome-email-draft.pdf', '640 KB', 'Maria Rodriguez', '2026-04-05T14:40:00'),
+    ],
+    history: [
+      buildHistoryEntry(
+        'history-1',
+        'updated',
+        'Task updated',
+        'The onboarding scope was adjusted after the legal review.',
+        '2026-04-08T16:10:00',
+        'Maria Rodriguez',
+      ),
+      buildHistoryEntry(
+        'history-2',
+        'created',
+        'Task created',
+        'Jorge Herrera created the task from the project workspace.',
+        '2026-04-01T09:00:00',
+        'Jorge Herrera',
+      ),
+    ],
+  },
+  {
+    id: 2,
+    folio: 'T-2026-002',
+    type: 'project-task',
+    unit: 'Finance',
+    business: 'Administration',
+    title: 'Validate approver matrix',
+    description: 'Confirm purchase approval levels by amount, vendor risk, and emergency scenario.',
+    createdAt: '2026-04-03',
+    startDate: '2026-04-04',
+    dueDate: '2026-04-21',
+    status: 'overdue',
+    creator: 'Carlos Ibarra',
+    responsible: 'Sofia Campos',
+    priority: 'high',
+    attachments: 1,
+    projectId: 2,
+    project: 'Procurement governance',
+    completion: 74,
+    notes: 'Two business leaders still have not confirmed delegated approvers.',
+    weighting: 5,
+    audited: false,
+    auditNotes: '',
+    files: [buildFile('file-3', 'Approval-matrix.xlsx', '512 KB', 'Carlos Ibarra', '2026-04-04T11:20:00')],
+    history: [
+      buildHistoryEntry(
+        'history-3',
+        'updated',
+        'Task updated',
+        'The due date was escalated after the governance review.',
+        '2026-04-12T08:30:00',
+        'Carlos Ibarra',
+      ),
+      buildHistoryEntry(
+        'history-4',
+        'created',
+        'Task created',
+        'Carlos Ibarra created the task from the project workspace.',
+        '2026-04-03T10:00:00',
+        'Carlos Ibarra',
+      ),
+    ],
+  },
+  {
+    id: 3,
+    folio: 'T-2026-003',
+    type: 'project-task',
+    unit: 'Warehouse',
+    business: 'Operations',
+    title: 'Publish maintenance windows',
+    description: 'Share the preventive maintenance windows with the warehouse supervisors for sign-off.',
+    createdAt: '2026-04-05',
+    startDate: '2026-04-06',
+    dueDate: '2026-04-24',
+    status: 'completed',
+    creator: 'Luis Mejia',
+    responsible: 'Ana Garcia',
+    priority: 'medium',
+    attachments: 1,
+    projectId: 3,
+    project: 'Preventive maintenance cycle',
+    completion: 100,
+    notes: 'All warehouse leads confirmed the proposed windows.',
+    weighting: 3,
+    audited: false,
+    auditNotes: '',
+    files: [buildFile('file-4', 'Maintenance-calendar.pdf', '880 KB', 'Luis Mejia', '2026-04-06T13:45:00')],
+    history: [
+      buildHistoryEntry(
+        'history-5',
+        'completed',
+        'Task completed',
+        'Ana Garcia closed the publication round after receiving all confirmations.',
+        '2026-04-14T17:20:00',
+        'Ana Garcia',
+      ),
+      buildHistoryEntry(
+        'history-6',
+        'created',
+        'Task created',
+        'Luis Mejia created the task from the project workspace.',
+        '2026-04-05T09:30:00',
+        'Luis Mejia',
+      ),
+    ],
+  },
+  {
+    id: 4,
+    folio: 'T-2026-004',
+    type: 'project-task',
+    unit: 'Sales',
+    business: 'Commercial',
+    title: 'Design KPI review script',
+    description: 'Prepare the talking points that team leads will use during weekly KPI reviews.',
+    createdAt: '2026-04-10',
+    startDate: '2026-04-12',
+    dueDate: '2026-04-28',
+    status: 'pending',
+    creator: 'Daniela Solis',
+    responsible: 'Carlos Lopez',
+    priority: 'medium',
+    attachments: 0,
+    projectId: 4,
+    project: 'Service performance ritual',
+    completion: 0,
+    notes: '',
+    weighting: 3,
+    audited: false,
+    auditNotes: '',
+    files: [],
+    history: [
+      buildHistoryEntry(
+        'history-7',
+        'created',
+        'Task created',
+        'Daniela Solis created the task from the project workspace.',
+        '2026-04-10T08:10:00',
+        'Daniela Solis',
+      ),
+    ],
+  },
+  {
+    id: 5,
+    folio: 'T-2026-005',
+    type: 'project-task',
+    unit: 'Technology',
+    business: 'Operations',
+    title: 'Close support playbook sign-off',
+    description: 'Collect final approvals from operations and archive the updated support playbook.',
+    createdAt: '2026-03-25',
+    startDate: '2026-03-27',
+    dueDate: '2026-04-10',
+    status: 'audited',
+    creator: 'Marta Ruiz',
+    responsible: 'Marta Ruiz',
+    priority: 'low',
+    attachments: 1,
+    projectId: 5,
+    project: 'Support playbook refresh',
+    completion: 100,
+    notes: 'The playbook is now part of the support squad onboarding pack.',
+    weighting: 5,
+    audited: true,
+    auditNotes: 'Approved after the final service review.',
+    files: [buildFile('file-5', 'Support-playbook-v5.pdf', '1.0 MB', 'Marta Ruiz', '2026-04-01T12:00:00')],
+    history: [
+      buildHistoryEntry(
+        'history-8',
+        'audit',
+        'Audit registered',
+        'Marta Ruiz registered the closing audit and approved the final package.',
+        '2026-04-11T10:00:00',
+        'Marta Ruiz',
+      ),
+      buildHistoryEntry(
+        'history-9',
+        'completed',
+        'Task completed',
+        'The support playbook sign-off was completed.',
+        '2026-04-09T15:45:00',
+        'Marta Ruiz',
+      ),
+    ],
   },
   {
     id: 6,
-    name: 'Cuadrillas Preventivas',
-    role: 'Operacion',
-    area: 'Mantenimiento',
-    level: 'Operacion',
-    lead: 'Luis Mejia',
-    people: 11,
-    location: 'Saltillo',
-    focus: 'Ejecuta inspecciones, mantenimientos y liberaciones tecnicas.',
-    directReports: 0,
-    activeProjects: 2,
-    responsibilities: ['Inspecciones quincenales', 'Programacion de cuadrillas', 'Cierre de incidencias tecnicas'],
+    folio: 'T-2026-006',
+    type: 'task',
+    unit: 'Technology',
+    business: 'Operations',
+    title: 'Review escalation queue',
+    description: 'Validate blockers escalated from daily support operations and assign owners.',
+    createdAt: '2026-04-14',
+    startDate: '2026-04-15',
+    dueDate: '2026-04-16',
+    status: 'in-progress',
+    creator: 'Marta Ruiz',
+    responsible: 'Carlos Lopez',
+    priority: 'high',
+    attachments: 1,
+    projectId: null,
+    project: 'No project',
+    completion: 55,
+    notes: 'Need final input from platform operations before noon.',
+    weighting: 4,
+    audited: false,
+    auditNotes: '',
+    files: [buildFile('file-6', 'Escalation-queue.csv', '340 KB', 'Marta Ruiz', '2026-04-15T08:50:00')],
+    history: [
+      buildHistoryEntry(
+        'history-10',
+        'created',
+        'Task created',
+        'Marta Ruiz created the task directly from the agenda table.',
+        '2026-04-14T18:00:00',
+        'Marta Ruiz',
+      ),
+    ],
   },
   {
     id: 7,
-    name: 'Equipo de Soporte de Procesos',
-    role: 'Operacion',
-    area: 'Transformacion',
-    level: 'Operacion',
-    lead: 'Marta Ruiz',
-    people: 8,
-    location: 'Remoto',
-    focus: 'Monitorea tableros, actualiza tareas y acompana despliegues operativos.',
-    directReports: 0,
-    activeProjects: 5,
-    responsibilities: ['Monitoreo diario', 'Documentacion de cambios', 'Soporte de lanzamientos'],
+    folio: 'T-2026-007',
+    type: 'process',
+    unit: 'Finance',
+    business: 'Administration',
+    title: 'Weekly close checklist',
+    description: 'Run the weekly close checklist and log exceptions that require leadership review.',
+    createdAt: '2026-04-11',
+    startDate: '2026-04-11',
+    dueDate: '2026-04-17',
+    status: 'pending',
+    creator: 'Sofia Campos',
+    responsible: 'Sofia Campos',
+    priority: 'medium',
+    attachments: 0,
+    projectId: null,
+    project: 'No project',
+    completion: 0,
+    notes: '',
+    weighting: 3,
+    audited: false,
+    auditNotes: '',
+    files: [],
+    history: [
+      buildHistoryEntry(
+        'history-11',
+        'created',
+        'Task created',
+        'Sofia Campos scheduled the weekly close checklist.',
+        '2026-04-11T07:30:00',
+        'Sofia Campos',
+      ),
+    ],
+  },
+  {
+    id: 8,
+    folio: 'T-2026-008',
+    type: 'task',
+    unit: 'Sales',
+    business: 'Commercial',
+    title: 'Follow up on pilot feedback',
+    description: 'Consolidate pilot feedback after the first KPI ritual dry run.',
+    createdAt: '2026-04-13',
+    startDate: '2026-04-14',
+    dueDate: '2026-04-25',
+    status: 'pending',
+    creator: 'Daniela Solis',
+    responsible: 'Ana Garcia',
+    priority: 'low',
+    attachments: 0,
+    projectId: null,
+    project: 'No project',
+    completion: 0,
+    notes: '',
+    weighting: 2,
+    audited: false,
+    auditNotes: '',
+    files: [],
+    history: [
+      buildHistoryEntry(
+        'history-12',
+        'created',
+        'Task created',
+        'Daniela Solis requested a follow-up report for the pilot feedback round.',
+        '2026-04-13T10:25:00',
+        'Daniela Solis',
+      ),
+    ],
   },
 ];
+
+export type OrgCollaboratorRole =
+  | 'Director General'
+  | 'Director Operaciones'
+  | 'Director Finanzas'
+  | 'Jefe Almacen'
+  | 'Jefe Compras'
+  | 'Contador'
+  | 'Supervisor'
+  | 'Analista de procesos'
+  | 'Coordinadora PMO'
+  | 'Lider de servicio';
 
 export interface OrgCollaborator {
   id: number;
   name: string;
-  role: string;
+  role: OrgCollaboratorRole;
   title: string;
   area: string;
   location: string;
