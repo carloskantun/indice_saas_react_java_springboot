@@ -230,18 +230,16 @@ public class HrFaceService {
             enrollment.employeeId()
         );
 
-        var body = new LinkedHashMap<String, Object>();
-        body.put("enrollment", toEnrollmentMap(loadLatestEnrollment(companyId, enrollment.employeeId()), enrollment.employeeId()));
-        return body;
+        return Map.of(
+            "enrollment", toEnrollmentMap(loadLatestEnrollment(companyId, enrollment.employeeId()))
+        );
     }
 
     public Map<String, Object> getEnrollment(long companyId, long employeeId) {
         requireFaceEnabled();
         ensureEmployeeExists(companyId, employeeId);
         var enrollment = loadLatestEnrollment(companyId, employeeId);
-        var body = new LinkedHashMap<String, Object>();
-        body.put("enrollment", toEnrollmentMap(enrollment, employeeId));
-        return body;
+        return Map.of("enrollment", toEnrollmentMap(enrollment));
     }
 
     @Transactional
@@ -745,24 +743,18 @@ public class HrFaceService {
         }
     }
 
-    private Map<String, Object> toEnrollmentMap(EnrollmentRow enrollment, long employeeId) {
-        var body = new LinkedHashMap<String, Object>();
+    private Map<String, Object> toEnrollmentMap(EnrollmentRow enrollment) {
         if (enrollment == null) {
-            body.put("id", null);
-            body.put("employee_id", employeeId);
-            body.put("status", "not_enrolled");
-            body.put("expires_at", null);
-            body.put("enrolled_at", null);
-            body.put("required_steps", REQUIRED_STEPS);
-            return body;
+            return null;
         }
-        body.put("id", enrollment.id());
-        body.put("employee_id", enrollment.employeeId());
-        body.put("status", enrollment.status());
-        body.put("expires_at", enrollment.expiresAt() == null ? null : enrollment.expiresAt().toString());
-        body.put("enrolled_at", enrollment.enrolledAt() == null ? null : enrollment.enrolledAt().toString());
-        body.put("required_steps", REQUIRED_STEPS);
-        return body;
+        return Map.of(
+            "id", enrollment.id(),
+            "employee_id", enrollment.employeeId(),
+            "status", enrollment.status(),
+            "expires_at", enrollment.expiresAt() == null ? null : enrollment.expiresAt().toString(),
+            "enrolled_at", enrollment.enrolledAt() == null ? null : enrollment.enrolledAt().toString(),
+            "required_steps", REQUIRED_STEPS
+        );
     }
 
     private Map<String, Object> presignBody(PresignedUpload upload, String step) {
